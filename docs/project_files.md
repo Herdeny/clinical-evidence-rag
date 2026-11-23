@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-23。根目录现有9个Python模块，14个数据维护工具集中到scripts/data；Dense缓存、RRF两函数和三个方法入口已通过相应检查，方法层配置原样保存。NFCorpus公开基准数据已准备，benchmark_data.py真实dev读取主流程通过，通用性与异常输入契约仍待完成。
+整理日期：2026-11-19，进度更新2026-11-23。根目录现有9个Python模块，14个数据维护工具集中到scripts/data；Dense缓存、RRF两函数和三个方法入口已通过相应检查，方法层配置原样保存。NFCorpus公开基准读取适配已通过全部9项检查，当前用户任务是在新模块benchmark_eval.py中实现公共查询循环及评分；该新模块尚未计入现有文件数。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | 验证并保存既有结果；支持方法层配置与旧平铺布局，原样保留配置 | 助手辅助，逐行中文注释 |
-| benchmark_data.py | BEIR基准读取适配，真实dev主流程通过；显式CSV类型、通用locator及异常输入校验待完成 | 用户 |
+| benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 
 ## 数据维护模块
 
@@ -39,7 +39,7 @@
 
 本次将 10 个数据脚本移出根目录，同步脚本之间及测试中的导入，调整 3 个 ROOT 定位和构建清单中的代码路径。没有发现可以直接丢弃且完全没有复现／测试用途的独立临时源码，因此没有为了减少数量而删掉下载与验证能力。9 个旧路径的自动编译 .pyc 已删除，可由 Python 自动重建。
 
-tests中现有10个测试模块，均有逐行中文注释。test_embedding_index.py验证编码恢复；test_rrf_fusion.py含7项融合和5项编排，已通过。test_retrieval_entry.py的5项入口检查已通过，使用临时数据、假模型及真实小型检索／评分／保存。test_retrieval_results_io.py的6项检查验证分组／旧平铺保存、配置不变与错误定位。test_ct_evaluation.py的4项检查验证来源选择漂移、缺事实／缺规则分离、家族边界及实际快照重建／人工修改保护。新增test_benchmark_data.py的9个方法检查公开dev、通用目录和数据完整性，当前用户读取适配尚未通过。其他覆盖来源位置、数据划分和缓存恢复。scripts的两个__init__.py仅标记Python包。
+tests中现有10个测试模块，均有逐行中文注释。test_embedding_index.py验证编码恢复；test_rrf_fusion.py含7项融合和5项编排，已通过。test_retrieval_entry.py的5项入口检查已通过，使用临时数据、假模型及真实小型检索／评分／保存。test_retrieval_results_io.py的6项检查验证分组／旧平铺保存、配置不变与错误定位。test_ct_evaluation.py的4项检查验证来源选择漂移、缺事实／缺规则分离、家族边界及实际快照重建／人工修改保护。新增test_benchmark_data.py的9个方法检查公开dev、通用目录和数据完整性，已全部通过。其他覆盖来源位置、数据划分和缓存恢复。scripts的两个__init__.py仅标记Python包。
 
 原始数据、冻结清单、历史执行源码快照、结果及 Notebook 作为已有记录保留。Notebook 中的历史根目录导入可能是当时的路径，当前操作以脚本和本文目录为准，不把 Notebook 重新作为生产依赖。
 

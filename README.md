@@ -2,9 +2,9 @@
 
 项目完整背景、当前进度、后续路线与合作约定见 [项目交接总记录](PROJECT_CONTEXT.md)。继续开发或切换对话时先读该文件，再核对最新代码和输出。
 
-代码目录已整理：根目录现有9个开发模块（含尚未完成的benchmark_data.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
+代码目录已整理：根目录现有9个开发模块（含已通过读取契约检查的benchmark_data.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
 
-**当前任务：接入公开检索基准。** BEIR官方镜像NFCorpus已下载、固定并通过独立数据核验：3633文档、2590 train／324 dev／323 test查询。未运行模型或检索。用户下一步实现[数据读取适配](docs/nfcorpus_benchmark_task.md)；之后以公开qrels比较Dense／BM25／RRF，自建CT题只作产品场景回归，MIRAGE7663保留为最终问答对标。见[数据说明与来源](data/external/nfcorpus/DATA_CARD.md)。
+**当前任务：接入公开检索基准。** BEIR官方镜像NFCorpus已下载、固定并通过独立数据核验：3633文档、2590 train／324 dev／323 test查询。2026-11-23数据读取适配的9项检查全部通过，dev保留11385条整数等级标注；下一步由用户实现[公共查询循环与评分](docs/nfcorpus_benchmark_task.md)。尚无公开基准模型或检索成绩。之后以公开qrels比较Dense／BM25／RRF，自建CT题只作产品场景回归，MIRAGE7663保留为最终问答对标。见[数据说明与来源](data/external/nfcorpus/DATA_CARD.md)。
 
 **2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
 

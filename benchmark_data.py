@@ -27,7 +27,7 @@ def load_beir_dataset(data_dir, *, split="dev"):
         corpus_df["body"].fillna("")
         ).str.strip() # .str 表示对一列中的字符串逐个操作，.strip() 用于去除首尾空白，包括空格、\n、\t 等
     
-    if any(corpus_df["text"].str.isna() or corpus_df["text"].str.strip().eq("")):
+    if any(corpus_df["body"].isna() | corpus_df["body"].str.strip().eq("")):
         raise ValueError(f"body is empty in corpus")
     
     corpus_df["source_id"] = corpus_df["id"]
@@ -48,6 +48,8 @@ def load_beir_dataset(data_dir, *, split="dev"):
             "corpus-id": str,
             "score": int
         })
+    if qrels_df.empty:
+        raise ValueError("qrels is empty")
     
     if qrels_df.duplicated(subset=["query-id", "corpus-id"]).any():
         raise ValueError("query-corpus pair duplicated in qrels")
@@ -64,8 +66,15 @@ def load_beir_dataset(data_dir, *, split="dev"):
             qrels[query_id] = {document_id: score}
     
     queries_df = pd.read_json(queries_path, lines=True, dtype=False).rename(columns={"_id": "id", "text": "query"})
-    if not (set(qrels["query_id"]) - set(queries_df["id"])).empty:
+    
+    if queries_df["id"].duplicated().any():
+        raise ValueError("queries id duplicated")
+    
+    if (set(qrels) - set(queries_df["id"])):
         raise ValueError("qrels id not fount in queries")
+    
+    if (set(qrels_df["corpus-id"]) - set(corpus_df["id"])):
+        raise ValueError("missing document incitement")
     
     queries_df = queries_df[queries_df["id"].isin(qrels)]
     

@@ -1,12 +1,12 @@
 # NFCorpus 检索评测接入任务
 
-当前数据已准备：3,633篇文档，2,590 train／324 dev／323 test查询。来源版本、原始文件、转换记录和校验见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。本次用户任务是完整实现数据读取适配；之后再接现有检索、官方排序指标及独立结果保存。核心仍由用户编写。
+当前数据已准备：3,633篇文档，2,590 train／324 dev／323 test查询。来源版本、原始文件、转换记录和校验见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。数据读取适配已验收；当前接入现有检索与官方排序指标，随后提供独立运行入口和结果保存。核心仍由用户编写。
 
-## 当前实现一个完整读取函数
+## 已验收：数据读取函数
 
-2026-11-23最新检查：真实dev读取主流程通过，返回3633文档／324查询／324个qrels查询键／11385标签，等级与正文保真检查通过。字典键、查询字段、isin和返回顺序都已正确。剩余收尾是TSV显式ID字符串／grade整数dtype、通用locator和此前列明的输入校验；9方法中真实dev一项通过，其余8方法仍待完成。最新诊断见results/benchmark_data_validation.json及revision3，用户实现未由助手修改。
+2026-11-23最新检查：原9方法全部通过。真实dev返回3633文档、324查询、324个qrels查询键、11385标签，原等级1／2、正文与行序保留；通用目录／前导零／划分隔离及既定异常输入检查均通过。源码SHA46419011dd285ad6eeaf3fd35481acc0a43e946c5c3ead15dd3922b9ffd18833，诊断见results/benchmark_data_validation.json及revision6。用户核心未由助手修改，无模型／检索。读取环节结束，保留有效的any(布尔Series)写法。
 
-在项目根目录新建 benchmark_data.py，实现：
+项目根目录 benchmark_data.py 已实现：
 
     load_beir_dataset(data_dir, *, split="dev")
 
@@ -37,6 +37,24 @@ Path可用斜杠组合子路径；rename(columns=...)统一字段名；Series.st
 对官方dev目录调用后：len(corpus_df)=3633，len(queries_df)=324，len(qrels)=324；sum(len(items) for items in qrels.values())=11385。所有qrels查询属于queries_df，相关文档属于corpus_df，等级保持整数1／2。官方文件指纹不变，语料次序、标题及原正文保留。
 
 助手还会用小型临时BEIR目录检查路径可配置、标签多对多、无关查询过滤、重复及悬空ID拒绝，确保不是只能读取一份nfcorpus。用户贴代码或保存后说“好了”，助手重读实际文件再验收，不代写核心。
+
+## 当前任务：公共检索评测函数
+
+由用户新建 /home/wzh/clinical-evidence-rag/benchmark_eval.py，实现 evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10, 100))，返回 (eval_df, run)。本步不创建模型、构建索引或保存文件，已有读取模块与Dense／BM25／RRF接口继续复用。
+
+依赖：pandas、time、math、tqdm以及pytrec_eval。2026-11-23检查发现tqdm已安装，pytrec_eval／ir_measures／beir未安装。用户在all-in-rag环境安装 pytrec-eval-terrier==0.5.11；安装名与import名不同。该依赖与[BEIR pyproject](https://github.com/beir-cellar/beir/blob/main/pyproject.toml)一致；接口见[BEIR官方评分实现](https://github.com/beir-cellar/beir/blob/main/beir/retrieval/evaluation.py)，版本文件见[PyPI](https://pypi.org/project/pytrec-eval-terrier/0.5.11/)。本轮仅核查，尚未安装或运行评分库。
+
+输入queries_df使用读取器返回的id、query两列，qrels保持原等级字典。每条原query只调用一次retrieve_fn(query, max(ks))；检索调用不接收qrels，不加CT模板。time.perf_counter()仅计量retrieve_fn调用，换算ms；索引初始化与指标计算不计入该列。循环可用tqdm，给出total=len(queries_df)。
+
+run结构为query_id → {document_id: float(retrieval_score)}；与qrels的相关性等级严格区分。保留真实检索分数，不改成标签或排序行号。每次hits的id应唯一、score可转换为有限浮点数，不接受NaN／Infinity；异常直接抛出并标识query_id，不通过字典覆盖或丢题掩盖。
+
+评分器可用pytrec_eval.RelevanceEvaluator(qrels, {"ndcg_cut.10,100", "recall.10,100"})，再evaluate(run)取得逐题指标，返回键如ndcg_cut_10、recall_100。ks可配置时相应生成指标字符串。主报告是nDCG@10及Recall@100，额外保留两种指标在两个K的值便于核查。直接使用库的等级与排序语义，不另写gain公式。
+
+eval_df每查询一行，列为query_id、query、retrieved_ids、scores、latency_ms，以及每个k对应的ndcg_at_{k}、recall_at_{k}。按queries_df原顺序返回。空hits也保留run[qid]={}与结果行，四项指标记0；若评分库不返回该qid，不能因此丢行。汇总将对全部行做算术平均，当前函数不额外返回summary。
+
+既定输入约束一次说明：ks是非空、不重复的正整数序列；queries_df非空且id唯一，查询ID集合与qrels的键一致；任何单次hits不能含重复id、非有限分数或超过max(ks)条。空hits有效；检索异常使本次运行失败，不静默跳题。有效但少于K的命中按实际返回评估，不人工补齐文档。
+
+验收先用临时查询、标签和假retrieve_fn，无模型运行：两查询中一条按等级正确排序检出全部相关文档，另一条返回空；结果恰两行，前者四指标为1、后者为0，各指标均值0.5；每题调用一次、原query不变、K=max(ks)，run保留实际float分数。交换不同相关等级文档顺序应降低nDCG而不改变召回；重复ID及非有限分数应明确拒绝。用户保存后助手检查实际源码并验证，再接真实BM25开发集、Dense与RRF入口及保存，不直接消耗test。
 
 ## 后续接入保持同一接口
 
