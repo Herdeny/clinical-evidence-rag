@@ -1,0 +1,39 @@
+
+# Secrets
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Environments and caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+node_modules/
+.cache/
+
+# Data and generated files
+/data/
+/datasets/
+/logs/
+/outputs/
+/checkpoints/
+/chroma_db/
+/vectorstore/
+/vector_store/
+*.db
+*.sqlite*
+*.pt
+*.pth
+*.safetensors
+
+# Generated caches
+/cache/
+
+# Experiment outputs and snapshots
+/results/
