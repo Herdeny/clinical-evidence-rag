@@ -6,6 +6,12 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新：真实重排配置／加载与保存辅助已实现，用户下一项新增run_reranking_eval.py。** 助手新增configs/reranker_profiles.json和reranker_adapter.py，扩展原retrieval_results_io.save_beir_results支持frozen_rerank，不改用户benchmark_eval.py／rerank_core.py。新辅助build_reranker(profile)返回一个CrossEncoder；describe_reranker(model,*,profile_name,profile,config_path)返回实际设备、权重精度、长度、激活／指令和库版本等可保存字典。候选来源与本轮模型分置config.candidate_source和config.rerank，来源描述文件／原三产物／三输入重新核对，逐题输出只能来自自己原候选；latency.scope明确只含候选副本读取＋重排，排除原召回／文件模型加载／计分，旧方法范围保持。
+
+三候选Qwen4B／8B／BGE-v2-m3保留；8B固定revision=77d193c791ed757ca307ee72715aa132723da912，4B和BGE固定版本沿用。已读官方模型卡／公开API／固定版本小配置，Qwen为Transformer＋LogitScore，yes9693／no2152、默认query指令、Identity原始差值。实际ST5.7.0类位于cross_encoder/model.py（并非大写CrossEncoder.py），构造签名已直接核对。初始4096联合输入上限、batch1、CUDA BF16 SDPA；这是待真实预检的起点，不是最优或已验证显存配置。没有权重下载、模型推理或GPU运行。相关46项全部通过：新辅助7＋原BEIR保存6＋CT保存5＋评测10＋加载6＋rerank12。报告results/reranking_support_validation.json，真实构造仅autospec检查签名转发，不能写成模型加载通过。
+
+下一项完整说明见docs/reranking_runtime_task.md：用户写main(config_dir,data_dir,receipt_path,profile_name,run_name,result_dir)及CLI；显式读配置→加载冻结候选→创建一次reranker并取得真实描述→调用既有evaluate_frozen_reranking，batch_size须来自profile→构建8字段config→save_beir_results→返回summary。split从冻结来源取，不设冲突参数；不重建embedding／Dense，不复制循环，不让用户调用不存在辅助。本轮先写入口，保存后语义审核＋假模型编排检查，通过同步再准备用户终端下载和真实小批预检。新增文件的来源／用途／输入输出必须在交任务前讲清，不再直接引入未说明对象。
+
 **2026-11-25最新验收：用户已完成冻结候选重排评测衔接，相关28项检查全部通过。** benchmark_eval.py保留默认两参数检索回调，新增pass_query_id=False选项；开启时传当前行query_id。用户新增evaluate_frozen_reranking(frozen,reranker,ks=(10,100),*,batch_size=16)，内部按ID取候选、调用现有rerank，并复用原计时和pytrec_eval循环返回eval_df／run。选项可由位置或关键字传入，不因原任务建议仅关键字而强制用户修改合法签名。原有未使用导入不作为本轮返工门槛。助手未改用户核心源码，只在tests/test_benchmark_eval.py添加3项已说明的行为检查：同文不同ID回调、真实rerank句对／批次／候选副本衔接、空题保留分母；该模块10项，加加载器6项、rerank核心12项，共28项通过。
 
 真实NFCorpus324题／32400句对也已通过用户包装函数完整联结检查：假打分器反转候选顺序，逐题query原文／ID／顺序和候选集合均保持，Recall@100仍0.39709670188154617；只验证衔接与集合不变量，不是重排模型成绩，不报告假分数nDCG为项目效果。未加载模型、向量或GPU，原描述文件／三产物／三输入SHA全部未变。结果results/frozen_reranking_eval_validation.json、_run.log和_accepted_code_snapshot。用户已了解frozen由助手在9c56f07提供的load_frozen_candidates创建，不是内置变量；辅助文件的来源、输入／返回结构和角色应在使用前讲明。当前工作单元验收后先提交同步；下一步准备真实重排的配置、来源／计时保存辅助和运行入口，现有save_beir_results尚未支持重排，不让用户调用不存在的接口。真实reranker尚未下载或实测。

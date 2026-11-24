@@ -1,0 +1,44 @@
+{
+  "qwen3_4b": {
+    "model_name": "Qwen/Qwen3-Reranker-4B",
+    "revision": "22e683669bc0f0bd69640a1354a6d0aebcfeede5",
+    "license": "Apache-2.0",
+    "device": "cuda",
+    "local_files_only": true,
+    "max_length": 4096,
+    "batch_size": 1,
+    "model_kwargs": {"dtype": "bfloat16", "attn_implementation": "sdpa"},
+    "processor_kwargs": {"padding_side": "left"},
+    "prompts": {"query": "Given a web search query, retrieve relevant passages that answer the query"},
+    "default_prompt_name": "query",
+    "score_type": "raw_yes_minus_no_logit"
+  },
+  "qwen3_8b": {
+    "model_name": "Qwen/Qwen3-Reranker-8B",
+    "revision": "77d193c791ed757ca307ee72715aa132723da912",
+    "license": "Apache-2.0",
+    "device": "cuda",
+    "local_files_only": true,
+    "max_length": 4096,
+    "batch_size": 1,
+    "model_kwargs": {"dtype": "bfloat16", "attn_implementation": "sdpa"},
+    "processor_kwargs": {"padding_side": "left"},
+    "prompts": {"query": "Given a web search query, retrieve relevant passages that answer the query"},
+    "default_prompt_name": "query",
+    "score_type": "raw_yes_minus_no_logit"
+  },
+  "bge_v2_m3": {
+    "model_name": "BAAI/bge-reranker-v2-m3",
+    "revision": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+    "license": "Apache-2.0",
+    "device": "cuda",
+    "local_files_only": true,
+    "max_length": 4096,
+    "batch_size": 1,
+    "model_kwargs": {"dtype": "bfloat16", "attn_implementation": "sdpa"},
+    "processor_kwargs": {"padding_side": "right"},
+    "prompts": {},
+    "default_prompt_name": null,
+    "score_type": "raw_classification_logit"
+  }
+}

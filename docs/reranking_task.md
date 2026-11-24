@@ -1,5 +1,7 @@
 # Cross-Encoder重排任务
 
+**2026-11-25运行辅助已提供：** configs/reranker_profiles.json固定Qwen4B／8B与BGE配置，8B revision=77d193c791ed757ca307ee72715aa132723da912；reranker_adapter.py提供build_reranker和describe_reranker，save_beir_results已支持frozen_rerank、候选来源核对和独立重排计时。相关46项检查通过，未下载或加载真实模型。4096联合长度／batch1待预检。用户下一项新增运行入口，完整接口、参数理由和配置对应见[运行任务](reranking_runtime_task.md)。以下待实现描述属于此前阶段。
+
 **当前衔接已验收，2026-11-25：** 用户已完成benchmark_eval.py的可选query_id传递及evaluate_frozen_reranking包装函数，复用原评分循环，相关28项检查全部通过。真实324题／32400候选以假打分反转顺序核对了查询身份、候选集合及Recall@100保持0.39709670188154617；未加载模型、向量或GPU。详见[冻结重排评测任务](frozen_reranking_eval_task.md)，记录results/frozen_reranking_eval_validation.json。模型／CLI／重排保存扩展待后续，暂无真实重排成绩。
 
 **导师检查方式修正，2026-11-25。** 用户明确反对由不可见测试要求核心迁就错误异常约定。TypeError／ValueError按语义使用，不强制统一名称；本轮测试只核对非法输入／输出确实被拒绝、候选与分数对应、来源／输入不变、模型调用次数和运行异常传播。先审实际代码与API，再验证；若测试假设错，修测试，不反复改正确实现。用户无需再加异常包装，核心本轮不修改。此原则覆盖下文旧的强制ValueError要求，详见PROJECT_CONTEXT第13.12节。
@@ -29,7 +31,7 @@
 | 已核查候选 | 任务能力与使用条件 | 本轮定位 |
 | --- | --- | --- |
 | [Qwen/Qwen3-Reranker-4B](https://huggingface.co/Qwen/Qwen3-Reranker-4B) | 4B，多语言、指令感知，官方报告32K上下文，Apache-2.0；revision=22e683669bc0f0bd69640a1354a6d0aebcfeede5 | 优先验证的效果候选，尚未下载／运行，不能称为最终胜出模型 |
-| [Qwen/Qwen3-Reranker-8B](https://huggingface.co/Qwen/Qwen3-Reranker-8B) | 8B，多语言、指令感知，官方报告32K上下文，Apache-2.0；下载前再固定revision | 与4B做同家族直接对照，官方中文／多语言／长文档项更高；尚未下载／运行 |
+| [Qwen/Qwen3-Reranker-8B](https://huggingface.co/Qwen/Qwen3-Reranker-8B) | 8B，多语言、指令感知，官方报告32K上下文，Apache-2.0；revision=77d193c791ed757ca307ee72715aa132723da912 | 与4B做同家族直接对照，官方中文／多语言／长文档项更高；尚未下载／运行 |
 | [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) | 多语言联合编码相关性打分，Apache-2.0；revision=953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e | 效果与成本对照，尚未下载／运行，不因规模较小预设为最终模型 |
 
 候选依据：[Qwen官方同一评测表](https://huggingface.co/Qwen/Qwen3-Reranker-4B#evaluation)中，Qwen3-Reranker-4B的MTEB-R为69.76，BGE-reranker-v2-m3为57.03，Qwen3-Reranker-8B为69.02；该表均由发布方在Qwen3-Embedding-0.6B检索的Top100上运行。当前英文任务支持先验证4B，但不足以排除8B。8B在CMTEB-R（77.45对75.94）、MMTEB-R（72.94对72.74）、MLDR（70.19对69.97）更高，4B在FollowIR（14.84对8.05）更高；汇总项不能代替医学专项，未提供误差范围也不宣称差异显著。用户追问8B后，明确将其加入正式候选，在相同Dense Top100、相同实际输入内容／预算与任务指令下与4B直接比较，记录截断和显存／延迟；模型格式差异必须如实配置。先验候选顺序不是最终胜出结论。这些模型都是通用模型，不能当作医学专用或已具备指南适用性判断能力。

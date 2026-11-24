@@ -33,7 +33,11 @@ def _validate_method_metadata(config, method):
     # 只有出现检索子配置才将RRF识别为新的分组布局。
     grouped_rrf = method == "rrf" and any(name in config for name in ("dense", "bm25"))
     # 组合方法分别记录两路信息，不要求虚构一个全局模型名。
-    if grouped_rrf:
+    if method == 'frozen_rerank':
+        # 候选来源与本轮模型分别保留，不能冒写成一次新的Dense实验。
+        sections = [('config.candidate_source', config.get('candidate_source'), {'source_run_name', 'candidate_k', 'query_count', 'frozen_receipt', 'source_files', 'input_sha256'}), ('config.rerank', config.get('rerank'), {'model_name', 'revision', 'device', 'max_length', 'batch_size', 'score_type', 'actual_device', 'actual_weight_dtype', 'actual_max_length'})]
+    # 组合方法分别核对两路检索参数。
+    elif grouped_rrf:
         # 每一项包含报错路径、实际配置以及该层必须具有的字段。
         sections = [("config.dense", config.get("dense"), metadata_keys), ("config.bm25", config.get("bm25"), metadata_keys), ("config.rrf", config.get("rrf"), {"candidate_k", "rrf_constant"})]
     # 单路方法优先使用自己的分组配置。
@@ -242,8 +246,8 @@ def save_beir_results(result_df, run, *, config, run_name, result_dir):
     if not isinstance(config, dict) or required - config.keys():
         # 给出稳定的配置错误。
         raise ValueError(f"config必须提供{sorted(required)}")
-    # 限定现有三种检索方法以及BEIR标准划分。
-    if config["retrieval_method"] not in {"dense", "bm25", "rrf"} or config["split"] not in {"train", "dev", "test"}:
+    # 支持原有检索与离线冻结候选重排，划分仍沿用BEIR标准。
+    if config["retrieval_method"] not in {"dense", "bm25", "rrf", "frozen_rerank"} or config["split"] not in {"train", "dev", "test"}:
         # 未知方法或划分不能被误标成有效运行。
         raise ValueError("未知retrieval_method或split")
     # 沿用原有方法层元数据检查，不要求移动到顶层。
@@ -326,12 +330,46 @@ def save_beir_results(result_df, run, *, config, run_name, result_dir):
             if not isfinite(row[name]) or row[name] < 0 or (name != "latency_ms" and row[name] > 1):
                 # 清楚定位哪一题的哪个字段不合法。
                 raise ValueError(f"query_id={query_id}:{name}数值不合法")
+    # 重排额外验证原候选来源和当前输出集合，不重新运行模型或评分。
+    if config['retrieval_method'] == 'frozen_rerank':
+        # 使用已经加载并通过核对的来源信息。
+        source = config['candidate_source']
+        # 所声明的原始数据必须与这次保存实际读取的输入一致。
+        if any(_sha256_file(path) != source['input_sha256'][name]['sha256'] for name, path in inputs.items()):
+            # 拒绝把另一版语料、查询或标签混入重排结果。
+            raise ValueError('Reranking inputs differ from frozen candidate source')
+        # 描述文件和三份原始检索产物都应保持原内容。
+        source_files = [source['frozen_receipt'], *source['source_files'].values()]
+        # 逐一核对关联的实际源文件。
+        for item in source_files:
+            # 已保存的来源如果变化，当前结果不能再引用旧身份。
+            if _sha256_file(item['path']) != item['sha256']:
+                # 来源文件名保留在错误中。
+                raise ValueError(f"Frozen candidate source changed: {item['path']}")
+        # 原逐题候选用于核对每题输出只来自自己的原始候选。
+        source_rows = [json.loads(line) for line in Path(source['source_files']['results.jsonl']['path']).read_text(encoding='utf-8').splitlines() if line.strip()]
+        # 按问题ID关联，不按原文件行号或可能重复的问题文字关联。
+        original = {row['query_id']: row for row in source_rows}
+        # 保留原实验全部查询，不能静默丢失空候选题。
+        if len(source_rows) != len(original) or set(original) != set(normalized_run) or len(records) != source['query_count']:
+            # 不改变评测分母。
+            raise ValueError('Reranking query coverage differs from frozen source')
+        # 每题只能重排自己原有的候选，截取数由本轮ks决定。
+        for row in records:
+            # 获取该题原始结果。
+            old = original[row['query_id']]
+            # 返回数量须等于预算内原候选数，且不得跨题换文档或改问题。
+            if row['query'] != old['query'] or len(row['retrieved_ids']) != min(max(ks), len(old['retrieved_ids'])) or not set(row['retrieved_ids']) <= set(old['retrieved_ids']):
+                # 明确定位对应问题。
+                raise ValueError(f"query_id={row['query_id']}:reranking candidates differ from frozen source")
+    # 按实际运行方法记录计时含义，避免把离线重排写成端到端召回耗时。
+    latency_scope = 'frozen candidate copy and rerank only; excludes source retrieval, file/model loading and metric computation' if config['retrieval_method'] == 'frozen_rerank' else 'retrieve_fn call only; includes query encoding, excludes index construction and metric computation'
     # 所有输入检查完成后准备输出路径。
     output = Path(result_dir).resolve()
     # 独立保存逐题结果、评分输入和汇总。
     paths = {"results": output / f"{run_name}_results.jsonl", "run": output / f"{run_name}_run.json", "summary": output / f"{run_name}_summary.json"}
     # 汇总使用全部查询行，包括空命中题。
-    summary = {"dataset_name": config["dataset_name"], "split": config["split"], "retrieval_method": config["retrieval_method"], "config": config, "document_count": len(document_ids), "query_count": len(records), "metrics": {name: sum(row[name] for row in records) / len(records) for name in metrics}, "latency_ms": {"mean": sum(row["latency_ms"] for row in records) / len(records), "median": float(pd.Series([row["latency_ms"] for row in records]).median()), "scope": "retrieve_fn call only; includes query encoding, excludes index construction and metric computation"}, "scorer": {"package": "pytrec-eval-terrier", "version": version("pytrec-eval-terrier")}, "input_sha256": {name: {"path": str(path), "sha256": _sha256_file(path)} for name, path in inputs.items()}, "files": {name: str(path) for name, path in paths.items()}, "provenance": "learner-computed per-query metrics; helper validates, aggregates and saves"}
+    summary = {"dataset_name": config["dataset_name"], "split": config["split"], "retrieval_method": config["retrieval_method"], "config": config, "document_count": len(document_ids), "query_count": len(records), "metrics": {name: sum(row[name] for row in records) / len(records) for name in metrics}, "latency_ms": {"mean": sum(row["latency_ms"] for row in records) / len(records), "median": float(pd.Series([row["latency_ms"] for row in records]).median()), "scope": latency_scope}, "scorer": {"package": "pytrec-eval-terrier", "version": version("pytrec-eval-terrier")}, "input_sha256": {name: {"path": str(path), "sha256": _sha256_file(path)} for name, path in inputs.items()}, "files": {name: str(path) for name, path in paths.items()}, "provenance": "learner-computed per-query metrics; helper validates, aggregates and saves"}
     # 所有内容先完成严格序列化，再创建文件。
     texts = {"results": "".join(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n" for row in records), "run": json.dumps(normalized_run, ensure_ascii=False, indent=2, allow_nan=False) + "\n", "summary": json.dumps(summary, ensure_ascii=False, indent=2, allow_nan=False) + "\n"}
     # 已有结果不覆盖，保留原实验身份。

@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-24。根目录现有14个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。用户已完成Qwen固定配置与维度接入，缓存编排9项、入口15项合成检查通过，参数位于configs/embedding_profiles.json。正式入口15项及真实GPU预检03均通过，Qwen完整Dense dev已实测核验，当前用户实现rerank纯函数，尚无重排成绩。rerank_core.py纯函数12项验收通过，真实模型和入口待接。
+整理日期：2026-11-19，进度更新2026-11-25。根目录现有15个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。Qwen完整Dense dev已实测核验，用户rerank及冻结候选评测已接通。真实重排配置、模型加载／运行描述与保存辅助已提供，相关46项无权重检查通过；当前用户新增run_reranking_eval.py，尚无真实重排成绩。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -13,13 +13,16 @@
 | run_retrieval_eval.py | CLI、方法选择与评测入口 | 用户 |
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
 | embedding_adapter.py | 共享模型构造与显式FP32输出归一化；6项无权重验证通过，预检和正式入口已共用，真实GPU预检03通过 | 助手辅助，逐行中文注释 |
+| reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；只验证参数和合成运行属性，尚未加载真实权重 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
-| retrieval_results_io.py | 验证并保存CT及BEIR既有结果；新增save_beir_results，支持方法层配置，保留旧接口 | 助手辅助，逐行中文注释 |
+| retrieval_results_io.py | 验证并保存CT及BEIR既有结果；save_beir_results支持原方法及frozen_rerank，保留候选来源和正确计时范围 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分；新增可选query_id回调和冻结候选重排包装，10项小样本检查通过，真实324题假打分衔接核对通过 | 用户 |
 | run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
 
 ## 数据维护模块
+
+configs/reranker_profiles.json保存三种重排候选的固定版本与初始运行参数。tests现有18个模块，新增test_reranking_support.py的7项检查针对真实构造签名转发、合成实际属性及重排结果来源／候选集合／计时范围；加现有相关39项共46项通过。说明与用户下一项见reranking_runtime_task.md，结果results/reranking_support_validation.json。文末“17个模块”属于此前整理记录。
 
 | scripts/data 内的模块 | 保留理由 |
 | --- | --- |
