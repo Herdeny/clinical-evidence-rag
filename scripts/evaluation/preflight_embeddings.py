@@ -8,12 +8,16 @@ import hashlib
 from pathlib import Path
 # 分别记录模型加载和小批编码时间。
 from time import perf_counter
+# 只读取明确的模型缓存变量，用于证明实际加载位置。
+import os
 # 检查向量形状、有限值和归一化。
 import numpy as np
 # 读取真实GPU信息与权重精度，不改变驱动或模型规模。
 import torch
 # 复用成品入口的同一LangChain模型接口。
 from langchain_huggingface import HuggingFaceEmbeddings
+# 保存Hub真实解析出的缓存路径，不读取认证信息。
+from huggingface_hub import constants as hub_constants
 # 复用已验收的BEIR读取器，只读取dev及其配套语料。
 from benchmark_data import load_beir_dataset
 
@@ -151,8 +155,10 @@ def run_preflight(config_dir, data_dir, profile_name):
     if input_sha != {name: file_sha256(path) for name, path in paths.items()}:
         # 发生并行编辑时不把混合输入声明为通过。
         raise RuntimeError('Inputs or preflight source changed during execution')
+    # 缓存位置独立记录，不改变模型语义配置或旧文档向量身份。
+    cache_locations = {'hf_home': hub_constants.HF_HOME, 'hf_hub_cache': hub_constants.HF_HUB_CACHE, 'hf_xet_cache': hub_constants.HF_XET_CACHE, 'sentence_transformers_home': os.environ.get('SENTENCE_TRANSFORMERS_HOME')}
     # 返回真实模型小批与长度检查，不包含公开基准效果分数。
-    return {'status': 'passed', 'scope': 'real model metadata and small-batch encoding; no corpus cache, retrieval, test split or MIRAGE run', 'profile': profile_name, 'profile_config': profile, 'input_sha256': input_sha, 'actual_device': str(parameter.device), 'actual_weight_dtype': str(parameter.dtype), 'actual_dimension': dimension, 'actual_max_seq_length': limit, 'gpu_name': torch.cuda.get_device_name(device), 'gpu_total_bytes': torch.cuda.get_device_properties(device).total_memory, 'gpu_peak_allocated_bytes': torch.cuda.max_memory_allocated(device), 'gpu_peak_reserved_bytes': torch.cuda.max_memory_reserved(device), 'model_load_seconds': load_seconds, 'document_sample_seconds': document_seconds, 'single_query_encode_seconds': query_seconds, 'document_count': len(texts), 'dev_query_count': len(questions), 'document_token_max': max(document_lengths), 'documents_over_limit': sum(length > limit for length in document_lengths), 'query_token_max': max(query_lengths), 'queries_over_limit': sum(length > limit for length in query_lengths), 'sample_document_ids': corpus.iloc[indices]['id'].tolist(), 'sample_query_id': queries.iloc[0]['id'], 'document_vectors': document_check, 'query_vectors': query_check}
+    return {'status': 'passed', 'scope': 'real model metadata and small-batch encoding; no corpus cache, retrieval, test split or MIRAGE run', 'profile': profile_name, 'profile_config': profile, 'cache_locations': cache_locations, 'input_sha256': input_sha, 'actual_device': str(parameter.device), 'actual_weight_dtype': str(parameter.dtype), 'actual_dimension': dimension, 'actual_max_seq_length': limit, 'gpu_name': torch.cuda.get_device_name(device), 'gpu_total_bytes': torch.cuda.get_device_properties(device).total_memory, 'gpu_peak_allocated_bytes': torch.cuda.max_memory_allocated(device), 'gpu_peak_reserved_bytes': torch.cuda.max_memory_reserved(device), 'model_load_seconds': load_seconds, 'document_sample_seconds': document_seconds, 'single_query_encode_seconds': query_seconds, 'document_count': len(texts), 'dev_query_count': len(questions), 'document_token_max': max(document_lengths), 'documents_over_limit': sum(length > limit for length in document_lengths), 'query_token_max': max(query_lengths), 'queries_over_limit': sum(length > limit for length in query_lengths), 'sample_document_ids': corpus.iloc[indices]['id'].tolist(), 'sample_query_id': queries.iloc[0]['id'], 'document_vectors': document_check, 'query_vectors': query_check}
 
 
 # 显式运行时才解析参数和调用模型。

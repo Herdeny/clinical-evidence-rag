@@ -52,3 +52,5 @@ tests中现有14个测试模块，均有逐行中文注释。test_embedding_inde
 原始数据、冻结清单、历史执行源码快照、结果及 Notebook 作为已有记录保留。Notebook 中的历史根目录导入可能是当时的路径，当前操作以脚本和本文目录为准，不把 Notebook 重新作为生产依赖。
 
 整理前源码与迁移清单：results/source_maintenance_2026-11-19。该目录是历史审计，不是新的运行入口。未来真正无依赖的一次性探测脚本可以删除，但其输入来源、命令／参数、时间与指纹、失败原因及最终产物必须先进入文档或审计记录。
+
+模型命令通过scripts/project_env.sh启动；它只对子进程设置项目内模型／下载后端缓存，不更改全局shell配置。缓存迁移记录在results/model_cache_migration_2026-11-24.json，下载和加载命令以docs/dense_model_selection_task.md更新版为准。

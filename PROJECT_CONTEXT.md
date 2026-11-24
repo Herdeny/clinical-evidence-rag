@@ -6,6 +6,10 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-24最新缓存位置要求：模型文件只放项目内，当前下载已暂停并迁移，等待用户终端继续。** 用户明确不希望默认下载写项目外。已精确核对并SIGINT中断该Qwen下载PID166760（进程已退出），将/home/herdeny/.cache/huggingface/hub/models--Qwen--Qwen3-Embedding-8B及对应.lock目录原子移至项目cache/huggingface/hub，31个实体／相对链接文件的大小与inode清单一致，旧Qwen目录已移走；只迁本次PID的Xet日志，旧共享日志不删除。BGE模型缓存复制到项目并逐文件SHA核对，原共享BGE保留。迁移记录results/model_cache_migration_2026-11-24.json；没有模型加载／GPU执行，下载未完成。未完成分片保留，不能承诺后端会复用全部已传字节。
+
+**当前用户操作：** 用docs/dense_model_selection_task.md末节更新命令继续下载并预检，两者都必须通过bash scripts/project_env.sh启动。该包装器将HF_HOME／Hub／Xet／assets／Sentence Transformers／Torch／XDG缓存设到项目cache内，仅影响子进程，不改shell全局配置或父进程。新日志results/qwen3_8b_download_02_project_cache.log，旧01保留。HF_HUB_DISABLE_PROGRESS_BARS=0及TQDM_POSITION=-1可显示管道下单文件进度。已验证实际Hub／Xet路径、项目内BGE／Qwen配置解析、异目录调用、参数完整及父环境不变；原BGE文档缓存指纹4aa...不变，17个原基线／缓存文件SHA未变。results/project_model_cache_validation.json为passed。/cache/已在Git忽略规则中，权重不提交。用户偏好见13.11，后续不得再给直接使用默认共享缓存的模型命令。预检仍未执行，不用旧命令从外部缓存加载。
+
 **2026-11-24最新：模型配置／维度接入已完成，下一步用户终端下载和预检Qwen8B。** 用户已将CLI调用与六个位置参数对齐，config_dir必填、配置名保留config_embedding_model，结果名带bge_small／qwen3_8b。最终缓存9项、入口14项全部通过，含真实安装类API、4096维、两配置／缓存隔离、零文档重编码、元数据、参数拒绝和CLI。核心由用户完成；助手仅删除未使用logging.config／matplotlib rainbow导入、整理空白，未改变函数逻辑。最终SHA：embedding_index.py=dbdd1baca3a0dc85bd8853c8c6cb8763919af8c59eb4eec2cc075bc559e6fd49；run_benchmark_eval.py=b6d2472690e42519657766e5f8f2c56a1302b7938c38f271d06503ec228f6f3b。results/embedding_model_integration_validation.json为passed，revision5_accepted保存源码；旧10份结果及NFCorpus缓存2文件SHA未变，旧失败报告保留。
 
 **当前用户任务：固定版本下载＋小批预检，命令见docs/dense_model_selection_task.md末节。** 已核查hf路径/home/wzh/miniforge3/envs/all-in-rag/bin/hf、huggingface-hub0.36.2；Qwen revision1d8ad4ca9b3dd8059ad90a75d4983776a23d44af的配置／权重尚未缓存，官方目录约15.2GB。新增助手辅助scripts/evaluation/preflight_embeddings.py，必填--config-dir／--profile／--output，读取同一配置与NFCorpus dev，统计全部文档／查询token长度，只编码前两篇及最长文档、第一条原query；核对真实CUDA、BF16、4096维、8192上限、有限性／范数和峰值GPU分配／保留内存，记录输入与源码SHA。不创建全库缓存、不检索／评分、不访问test／MIRAGE。4项无权重辅助检查及--help通过，实际模型／GPU未运行。用户先下载，再用进程离线开关运行预检；实时日志和GNU time资源文件独立保存，不在助手后台启动。
@@ -716,6 +720,12 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 - 区分官方结果、待验证候选与本项目已实现／实测。面试选型理由应能回到候选比较、实测增益与失败边界；未做的对照不能写成自己的实验结论。检索相关性模型不自动等于医学适用性判断或临床决策能力。
 - 既有BGE-small、DeepSeek及缓存保留为已有基线；成品模型没有因此被永久锁定。模型配置通过已定接口接入，升级向量模型确需新编码与索引，但不让用户重写核心，也不与新检索模块同时改动。
 - 本轮撤回未经效果对照的MiniLM成品选型，Qwen3-Reranker-4B／8B作为同家族效果候选直接比较，BGE-reranker-v2-m3保留对照；不以英文单项排除8B。当前rerank纯函数及验收不变。模型权重、dtype、输入模板、长度和batch在真实运行前核定并冻结，尚无重排模型成绩。
+
+### 13.11 模型下载与运行缓存放项目内
+
+用户于2026-11-24明确要求下载到clinical-evidence-rag项目中，不污染外部环境。后续模型下载、预检、索引和评测统一通过bash scripts/project_env.sh启动，或采用同等明确的项目内缓存配置；HF_HOME位于cache/huggingface，Hub／Sentence Transformers共享其hub子目录，Xet及资产缓存同属项目。包装器仅影响子进程，不修改全局启动文件。模型文件、未完成分片和运行日志继续由Git忽略；保留来源、固定版本与迁移／运行记录。
+
+旧共享缓存可能供其他项目使用，不清空整个全局缓存；本次只移动已确认的Qwen及其本次日志，复制BGE维持本项目离线加载。只改变模型文件存储位置不意味着模型或编码参数改变，已验证BGE文档向量身份仍一致。当前迁移已完成，下载等待用户在可见终端继续，不由助手后台启动长下载。
 
 ## 14. 恢复工作与维护本文
 
