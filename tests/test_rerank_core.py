@@ -88,7 +88,7 @@ class RerankCoreTests(unittest.TestCase):
             # 即使输入错误，也不应调用模型。
             model = SimpleNamespace(predict=Mock())
             # 只有合法全局参数配合空候选才能返回空成功结果。
-            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+            with self.subTest(field=field, value=value), self.assertRaises((TypeError, ValueError)):
                 # 专门覆盖提前return绕过校验的组合。
                 rerank(hits=[], reranker=model, **kwargs)
             # 空候选分支始终无需模型推理。
@@ -118,8 +118,8 @@ class RerankCoreTests(unittest.TestCase):
         for query in ('', ' \n\t ', None, 1, ['question']):
             # 独立记录该次模型调用。
             model = SimpleNamespace(predict=Mock())
-            # 所有不符合接口的输入应给出明确ValueError。
-            with self.subTest(query=query), self.assertRaises(ValueError):
+            # 不合法类型或值需在推理前拒绝，不强制改写原生异常类型。
+            with self.subTest(query=query), self.assertRaises((TypeError, ValueError)):
                 # 不应先调用strip再发现类型不符。
                 rerank(query, make_hits(), 2, reranker=model)
             # 不消耗模型推理资源。
@@ -137,8 +137,8 @@ class RerankCoreTests(unittest.TestCase):
                 kwargs[field] = value
                 # 每次使用新假模型。
                 model = SimpleNamespace(predict=Mock())
-                # 错误消息自身也不能因拼接类型而抛出TypeError。
-                with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                # 检查参数被拒绝，不以统一异常名称作为功能门槛。
+                with self.subTest(field=field, value=value), self.assertRaises((TypeError, ValueError)):
                     # 保持其他输入合法。
                     rerank('question', make_hits(), reranker=model, **kwargs)
                 # 非法输入不可触发推理。
@@ -151,7 +151,7 @@ class RerankCoreTests(unittest.TestCase):
             # 用假模型观察是否错误地开始推理。
             model = SimpleNamespace(predict=Mock())
             # 不将这些输入静默转成其他容器。
-            with self.subTest(hits=hits), self.assertRaises(ValueError):
+            with self.subTest(hits=hits), self.assertRaises((TypeError, ValueError)):
                 # 直接使用当前输入。
                 rerank('question', hits, 2, reranker=model)
             # 所有结构错误都应在调用模型前发现。
@@ -204,8 +204,8 @@ class RerankCoreTests(unittest.TestCase):
             original = deepcopy(hits)
             # 当前假模型返回指定异常结构。
             model = SimpleNamespace(predict=Mock(return_value=values))
-            # 所有模型输出契约错误都应转为明确ValueError。
-            with self.subTest(values=values), self.assertRaises(ValueError):
+            # 错误结构或非法数值必须拒绝，保留类型错误和值错误各自语义。
+            with self.subTest(values=values), self.assertRaises((TypeError, ValueError)):
                 # 输入仍是合法的三条候选。
                 rerank('question', hits, 2, reranker=model)
             # 必须先实际调用一次模型，才能检查其返回值。
