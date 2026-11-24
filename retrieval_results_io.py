@@ -226,3 +226,141 @@ def save_retrieval_results(result_df, config, *, run_name=None, result_dir="resu
     print("运行摘要：", summary_path.resolve())
     # 返回summary，结束本次函数调用。
     return summary
+
+
+# 保存已经计算好的BEIR逐题结果和评分输入，不调用检索器或重新评分。
+def save_beir_results(result_df, run, *, config, run_name, result_dir):
+    # CSV仅用于读取当前划分的题号，避免把其他划分并入结果。
+    import csv
+    # 检查浮点数是否有限。
+    from math import isfinite
+    # 记录本次真正使用的评分包版本。
+    from importlib.metadata import version
+    # 配置只要求实际运行所需的共同信息，方法参数保留在各自子配置。
+    required = {"dataset_name", "data_dir", "split", "retrieval_method", "ks"}
+    # 缺少公共运行信息时不创建输出文件。
+    if not isinstance(config, dict) or required - config.keys():
+        # 给出稳定的配置错误。
+        raise ValueError(f"config必须提供{sorted(required)}")
+    # 限定现有三种检索方法以及BEIR标准划分。
+    if config["retrieval_method"] not in {"dense", "bm25", "rrf"} or config["split"] not in {"train", "dev", "test"}:
+        # 未知方法或划分不能被误标成有效运行。
+        raise ValueError("未知retrieval_method或split")
+    # 沿用原有方法层元数据检查，不要求移动到顶层。
+    _validate_method_metadata(config, config["retrieval_method"])
+    # 数据集身份用于摘要，不能留空。
+    if not isinstance(config["dataset_name"], str) or not config["dataset_name"].strip():
+        # 拒绝没有身份的结果。
+        raise ValueError("dataset_name应为非空字符串")
+    # 使用与用户评测函数一致的K集合。
+    ks = config["ks"]
+    # 避免空、重复、布尔值或非正整数K。
+    if not ks or any(type(k) is not int or k <= 0 for k in ks) or len(ks) != len(set(ks)):
+        # 导出不能改变评测预算。
+        raise ValueError("config.ks应为不重复的正整数序列")
+    # 结果前缀限制为单个文件名。
+    if not isinstance(run_name, str) or not run_name or Path(run_name).name != run_name:
+        # 阻止结果写到指定目录以外。
+        raise ValueError("run_name只能是非空文件名前缀")
+    # 按实际K确定所有需要保存的指标。
+    metrics = [f"{name}_at_{k}" for k in ks for name in ("ndcg", "recall")]
+    # 查询、命中与耗时必须保留，便于逐题排错。
+    columns = {"query_id", "query", "retrieved_ids", "scores", "latency_ms", *metrics}
+    # 不接受空结果、重复题号或缺失字段。
+    if columns - set(result_df.columns) or result_df.empty or not result_df["query_id"].is_unique:
+        # 本阶段不允许静默丢题或合并重复题。
+        raise ValueError("BEIR结果必须非空、题号唯一且字段完整")
+    # 只读取原始文件的身份，不另行解析正文或重新运行数据准备流程。
+    data_dir = Path(config["data_dir"]).resolve()
+    # 三个实际输入文件都进入来源指纹。
+    inputs = {"corpus": data_dir / "corpus.jsonl", "queries": data_dir / "queries.jsonl", "qrels": data_dir / "qrels" / f"{config['split']}.tsv"}
+    # 在写结果前确认输入存在。
+    for path in inputs.values():
+        # 缺失文件保留明确的异常类型。
+        if not path.is_file():
+            # 不把缺文件当成一次成功评测。
+            raise FileNotFoundError(path)
+    # 语料只保留文档ID集合，不复制全部正文到内存。
+    with inputs["corpus"].open(encoding="utf-8") as stream:
+        # 标准BEIR文档身份来自原始_id字段。
+        document_ids = {json.loads(line)["_id"] for line in stream if line.strip()}
+    # 当前划分的题号由所选qrels决定。
+    with inputs["qrels"].open(encoding="utf-8", newline="") as stream:
+        # 只收集query-id，不向任何检索器传入标签。
+        query_ids = {row["query-id"] for row in csv.DictReader(stream, delimiter="\t")}
+    # 文件、逐题结果与评分输入必须覆盖同一组题。
+    if not isinstance(run, dict) or set(result_df["query_id"]) != query_ids or set(run) != query_ids:
+        # 避免删除空命中或只保存容易题而改变分母。
+        raise ValueError("结果、run与所选qrels的查询ID不一致")
+    # 转成独立行字典，保持原始查询次序。
+    records = result_df.to_dict(orient="records")
+    # 为标准JSON准备真实浮点检索分数。
+    normalized_run = {}
+    # 核对每条查询的命中表与run是否一致。
+    for row in records:
+        # 用查询身份报告具体哪一题失败。
+        query_id, ids, scores = row["query_id"], row["retrieved_ids"], row["scores"]
+        # 文档列表需要与分数逐项对应，允许空命中或少于K。
+        if len(ids) != len(scores) or len(ids) > max(ks) or len(ids) != len(set(ids)) or not set(ids) <= document_ids:
+            # 不补齐或删除不合法的命中。
+            raise ValueError(f"query_id={query_id}:命中ID或数量不合法")
+        # 保留检索分数的Python浮点表示。
+        row["scores"] = [float(value) for value in scores]
+        # 非有限分数不能进入JSON或评分复现文件。
+        if not all(isfinite(value) for value in row["scores"]):
+            # 报告当前题号。
+            raise ValueError(f"query_id={query_id}:分数必须有限")
+        # 用已有逐题命中构造期望评分输入。
+        expected = dict(zip(ids, row["scores"]))
+        # 不允许逐题结果和评分输入保存不同文档或分数。
+        if expected != run[query_id]:
+            # 拒绝矛盾的实验产物。
+            raise ValueError(f"query_id={query_id}:run与逐题结果不一致")
+        # 保留空命中查询键。
+        normalized_run[query_id] = expected
+        # 指标与耗时只验证、汇总，不重新评分。
+        for name in (*metrics, "latency_ms"):
+            # 转成JSON原生浮点数。
+            row[name] = float(row[name])
+            # 指标有上下界，耗时只要求非负有限。
+            if not isfinite(row[name]) or row[name] < 0 or (name != "latency_ms" and row[name] > 1):
+                # 清楚定位哪一题的哪个字段不合法。
+                raise ValueError(f"query_id={query_id}:{name}数值不合法")
+    # 所有输入检查完成后准备输出路径。
+    output = Path(result_dir).resolve()
+    # 独立保存逐题结果、评分输入和汇总。
+    paths = {"results": output / f"{run_name}_results.jsonl", "run": output / f"{run_name}_run.json", "summary": output / f"{run_name}_summary.json"}
+    # 汇总使用全部查询行，包括空命中题。
+    summary = {"dataset_name": config["dataset_name"], "split": config["split"], "retrieval_method": config["retrieval_method"], "config": config, "document_count": len(document_ids), "query_count": len(records), "metrics": {name: sum(row[name] for row in records) / len(records) for name in metrics}, "latency_ms": {"mean": sum(row["latency_ms"] for row in records) / len(records), "median": float(pd.Series([row["latency_ms"] for row in records]).median()), "scope": "retrieve_fn call only; includes query encoding, excludes index construction and metric computation"}, "scorer": {"package": "pytrec-eval-terrier", "version": version("pytrec-eval-terrier")}, "input_sha256": {name: {"path": str(path), "sha256": _sha256_file(path)} for name, path in inputs.items()}, "files": {name: str(path) for name, path in paths.items()}, "provenance": "learner-computed per-query metrics; helper validates, aggregates and saves"}
+    # 所有内容先完成严格序列化，再创建文件。
+    texts = {"results": "".join(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n" for row in records), "run": json.dumps(normalized_run, ensure_ascii=False, indent=2, allow_nan=False) + "\n", "summary": json.dumps(summary, ensure_ascii=False, indent=2, allow_nan=False) + "\n"}
+    # 已有结果不覆盖，保留原实验身份。
+    for path in paths.values():
+        # 三个目标中任何一个已存在就拒绝整次导出。
+        if path.exists():
+            # 调用者可使用新的运行名称。
+            raise FileExistsError(path)
+    # 确认全部验证通过后创建结果目录。
+    output.mkdir(parents=True, exist_ok=True)
+    # 保存本次创建的文件，用于普通写入失败时清理。
+    created = []
+    # 摘要最后写入，普通写入失败不留下半套结果。
+    try:
+        # 字典顺序对应逐题、run、摘要。
+        for name, path in paths.items():
+            # 排他创建可以避免误覆盖并发生成的同名文件。
+            with path.open("x", encoding="utf-8") as stream:
+                # 只记录本次已成功创建的文件。
+                created.append(path)
+                # 写入已完成验证和序列化的内容。
+                stream.write(texts[name])
+    # 仅清理本次创建的文件，不动已有实验。
+    except Exception:
+        # 写入失败时回收当前导出拥有的文件。
+        for path in created:
+            # 排他创建确保此处不删除别人的旧文件。
+            path.unlink(missing_ok=True)
+        # 原始异常保留给调用者。
+        raise
+    # 返回汇总，供CLI打印或后续独立核验。
+    return summary

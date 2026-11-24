@@ -8,13 +8,15 @@
 
 **2026-11-24最新：benchmark_eval.py验收完成。** 实际验收源码SHAae8ba1240f9fcc9ca79dfbe029c2ecaa305c1887af7c7a8222aae67244254f6d，tests/test_benchmark_eval.py原7方法全部通过，pytrec-eval-terrier==0.5.11。覆盖原query不变、每题max(ks)只检索一次、结果行与真实float分数保留、空命中计0且保留分母、相关等级排序、自定义K、非法输入／命中拒绝及逐题异常定位。两题临时验收的四指标为[1,0]且均值0.5；这是可解释的小样本验收，绝非NFCorpus成绩。结果results/benchmark_eval_validation.json及2026-11-24_revision5，之前失败快照保留。核心由用户完成，助手未改。
 
-**推进约定与接续：** 按13.9先提交并推送本次函数、7项测试及文档，完成后再进入公共基准运行入口与结果保存。读取和评测函数已完成，不再要求重写。尚无真实NFCorpus检索结果、BM25／Dense／RRF公开成绩或MIRAGE成绩。.vscode是用户本地配置，不随本次提交；数据／缓存／结果继续由.gitignore排除。
+**同步与接续：** 评测节点777d784已推送origin/main，本地与远端一致。随后助手在既有retrieval_results_io.py新增save_beir_results(result_df,run,*,config,run_name,result_dir)，只校验／汇总／保存，不编码检索或重新逐题评分；新增6项和旧保存6项共12项通过，记录results/beir_results_io_validation.json。三类产物为_results.jsonl、_run.json、_summary.json，含全部题目的均值、耗时范围、方法层配置、评分包版本与三输入SHA；拒绝丢题、矛盾run、非法数值和同名覆盖。准备阶段提交推送后再交用户写入口。
+
+**当前用户任务：** 新建run_benchmark_eval.py，实现main(method,data_dir,split,cache_dir,run_name)及CLI，复用load_beir_dataset／evaluate_beir_retrieval与已存在save_beir_results，不修改CT入口。三方法复用当前Dense、BM25、RRF；BM25仅CPU构建一次，Dense沿用冻结的LangChain模型和缓存，RRF每路100／常量60。common config提供dataset_name／data_dir／split／retrieval_method／ks=[10,100]，保留原query模板及标题拼接规则；模型参数保留在dense／bm25／rrf子配置。完整参数、各阶段调用和验收见docs/nfcorpus_benchmark_task.md。先助手以临时数据和假模型检查入口，再由用户可见终端跑BM25 dev，之后Dense／RRF；目前无真实公开检索成绩。数据／缓存／本地结果与.vscode保持原策略。
 
 **概念注释提醒：** from exc明确设置直接原因；省略它时Python也会保留隐式异常上下文。用户注释中“不写from就有两个异常”的表述需要按此理解，不作为功能验收的新阻断。RuntimeError与from exc此前已经解释，异常链已用真实用户函数验证。
 
 **2026-11-23最新：NFCorpus读取适配验收完成。** benchmark_data.py源码SHA46419011dd285ad6eeaf3fd35481acc0a43e946c5c3ead15dd3922b9ffd18833，tests/test_benchmark_data.py原9方法全部通过。真实dev为3633文档、324查询、324个qrels查询键、11385标签，整数等级1／2、原正文和行序保留；通用目录、前导零、多对多标签、划分隔离、既定异常输入均通过。结果results/benchmark_data_validation.json及2026-11-23_revision6。有效any(布尔Series)写法保留，读取核心由用户完成；不继续要求改已验收代码。
 
-**已完成的评测接口：** benchmark_eval.py实现evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10,100))，返回逐题eval_df与run（query→doc→真实float检索分数）。直接使用原query，每题调用一次retrieve_fn(query,max(ks))；perf_counter只计检索调用，支持tqdm进度。评分用BEIR同口径pytrec_eval.RelevanceEvaluator及ndcg_cut／recall，按全部输入查询保留行，空hits计0；不传qrels给检索器。完整列、输入约束和无模型验收例见docs/nfcorpus_benchmark_task.md。用户写核心，助手之后验证和提供保存辅助。
+**已完成的评测接口：** benchmark_eval.py实现evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10,100))，返回逐题eval_df与run（query→doc→真实float检索分数）。直接使用原query，每题调用一次retrieve_fn(query,max(ks))；perf_counter只计检索调用，支持tqdm进度。评分用BEIR同口径pytrec_eval.RelevanceEvaluator及ndcg_cut／recall，按全部输入查询保留行，空hits计0；不传qrels给检索器。完整列、输入约束和无模型验收例见docs/nfcorpus_benchmark_task.md。用户核心已完成，保存辅助也已提供；当前继续实现公开运行入口。
 
 **依赖和边界：** 2026-11-23核查评分API时未安装；2026-11-24已确认用户安装pytrec-eval-terrier==0.5.11，导入名pytrec_eval，助手仅以临时标签与run核验真实返回结构。评测函数已通过7项临时数据验收，尚无公共检索成绩。待函数通过后接新公开基准入口与独立保存，先BM25 dev再Dense／RRF，主库矩阵继续保留且NFCorpus使用自身文档缓存。test和MIRAGE不做模型调用。
 

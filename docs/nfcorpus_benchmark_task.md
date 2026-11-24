@@ -1,6 +1,6 @@
 # NFCorpus 检索评测接入任务
 
-当前数据已准备：3,633篇文档，2,590 train／324 dev／323 test查询。来源版本、原始文件、转换记录和校验见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。数据读取适配已验收；当前接入现有检索与官方排序指标，随后提供独立运行入口和结果保存。核心仍由用户编写。
+当前数据已准备：3,633篇文档，2,590 train／324 dev／323 test查询。来源版本、原始文件、转换记录和校验见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。数据读取与公共评测已验收，结果保存辅助已提供；当前由用户实现独立运行入口。核心仍由用户编写。
 
 ## 已验收：数据读取函数
 
@@ -58,10 +58,30 @@ eval_df每查询一行，列为query_id、query、retrieved_ids、scores、laten
 
 验收先用临时查询、标签和假retrieve_fn，无模型运行：两查询中一条按等级正确排序检出全部相关文档，另一条返回空；结果恰两行，前者四指标为1、后者为0，各指标均值0.5；每题调用一次、原query不变、K=max(ks)，run保留实际float分数。交换不同相关等级文档顺序应降低nDCG而不改变召回；重复ID及非有限分数应明确拒绝。用户保存后助手检查实际源码并验证，再接真实BM25开发集、Dense与RRF入口及保存，不直接消耗test。
 
+## 当前任务：公开基准运行入口
+
+评测节点777d784已同步GitHub。保存辅助已在retrieval_results_io.py中实现save_beir_results(result_df,run,*,config,run_name,result_dir)，6项新检查及6项旧保存检查全部通过；不调用模型或检索器，不重新计算逐题指标。助手准备好该辅助后再交接用户入口，避免引用尚不存在的函数。
+
+用户新建 /home/wzh/clinical-evidence-rag/run_benchmark_eval.py，实现main(method,data_dir,split,cache_dir,run_name)，返回保存辅助的summary，再添加__main__参数解析。使用argparse、pathlib.Path、functools.partial及现有项目模块；Dense继续使用langchain_huggingface.HuggingFaceEmbeddings。不要从Notebook导入。
+
+执行顺序：校验method为dense／bm25／rrf；load_beir_dataset(data_dir,split=split)读取配套语料与当前查询；在查询循环外构建所需索引并用partial得到retrieve_fn；evaluate_beir_retrieval(queries_df,qrels,retrieve_fn,ks=(10,100))；调用save_beir_results(eval_df,run,config=config,run_name=...,result_dir=root/results)，最后返回summary。
+
+BM25与RRF分支调用build_bm25(corpus_df,k1=1.5,b=0.75,epsilon=0.25)，partial绑定retrieve_bm25的bm25_index和evidences。Dense与RRF沿用run_retrieval_eval.py内的固定模型设置：BAAI/bge-small-en-v1.5、revision=5c38ec7c405ec4b44b94cc5a9bb96e735b38267a、cuda、local_files_only=True，文档batch8／normalize_embeddings=True／prompt为空，查询batch1／normalize_embeddings=True／prompt为既有检索前缀。调用prepare_document_embeddings时evidences=corpus_df、evidence_path=data_dir/corpus.jsonl、cache_dir为CLI参数、chunk_size=512；源文件SHA及实际标题拼接后的id/text共同确定缓存身份，因此NFCorpus获得自身3633文档矩阵，医学主库783847行矩阵不重做。记录模型512-token输入限制和330篇超过长度的事实，不声称全部正文已编码。
+
+RRF使用partial绑定retrieve_rrf：两路闭包、candidate_k=100、rrf_constant=60。最终评估预算max(ks)=100，不沿用CT入口的20候选。每个索引只初始化一次。
+
+config公共字段为dataset_name=data_dir.name、data_dir绝对路径字符串、split、retrieval_method、ks=[10,100]、query_template="{query}"、corpus_text="title + space + body; strip"。BM25子配置保存model_name="rank_bm25.BM25Okapi"、device="cpu"、query_prefix=""及k1／b／epsilon。Dense子配置保存实际model_name、model_kwargs、encode_kwargs、query_encode_kwargs、query_prefix、device、embeddings_cache与矩阵shape及最大输入长度；RRF另记candidate_k／rrf_constant。配置放在方法层，不强制复制模型信息到顶层。
+
+CLI提供--method（默认bm25）、--data-dir（Path，默认root/data/external/nfcorpus/prepared/nfcorpus）、--split（默认dev）、--cache（Path，默认root/cache/embeddings）和--run-name。后者默认dataset_method_split，复跑同名会被保存辅助拒绝覆盖，应显式给新名称。summary.metrics供终端展示。
+
+验收先用临时BEIR目录、真实小型BM25和假Dense模型检查参数到结果的完整链路，确认配置、文件、预算与索引只建一次；用户先写完整入口，不由助手代写。通过并同步后再给用户可见终端命令跑真实BM25 dev，继而Dense与RRF。test与MIRAGE当前不运行。
+
+保存辅助写入三个文件：{run_name}_results.jsonl保留全部逐题字段；{run_name}_run.json保留题号到文档和检索分数；{run_name}_summary.json保存全部查询的指标均值、耗时、方法配置、评分包版本、输入文件SHA。当前没有任何真实NFCorpus模型成绩；辅助测试的0.5仍是临时验收值。
+
 ## 后续接入保持同一接口
 
 数据适配通过后，查询循环直接将query传给统一retrieve_fn(query,k)，复用现有Dense／BM25／RRF与文档缓存；不经过CT的Report/Question模板。公开基准新增评测函数，不伪造report、gold_evidence_groups来迎合旧保存接口。
 
-之后以BEIR使用的pytrec_eval指标实现核对nDCG@10、Recall@100，用户实现查询编排和评分调用，助手提供保存辅助。当前评分包已安装，评测函数已通过7项临时数据验收。RRF基准候选预算每路100、常量60，默认CT设置不改。
+之后以BEIR使用的pytrec_eval指标实现核对nDCG@10、Recall@100，用户已完成查询编排和评分，助手已提供保存辅助；当前继续接运行入口。当前评分包已安装，评测函数已通过7项临时数据验收。RRF基准候选预算每路100、常量60，默认CT设置不改。
 
 运行入口与结果按数据集／方法／划分命名，dev用于调试，test等方法固定后再完整评测。模型版本、原始语料、标题拼接、512-token截断、候选预算和计时范围均入配置。MIRAGE依然负责最终问答，CT合成题只作产品场景回归，三类评测分别报告。
