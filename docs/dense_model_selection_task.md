@@ -58,7 +58,11 @@ HuggingFaceEmbeddings.model_kwargs传给SentenceTransformer构造器，所以Qwe
 
 代码通过后先提交同步GitHub，再提供用户可见终端的固定版本下载、小批预检和正式dev命令；预检记录模型设备、dtype、维度、归一化、长度／截断和GPU内存。正式使用新run_name与新文档缓存，先NFCorpus，不直接重编码783847行医学主库。官方test和MIRAGE仍不运行；rerank函数接口继续保留，真实重排等待Dense选型结果。
 
-## 当前下一步：用户终端下载与小批预检
+## 当前下一步：用户终端小批预检02
+
+**2026-11-24下载验收完成。** 固定版本已下载至项目cache，下载日志17/17完成，索引要求的4个权重分片共15,134,634,568字节，逐个SHA-256匹配内容寻址文件名，未完成分片为0；results/qwen3_8b_download_validation.json保存核验结果。通过项目包装器离线读取AutoConfig成功，配置和全部权重均在项目内。本次只检查文件和配置，没有加载权重，不能作为显存或效果成绩。
+
+预检01实际已运行并以退出码1结束：离线查找模型文件失败，没有生成通过JSON。默认共享Hub下确实找不到该固定版本config／modules，项目包装器下均可解析；先统一入口重试，不重下模型或升级依赖。原01日志和资源保留，新运行使用02编号，results/nfcorpus_qwen3_8b_preflight_02_run_audit.json记录代码、配置及历史保护文件身份。以下下载迁移经过仅作过程记录，不要求再次下载。
 
 **缓存位置修正，2026-11-24。** 用户要求模型文件只放clinical-evidence-rag项目内。此前共享Hub目录的这次Qwen下载已精确中断，模型目录及锁文件原子迁至cache/huggingface/hub，本次Xet日志迁至cache/huggingface/xet/logs；完整文件、未完成分片及快照相对链接均保留，旧Qwen目录已移走。原BGE缓存复制到项目内并逐实体文件核对SHA，原共享BGE保留。操作记录results/model_cache_migration_2026-11-24.json，路径验证results/project_model_cache_validation.json；旧文档矩阵指纹和17个历史保护文件均未变。迁移不表示下载完成，未完成分片的复用由下载后端决定。
 
@@ -66,9 +70,9 @@ HuggingFaceEmbeddings.model_kwargs传给SentenceTransformer构造器，所以Qwe
 
 辅助scripts/evaluation/preflight_embeddings.py已准备。它使用与入口相同的四项模型配置，只统计配套语料／dev查询的输入长度，实际编码前两篇及最长文档（最多三篇）、第一条原query；检查真实设备、权重BF16、4096维、归一化、输入上限及峰值GPU分配／保留内存。完整参数、输入和辅助源码指纹写入独立JSON。它不调用检索、不计算效果分数、不创建文档向量缓存，也不访问test／MIRAGE。
 
-4项无权重检查已通过：换行／prompt／分词批次、向量异常拒绝、替换CUDA和模型后的完整报告／样本范围、无GPU时初始化前失败。--help也已检查。本轮工具没有加载预训练权重或运行真实GPU；显存和性能只在用户执行后报告。huggingface-hub0.36.2的hf入口存在，命令参数已核查；Qwen部分文件已迁入项目，等待继续完成剩余下载。
+4项无权重检查已通过：换行／prompt／分词批次、向量异常拒绝、替换CUDA和模型后的完整报告／样本范围、无GPU时初始化前失败。--help也已检查。本轮工具没有加载预训练权重或运行真实GPU；显存和性能只在用户执行后报告。huggingface-hub0.36.2的hf入口存在，下载参数已核查，下载现已核验完成。
 
-先继续下载，结束成功后再运行预检。模型约15.2GB，该数字来自官方文件目录，下载量与实际显存分开记录。下载命令和正式模型加载均使用项目内Hub缓存；不升级库、不切换镜像或改模型。原download_01日志保留为迁移前记录，新下载使用02_project_cache日志；TQDM_POSITION=-1确保经tee时也显示单文件进度。
+下面保留已完成的下载命令，后续重新准备环境时可复现；当前直接执行其后的预检02命令。下载量与实际显存分开记录。原download_01日志保留为迁移前记录，完成日志使用02_project_cache；TQDM_POSITION=-1确保经tee时也显示单文件进度。
 
 ```bash
 # 从项目目录保存本轮下载日志。
@@ -80,8 +84,12 @@ HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 HF_HUB_DISABLE_PROGRESS_BARS=0 TQDM_POSI
 ```
 
 ```bash
+# 从项目目录运行，防止相对配置和输出路径指向其他位置。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
 # 预检使用已下载的固定权重，禁止依赖链再联网探测。
-HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/time -v -o results/nfcorpus_qwen3_8b_preflight_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u -m scripts.evaluation.preflight_embeddings --config-dir configs --data-dir data/external/nfcorpus/prepared/nfcorpus --profile qwen3_8b --output results/nfcorpus_qwen3_8b_preflight_01.json 2>&1 | tee results/nfcorpus_qwen3_8b_preflight_01_run.log
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/time -v -o results/nfcorpus_qwen3_8b_preflight_02_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u -m scripts.evaluation.preflight_embeddings --config-dir configs --data-dir data/external/nfcorpus/prepared/nfcorpus --profile qwen3_8b --output results/nfcorpus_qwen3_8b_preflight_02.json 2>&1 | tee results/nfcorpus_qwen3_8b_preflight_02_run.log
 ```
 
 验收观察：status=passed、实际CUDA设备、torch.bfloat16权重、4096维、实际输入上限8192、3633文档／324 dev查询，文档样本形状最多3×4096、query为1×4096，数值有限且L2范数接近1。长度统计中的超限文档／查询数按真实分词器结果核查，不提前填写0；峰值GPU字节不能称为整进程RSS。失败保留终端日志，不改成CPU或缩小模型冒充通过。同名预检报告拒绝覆盖，重跑用新的后缀。

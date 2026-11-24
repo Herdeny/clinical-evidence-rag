@@ -6,9 +6,11 @@
 
 ## 1. 当前应从哪里继续
 
-**2026-11-24最新缓存位置要求：模型文件只放项目内，当前下载已暂停并迁移，等待用户终端继续。** 用户明确不希望默认下载写项目外。已精确核对并SIGINT中断该Qwen下载PID166760（进程已退出），将/home/herdeny/.cache/huggingface/hub/models--Qwen--Qwen3-Embedding-8B及对应.lock目录原子移至项目cache/huggingface/hub，31个实体／相对链接文件的大小与inode清单一致，旧Qwen目录已移走；只迁本次PID的Xet日志，旧共享日志不删除。BGE模型缓存复制到项目并逐文件SHA核对，原共享BGE保留。迁移记录results/model_cache_migration_2026-11-24.json；没有模型加载／GPU执行，下载未完成。未完成分片保留，不能承诺后端会复用全部已传字节。
+**2026-11-24最新：Qwen3-Embedding-8B项目内下载完整，等待用户重跑小批预检02。** 固定revision为1d8ad4ca9b3dd8059ad90a75d4983776a23d44af；download_02_project_cache日志显示17/17完成，索引要求的4个权重分片共15,134,634,568字节，逐分片流式SHA-256均与缓存内容哈希一致，该模型无.incomplete文件。核验记录results/qwen3_8b_download_validation.json。通过项目包装器离线AutoConfig读取成功，配置／分词器／权重全部位于项目cache；本次检查没有加载权重或执行GPU，不能称为Qwen效果或显存实测。
 
-**当前用户操作：** 用docs/dense_model_selection_task.md末节更新命令继续下载并预检，两者都必须通过bash scripts/project_env.sh启动。该包装器将HF_HOME／Hub／Xet／assets／Sentence Transformers／Torch／XDG缓存设到项目cache内，仅影响子进程，不改shell全局配置或父进程。新日志results/qwen3_8b_download_02_project_cache.log，旧01保留。HF_HUB_DISABLE_PROGRESS_BARS=0及TQDM_POSITION=-1可显示管道下单文件进度。已验证实际Hub／Xet路径、项目内BGE／Qwen配置解析、异目录调用、参数完整及父环境不变；原BGE文档缓存指纹4aa...不变，17个原基线／缓存文件SHA未变。results/project_model_cache_validation.json为passed。/cache/已在Git忽略规则中，权重不提交。用户偏好见13.11，后续不得再给直接使用默认共享缓存的模型命令。预检仍未执行，不用旧命令从外部缓存加载。
+**当前用户操作：** 用docs/dense_model_selection_task.md末节预检02命令，必须通过bash scripts/project_env.sh启动。预检01已经尝试并退出1，日志为离线文件缓存查找失败，未生成通过报告；保留01日志和资源记录，不覆盖。默认共享Hub下找不到该固定版本config／modules，项目包装器下二者及离线AutoConfig均成功，先统一缓存入口重试，不重新下载、不改模型或依赖。02回执为results/nfcorpus_qwen3_8b_preflight_02_run_audit.json。只有02真实GPU预检通过并同步后，才给正式Qwen Dense dev命令。以下“下载未完成／预检未执行”是历史记录，以本段为准。
+
+**缓存位置要求继续有效：** 模型命令都通过bash scripts/project_env.sh，将HF_HOME／Hub／Xet／assets／Sentence Transformers／Torch／XDG缓存设到项目cache内，仅影响子进程，不改全局配置。原Qwen目录及对应锁已从共享缓存原子迁入，BGE复制至项目并核验，原共享BGE保留。迁移记录results/model_cache_migration_2026-11-24.json，路径记录results/project_model_cache_validation.json。已有BGE文档矩阵和旧基线保留，权重不提交Git。用户偏好见13.11。
 
 **2026-11-24最新：模型配置／维度接入已完成，下一步用户终端下载和预检Qwen8B。** 用户已将CLI调用与六个位置参数对齐，config_dir必填、配置名保留config_embedding_model，结果名带bge_small／qwen3_8b。最终缓存9项、入口14项全部通过，含真实安装类API、4096维、两配置／缓存隔离、零文档重编码、元数据、参数拒绝和CLI。核心由用户完成；助手仅删除未使用logging.config／matplotlib rainbow导入、整理空白，未改变函数逻辑。最终SHA：embedding_index.py=dbdd1baca3a0dc85bd8853c8c6cb8763919af8c59eb4eec2cc075bc559e6fd49；run_benchmark_eval.py=b6d2472690e42519657766e5f8f2c56a1302b7938c38f271d06503ec228f6f3b。results/embedding_model_integration_validation.json为passed，revision5_accepted保存源码；旧10份结果及NFCorpus缓存2文件SHA未变，旧失败报告保留。
 
