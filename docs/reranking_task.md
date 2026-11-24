@@ -1,5 +1,17 @@
 # Cross-Encoder重排任务
 
+**2026-11-25最终验收：纯函数12项全部通过，真实重排模型尚未接入。** 原分数转换可保留Python原生TypeError／ValueError，撤回此前强制统一ValueError的验收要求；这是助手测试过严，不是重排算法错误。[Python异常说明](https://docs.python.org/3.12/library/exceptions.html#TypeError)区分类型不适当与值不合法。非法字段仍需在predict前拒绝，其他语义／调用次数／输入不变性要求不变。用户函数原逻辑未改，助手仅清理无用logging／空白，函数AST一致；最终SHA=1e04ef1809434bb57a30bc0a9cd903f597a29491c0d1c679d99793a86f1c32dc。记录results/rerank_core_validation_accepted.json和最终源码快照。当前完成归档同步，下一步先补冻结候选加载与评测辅助，再交入口接线；暂无真实重排效果。下文失败修订均为历史，旧“必须包装ValueError”条款失效。
+
+**2026-11-25最新复验revision05：12项通过11项。** 唯一剩余为第20行原score为None时float抛TypeError；转换周围捕获(TypeError,ValueError)，统一重新抛ValueError即可，成功后保留有限性检查。其他校验顺序、正常路径与错误输出均已通过。不增加接口要求或改算法，结果results/rerank_core_validation_05.json；当前纠错不提交／不加载真实模型，下次保存复验同一12项。
+
+**2026-11-25最新复验revision04：12项通过10项。** 正常重排和输出检查已恢复，剩第9／12行异常类型统一ValueError、第14行text增加纯空白检查，以及把重复ID／float原分数转换和有限性检查移到predict前。这里要拆两个循环：先完整验证输入候选，再打分，最后原循环只负责输出复制和分数保存；转换失败也按既定契约ValueError。结果results/rerank_core_validation_04.json，核心未代写，当前不提交、不加载模型，复验要求仍为同一12项。
+
+**2026-11-25最新复验revision03：** query类型顺序已修，但getattr检查dict属性误拒正常候选；应用字典键存在性检查，0分合法。复合条件被逗号构成tuple且少raise；应使用and组合独立布尔比较。空候选仍在predict后返回，重复ID／原分数转换与有限性仍需前置，类型错误统一ValueError。助手仅整理两条异常提示及注释，未代写校验／排序。12方法当前4通过，多条失败来自同一字段检查阻断；结果results/rerank_core_validation_03.json，用户原稿与受测快照均保留。仍在纠错阶段，不提交，不加载模型。原分数0的合法样例未改变契约。
+
+**2026-11-25最新复验revision02：** 正常打分、稳定排序、原分数／来源保留、单条／负分数和模型异常传播已通过。当前需先完成全局类型／值检查再返回合法空候选；query及id／text先检查字符串再strip；候选字段／唯一ID／有限原分数应全部在pairs和predict之前验证；输出维度和长度错误消息仍有str+int及len(scores[0])残留。本轮针对既有空候选约定补一项组合检查，共12方法7通过，未新增接口要求。记录results/rerank_core_validation_02.json及完整覆盖快照；当前用户修订，核心未由助手改写，不提交或加载真实模型。下面初版11项结果保留作历史。
+
+**2026-11-25当前验收：用户初版已存在，尚未通过。** 11个无权重测试方法初验未通过，results/rerank_core_validation_01.json及源码快照保留。正常输入首先被type(hits)与list()实例的比较阻断，错误消息又拼接非字符串；静态检查另见query类型、空候选／字段验证缺失、len(scores[0])及hit[index]误取值、两类分数未转float、logging.WARN误调用。以上普通代码错误不列工程贡献，助手不代写核心。当前用户集中修订后复验，不下载模型、不提交纠错阶段。后文“尚未创建”是旧阶段记录，以本段为准。
+
 任务确定与来源核查：2026-11-24。BM25、BGE Dense／RRF及Qwen3-Embedding-8B Dense均已实测核验，当前固定Qwen本轮Top100。其nDCG@10=0.3921959681142708、Recall@100=0.39709670188154617，平均query53.69274598138244ms。本步只改候选排序，核心由用户编写；rerank_core.py尚未创建，无重排成绩，官方test及MIRAGE未运行。
 
 **当前工作单元：** [Dense独立对照](dense_model_selection_task.md)已完成，现在用户新建rerank_core.py，实现以下纯函数，先假打分器验收。固定候选身份results/nfcorpus_qwen3_8b_frozen_candidates.json引用本轮原始results／run／summary及SHA；尚未实现候选加载辅助，不要求调用不存在的函数。真实推理后续用原query与候选ID联结原文，在独立进程只加载一个reranker，复用Top100，无需8B embedding与reranker同时占GPU或重复query编码。分别报告既有召回与新增重排耗时，不将分阶段数据相加冒充单进程端到端实测。
@@ -24,7 +36,7 @@
 
 ## 本轮完整工作单元
 
-新建项目根目录rerank_core.py，完成一个可复用函数：
+项目根目录rerank_core.py已实现并通过验收，接口保持：
 
     rerank(query, hits, k, *, reranker, batch_size=16)
 
@@ -44,7 +56,7 @@
 
 按已核查模型的官方CrossEncoder用法保留原始打分：分类模型logit或Qwen的logit差值，允许负数和大于1，不是概率；不做归一化或强制裁剪。候选模型不同，分数不直接跨模型比较；原Dense分数与重排分数也不相加。只在后续明确设计消融时才引入混合权重。
 
-输入检查集中在函数入口：query有效；k与batch_size为非bool正整数；hits中id为非空且唯一的字符串、text为非空字符串、原score可转有限float。输入候选有效但为空时返回[]，不调用predict。模型输出长度错误、维度错误或NaN／Inf时明确抛ValueError，不丢候选掩盖失败。真正的模型运行异常向上传递，不吞掉后继续给出答案。
+输入检查集中在函数入口：query有效；k与batch_size为非bool正整数；hits中id为非空且唯一字符串、text为非空且非纯空白字符串、原score可转有限float。原分数转换可自然抛TypeError／ValueError，不强制包装；当前其他显式检查保持ValueError，无需重写。合法空列表返回[]，不调用predict；非法字段须在模型调用前失败。模型输出长度错误、维度错误或NaN／Inf时抛ValueError，不丢候选掩盖失败。真正模型运行异常向上传递，不吞掉后继续给出答案。
 
 ## 所需库与API
 

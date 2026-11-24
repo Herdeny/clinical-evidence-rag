@@ -1,10 +1,32 @@
 # 项目背景、进度与后续任务交接
 
-最后核对：2026-11-24。本文用于在后续对话、上下文压缩或换助手时恢复项目。内容依据用户的项目要求、当前代码、保存的输出及结果文件整理。该日期是交接更新日，不覆盖来源此前的核验日期。
+最后核对：2026-11-25。本文用于在后续对话、上下文压缩或换助手时恢复项目。内容依据用户的项目要求、当前代码、保存的输出及结果文件整理。该日期是交接更新日，不覆盖来源此前的核验日期。
 
 **接手时先读本文件，再检查当前代码和用户最新提交的输出。不要把规划当成实现，不要从 B0 重新教起。用户后续明确指令优先于本文，代码与输出的变化需要及时更新到本文。**
 
 ## 1. 当前应从哪里继续
+
+**2026-11-25当前已验收：rerank纯函数12项全部通过，撤回原分数转换必须包装ValueError的过度约束。** 用户追问异常类型后，核对Python3.12官方说明：TypeError用于类型不合适，ValueError用于类型可接受但值不合法。float(None)自然抛TypeError，float('bad')抛ValueError；统一输入异常可简化调用方，但当前没有必要强制转换。本轮只修助手测试的异常类型要求，原分数转换保留原生TypeError／ValueError即可，非法字段仍须在predict前被拒绝；输出契约、排序、来源和不变性、运行异常传播检查均未减弱。rev05的11/12唯一失败不是算法错误，原报告按当时过严约定保留，不当成当前缺陷或用户工程贡献。
+
+用户原函数SHA=1254c963972c7a1d6e7cee00daa28be1cf11ddfad8d52697c007169f8f9eef9f，无需再改转换逻辑。助手只清理无用logging导入／尾部空白，函数AST相同；最终SHA=1e04ef1809434bb57a30bc0a9cd903f597a29491c0d1c679d99793a86f1c32dc。此前两条错误提示由助手整理，校验／评分／排序仍用户实现。最终results/rerank_core_validation_accepted.json和_run.log、rerank_core_accepted_code_snapshot保存12/12通过、0失败、0错误，无模型／GPU。待本单元归档同步后，下一步由助手先提供冻结Qwen候选加载／原query与正文联结／身份核验、重排评测保存辅助，再交用户入口编排；这些辅助尚未实现，不调用不存在接口。真实4B／8B／BGE reranker尚未下载／实测。以下“只剩强制ValueError”要求已撤回，不再让用户补try/except或撤回已写显式ValueError检查。
+
+**2026-11-25当前复验revision05：同一12项通过11项，只剩float(None)的异常转换。** 最新用户源码SHA=1254c963972c7a1d6e7cee00daa28be1cf11ddfad8d52697c007169f8f9eef9f。全局类型／合法空列表、字典字段／文本空白／重复ID／原分数有限性前置、正常打分排序／元数据／输入不变、错误模型输出与运行异常传播均已通过。唯一剩余：第20行float(hit['score'])遇None抛TypeError，需try/except捕获(TypeError,ValueError)，按既定接口重新抛ValueError，成功后继续现有有限性检查；不用再改算法或增加要求。results/rerank_core_validation_05.json、_run.log及revision_05源码快照保留，12方法11通过／0失败／1错误。未代写核心、未用模型／GPU，不提交纠错阶段；下次保存后复验同一12项，通过再清理无用logging／空白、归档同步，并进入冻结候选加载及重排评测辅助。
+
+**2026-11-25当前复验revision04：同一12项已通过10项，剩候选验证与异常类型。** 用户最新47行源码SHA=fbcf6541ffd3c10cf47c6094a683be56045f10f4db39cb3bc9562ae91379c8fc；字典键检查／and／raise、合法空候选位置、正常重排及输出异常分支均已修好。剩三项：(1)第9／12行仍TypeError，按已确定接口统一ValueError；(2)第14行text仅检查真假，没有strip，纯空白文本会被送模型；(3)重复ID、float原分数及有限性检查仍在predict后的复制循环里，需拆两个循环：predict前独立遍历全部候选完成这些检查，float转换捕获TypeError／ValueError后转ValueError；predict后原循环仅复制候选／存两类float分数。先前只说“前置”不够直观，本轮要明确拆开输入校验与输出组装两阶段，首个循环不能依赖scores。可先验证float再在输出循环重取，或用同序列表保留转换结果，不强制具体写法。
+
+results/rerank_core_validation_04.json、_run.log及revision_04快照保留；12方法10通过，8条子用例失败／错误不等于8个独立缺陷。未改核心、未用GPU／真实模型，不提交纠错阶段；下次保存后复验同一12项，通过后再同步及进入冻结候选加载辅助。以下03的4/12状态为历史。
+
+**2026-11-25当前复验revision03：新字段检查阻断正常字典，需解释Python语法后由用户修订。** 用户原提交SHA=1a0ce36a3fb362b90b7405aa1f61ef82717cb5f32f1ceb22d6aa0bc460c22a41，45行；query先判字符串再strip已修好。第13行用getattr(hit,"id"/"text"/"score")检查dict属性，普通候选全部被误拒，应检查键是否存在，不用值真假判断存在性，原分数0合法。第14行逗号表达式形成非空元组，not(tuple)恒False；type(id)未与str比较，str and也非类型判断；即使分支执行，缺raise只构造异常不抛。第9／12行仍TypeError而契约为ValueError；合法空hits返回仍在predict之后；重复ID、原分数转换／有限性仍在predict后，应全部前置，float转换失败统一ValueError。
+
+助手依用户早前允许输出语句代写的约定，仅修两处异常提示格式及加中文注释：维度提示改f-string，数量提示len(scores[0])改len(scores)；未改校验条件、字段访问、评分或排序。实际受测SHA=52ef630e1ddd73d8df3fb6c562c464f62ce872deadef10ac764f64c483eacb2c。tests仍12方法，合法候选原分数改为0以覆盖同一有限分数契约；当前4/12通过，主要共同阻断Missing attr for hit，不能把负例偶然通过说成字段检查正确。结果results/rerank_core_validation_03.json及_run.log，用户原稿revision_03_user_submission和实际受测revision_03快照均保留，无模型／GPU，纠错不提交。下次保存重读复验12项。当前教学要点：getattr查对象属性、in查dict键、and组合条件而非逗号元组、raise才抛异常；按全局校验→合法空列表返回→所有候选校验→predict→输出校验→复制排序整理。以下02的7/12状态为历史，不增加新接口要求、不写工程贡献。
+
+**2026-11-25当前复验revision02：正常重排路径通过，剩校验顺序和异常分支。** 重新读取用户34行实现，SHA=627747e8982b0922fccd5eb9dc8af257ac743390f7562ac140ff48ab2327820c。分数数组同位取值、Python float、来源保留／输入不变、同分ID排序、k超候选、单条与负分数、模型异常传播均通过。剩：(1)第4行if not hits过早返回，让None／空tuple／空dict等非法容器或空hits下非法全局参数伪成功；先验证query／hits容器／k／batch，再允许合法空列表返回。(2)第5行or仍先query.strip后类型判断，None等直接AttributeError；类型先判，id／text同样先判字符串再strip。(3)候选检查仍在predict后的结果复制循环内，应把必填字典／字段／类型／唯一ID及float原分数有限性验证全部放pairs和predict之前，原分数NaN／Inf当前仍漏检。类型不符按既有契约ValueError，不用TypeError。(4)第14行错误文本仍str+int，第15行数量条件已正确但消息内还留len(scores[0])，导致错误分支再次异常，应安全格式化并读整个scores长度。
+
+同一11项初复验7通过；补1个方法检查“合法空候选不能绕过既有全局参数契约”，未新增接口要求，当前12项方法7通过；8失败／13错误条目含子用例，不能当21个独立缺陷。结果results/rerank_core_validation_02.json和_run.log，初始11项结果另存_before_empty_contract_check，完整覆盖快照rerank_core_revision_02_complete_checks；未改用户实现，未加载模型／GPU、不提交纠错阶段。下一次用户保存后重读并复验这12项。推荐流程：全局校验→合法空列表返回→所有候选校验→pairs／predict→输出校验→复制候选并排序；核心仍用户写，logging未用可稍后清理，不另设验收阻断。以下初版状态为历史。
+
+**2026-11-25当前：用户rerank_core.py初版已保存，尚未验收，集中修订后复验，不推进真实模型。** 已逐行读取26行源码，SHA=d91b92aee01a8ada0bb7941dffcf78d2f8f35518b8bd688cef14be12ee0a558f。句对构造、一次predict传参、dict.copy及(-score,id)排序方向正确。阻断：第5行type(hits)与list()实例比较，正常list也被拒绝；错误消息拼接type／int又触发TypeError。query未先检查字符串就strip；k／batch消息也需安全格式化；缺少空hits提前返回及候选必填字段／类型／唯一ID／有限原分数检查；第15行len(scores[0])误把一维数组元素当容器；第22行hit[index]误从字典取整数键，应从分数数组同位置取值，两类分数转Python float；logging.WARN是数字级别不能调用，缺predict时不能只记录后继续。后几处为静态检查结论，当前有效输入实际尚未越过第5行，不声称已执行到后面。
+
+助手新增tests/test_rerank_core.py，11个无权重测试方法覆盖原query／全文句对、单次predict、稳定同分排序、原分数和来源保留／输入不变、k越界／空／单候选、负logit、非法输入／输出与运行异常传播。初验0/11方法通过，日志含47子用例错误及1条后续断言失败，均不当成48个独立缺陷。results/rerank_core_validation_01.json、_run.log及rerank_core_revision_01保存实际源码和测试快照；未改用户实现，未加载模型／GPU。当前用户集中修订，保存后重读新文件并复验同一契约；只有通过才提交同步并准备冻结候选加载／重排评测辅助。普通语法／索引错误不记工程面试贡献。仍保留d6e11c0已同步状态，benchmark_data.ipynb删除及.vscode不动，纠错阶段不提交。
 
 **2026-11-24最新：完整Qwen Dense dev已核验，当前交用户实现rerank_core.py纯函数。** 运行nfcorpus_dense_qwen3_8b_dev_01、执行提交ed7fc4e，同一3633文档／324题／11385 qrel对、每题100候选。nDCG@10=0.3921959681142708、Recall@10=0.19220254685998026、nDCG@100=0.37012524211267905、Recall@100=0.39709670188154617；相对BGE分别+19.8694%／+28.9855%／+24.5025%／+26.0295%。平均query53.69274598138244ms、中位49.21915899467422ms，为BGE均值2.3082倍；初始文档缓存0行，进程190.69秒、RSS6276000KiB、退出0，进度建库约168秒。本轮未采全程GPU峰值，不把预检或主机RSS替代完整运行显存。nDCG@10逐题163升／64降／97同，Recall@100为173／37／114；Top100至少命中292题，原BGE278，补回18原零命中、丢4原有命中。
 
