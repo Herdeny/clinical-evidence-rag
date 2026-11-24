@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-24。根目录现有11个Python模块，14个数据维护工具集中到scripts/data；Dense缓存、RRF两函数和三个方法入口已通过相应检查，方法层配置原样保存。NFCorpus公开基准读取适配9项、公共检索评测7项检查均已通过，保存辅助已提供，run_benchmark_eval.py的6项临时集成检查全部通过，BM25 dev真实结果已核验，当前准备用户终端Dense对照。
+整理日期：2026-11-19，进度更新2026-11-24。根目录现有11个Python模块，14个数据维护工具集中到scripts/data；Dense缓存、RRF两函数和三个方法入口已通过相应检查，方法层配置原样保存。NFCorpus公开基准读取适配9项、公共检索评测7项检查均已通过，保存辅助已提供，run_benchmark_eval.py的6项临时集成检查全部通过，BM25和Dense dev真实结果及Dense缓存已核验，当前准备用户终端RRF对照。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -14,7 +14,7 @@
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；新增save_beir_results，支持方法层配置，保留旧接口 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分，7项临时数据验收全部通过；无公开基准成绩 | 用户 |
-| run_benchmark_eval.py | 公开基准CLI与三方法入口，6项临时集成检查通过，BM25 dev已实测核验，Dense／RRF待运行 | 用户 |
+| run_benchmark_eval.py | 公开基准CLI与三方法入口，6项临时集成检查通过，BM25与Dense dev已实测核验，RRF待运行 | 用户 |
 
 ## 数据维护模块
 
@@ -39,7 +39,7 @@
 
 ## 评测核验工具
 
-scripts/evaluation/validate_beir_run.py从已保存run及原始标注重新评分，检查题目覆盖、原query、分数、指标均值、输入／源码与资源统计，验证通过后更新本地审计。它不重新检索或加载模型，不在检索入口中隐式运行。BM25首轮已由该工具通过核验；结果汇总见docs/nfcorpus_retrieval_baselines.md。
+scripts/evaluation/validate_beir_run.py从已保存run及原始标注重新评分，检查题目覆盖、原query、分数、指标均值、输入／源码与资源统计，验证通过后更新本地审计。它不重新检索或加载模型，不在检索入口中隐式运行。BM25及Dense首轮已由该工具通过核验；Dense缓存还分块核对形状、数值、范数与文件身份，并核对先前基线产物未改；结果汇总见docs/nfcorpus_retrieval_baselines.md。
 
 ## 清理范围与记录
 

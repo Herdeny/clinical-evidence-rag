@@ -1,6 +1,6 @@
 # NFCorpus 检索评测接入任务
 
-当前数据已准备：3,633篇文档，2,590 train／324 dev／323 test查询。来源版本、原始文件、转换记录和校验见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。数据读取与公共评测已验收，结果保存辅助已提供；当前由用户实现独立运行入口。核心仍由用户编写。
+当前数据已准备：3,633篇文档，2,590 train／324 dev／323 test查询。来源版本、原始文件、转换记录和校验见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。读取、评测与入口均已验收，BM25与Dense dev已实测；当前由用户执行RRF dev。核心仍由用户编写。
 
 ## 已验收：数据读取函数
 
@@ -99,7 +99,9 @@ set -o pipefail
 
 成功后results下生成同前缀的_results.jsonl、_run.json、_summary.json，以及上面保存的_run.log、_resources.txt。返回终端打印的指标或说明运行结束，助手读取本地文件核验；如失败，保留日志并按本轮运行记录排错，不静默删除失败题或覆盖旧结果。正式数据第一次运行在此时才开始，test与MIRAGE仍未参与。
 
-## 当前任务：用户终端运行 Dense dev
+## 已完成：Dense dev 首轮运行
+
+2026-11-24用户执行完成并核验：nDCG@10=0.32718602689711807、Recall@100=0.31508239684562706，平均查询23.262ms，整进程19.74s；3633×384缓存完整、有限且归一化，BM25原5产物未变。两路逐题差异及资源见[开发集对照报告](nfcorpus_retrieval_baselines.md)。Dense审计为complete_integrity_validated，下面命令保留作复现记录。
 
 BM25已核验，先提交同步其报告和核验工具，再执行本轮。使用同一配套文档、原query、dev标注与Top-100预算，独立结果名nfcorpus_dense_dev_01；固定模型配置沿用已验收入口，文档与查询编码用CUDA，相似度及Top-K仍是NumPy。
 
@@ -114,7 +116,24 @@ set -o pipefail
 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /usr/bin/time -v -o results/nfcorpus_dense_dev_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_benchmark_eval.py --method dense --data-dir data/external/nfcorpus/prepared/nfcorpus --split dev --run-name nfcorpus_dense_dev_01 2>&1 | tee results/nfcorpus_dense_dev_01_run.log
 ```
 
-启动回执results/nfcorpus_dense_dev_01_run_audit.json状态prepared_for_user_terminal_not_started，包含9份源码指纹、相同输入、模型版本和5份BM25原产物保护指纹。用户运行结束或遇到错误后保留输出，助手检查实际文件，不能把准备状态或临时验收值写成Dense成绩，也不擅自后台启动或重新跑BM25。通过Dense核验和同步后再做RRF；test和MIRAGE当前不运行。
+运行回执results/nfcorpus_dense_dev_01_run_audit.json状态complete_integrity_validated，包含9份源码指纹、相同输入、模型版本和5份BM25原产物保护指纹。用户运行结束或遇到错误后保留输出，助手检查实际文件，不能把准备状态或临时验收值写成Dense成绩，也不擅自后台启动或重新跑BM25。通过Dense核验和同步后再做RRF；test和MIRAGE当前不运行。
+
+## 当前任务：用户终端运行 RRF dev
+
+Dense核验报告先提交同步，再运行本轮。保持相同文档、原query、dev标注与模型，使用已固定的两路各Top100、rrf_constant=60、最终Top100；查询编码仍用GPU，BM25检索和排名融合使用CPU。
+
+Dense文档缓存已完成，本轮应cache_hit=true、initial_completed_rows=3633，向量指纹4aa389bc2d522a2fc285b6065a93e38de9516d6dfa7265c1e614a4761109c3f0；无需再生成3633篇文档向量。启动回执results/nfcorpus_rrf_dev_01_run_audit.json保存两路已有排名、相同输入与源码、两路原10份产物和缓存2文件的保护SHA。状态仍为prepared_for_user_terminal_not_started，未提前计算或登记RRF效果。
+
+```bash
+# 进入项目目录定位本轮结果。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python运行失败的退出状态。
+set -o pipefail
+# 复用文档向量并运行两路融合，保存资源与实时输出。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /usr/bin/time -v -o results/nfcorpus_rrf_dev_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_benchmark_eval.py --method rrf --data-dir data/external/nfcorpus/prepared/nfcorpus --split dev --run-name nfcorpus_rrf_dev_01 2>&1 | tee results/nfcorpus_rrf_dev_01_run.log
+```
+
+完成后助手读取本地文件，核验缓存实际复用、参数与保护文件、逐题指标和资源，再与两路基线比较。不把Top200并集或假想候选覆盖当作RRF实测；如发生错误，先保留本轮日志排查，不重新启动BM25或Dense。通过并同步后再讨论重排，当前不运行test或MIRAGE。
 
 ## 后续接入保持同一接口
 

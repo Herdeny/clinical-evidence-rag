@@ -45,6 +45,98 @@ def same_number(actual, expected):
     return math.isfinite(actual) and math.isfinite(expected) and math.isclose(actual, expected, rel_tol=1e-10, abs_tol=1e-12)
 
 
+# 只读核对Dense文档缓存，既不创建模型也不重新生成向量。
+def validate_dense_cache(summary, audit, data_dir):
+    # 数组只以内存映射方式读取。
+    import numpy as np
+    # 实际模型和编码配置来自本轮摘要。
+    dense = summary["config"]["dense"]
+    # 缓存路径和使用状态来自真实prepare返回值。
+    cache = dense["embeddings_cache"]
+    # 读取当前已发布的缓存清单。
+    manifest_path = Path(cache["manifest_path"])
+    # 不打开写锁或改变清单内容。
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    # 所有文档都应已经成功发布。
+    assert manifest["status"] == cache["status"] == "complete"
+    # 固定每行对应的语料身份和编码设置。
+    identity = manifest["identity"]
+    # 检查预期矩阵规模。
+    expected_shape = tuple(audit.get("expected_vector_shape", [audit["document_count"], 384]))
+    # 清单、摘要和执行前预期必须一致。
+    assert (identity["rows"], identity["dimension"]) == expected_shape == tuple(dense["embeddings_shape"])
+    # 全部行已经保存，不能拿部分缓存评估。
+    assert manifest["completed_rows"] == cache["rows"] == expected_shape[0]
+    # 模型最大长度保持实际记录的固定值。
+    assert dense["max_seq_length"] == audit.get("max_seq_length", 512)
+    # 缓存输入必须是当前BEIR原始语料文件。
+    assert identity["evidence_sha256"] == file_sha(data_dir / "corpus.jsonl")
+    # 重建缓存实际编码的有序ID与标题加正文身份。
+    ordered = hashlib.sha256()
+    # 只读取当前语料，不改写原始文件。
+    with (data_dir / "corpus.jsonl").open(encoding="utf-8") as stream:
+        # 保留原始文档行顺序。
+        for line in stream:
+            # 忽略容器空行。
+            if not line.strip():
+                # 空行不是文档记录。
+                continue
+            # 正文和标题来自固定原始记录。
+            record = json.loads(line)
+            # 与读取器保持同一标题拼接规则。
+            text = ((record.get("title") or "") + " " + record["text"]).strip()
+            # 使用缓存层相同的规范JSON序列化规则。
+            serialized = json.dumps([record["_id"], text], ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n"
+            # 逐行累加有序身份。
+            ordered.update(serialized.encode("utf-8"))
+    # 缓存行与本轮真正使用的文本必须一致。
+    assert ordered.hexdigest() == identity["ordered_id_text_sha256"]
+    # 模型名、固定版本和文档编码设置逐项匹配。
+    document_config = identity["document_config"]
+    # 不把另一种模型的向量当作本轮结果。
+    assert document_config["model_name"] == dense["model_name"] == audit["model_id"]
+    # 初始化设置保留实际CUDA和固定revision。
+    assert document_config["model_kwargs"] == dense["model_kwargs"]
+    # 本轮预先固定模型版本与设备。
+    assert dense["model_kwargs"]["revision"] == audit["model_revision"] and dense["device"] == audit["expected_device"]
+    # 文档编码设置与摘要一致。
+    assert document_config["encode_kwargs"] == dense["encode_kwargs"]
+    # 固定规范身份计算出的目录名必须匹配。
+    serialized = json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    # 摘要中的缓存指纹也来自相同身份。
+    assert hashlib.sha256(serialized.encode("utf-8")).hexdigest() == cache["fingerprint"] == manifest_path.parent.name
+    # 向量文件必须属于同一个缓存目录。
+    vectors_path = Path(cache["vectors_path"])
+    # 拒绝把语料清单与另一份向量矩阵组合。
+    assert vectors_path.parent == manifest_path.parent
+    # 文件字节身份必须匹配发布时保存的摘要。
+    assert file_sha(vectors_path) == manifest["array_sha256"]
+    # 只读内存映射，禁止修改已完成向量。
+    vectors = np.load(vectors_path, mmap_mode="r", allow_pickle=False)
+    # 形状、精度和只读属性逐项检查。
+    assert isinstance(vectors, np.memmap) and vectors.shape == expected_shape and vectors.dtype == np.float32 and not vectors.flags.writeable
+    # 分块检查，避免将后续大语料的完整矩阵复制成float64。
+    norm_min, norm_max = float("inf"), float("-inf")
+    # 每次最多检查4096行，保持额外内存有界。
+    for start in range(0, len(vectors), 4096):
+        # 只复制当前块用于高精度范数检查。
+        block = np.asarray(vectors[start:start + 4096], dtype=np.float64)
+        # 全部向量元素必须有限。
+        assert np.isfinite(block).all()
+        # 计算当前块每行的L2范数。
+        norms = np.linalg.norm(block, axis=1)
+        # 当前块应符合已固定的归一化设置。
+        assert np.allclose(norms, 1.0, rtol=1e-3, atol=1e-5)
+        # 累加全矩阵的最小与最大范数。
+        norm_min, norm_max = min(norm_min, float(norms.min())), max(norm_max, float(norms.max()))
+    # RRF等后续运行应复用事先固定的完整缓存。
+    if "expected_cache_fingerprint" in audit:
+        # 指纹不变且实际cache_hit，不能悄悄重编码。
+        assert cache["fingerprint"] == audit["expected_cache_fingerprint"] and cache["cache_hit"] and cache["initial_completed_rows"] == expected_shape[0]
+    # 保存可复查的缓存检查结果，不输出整个矩阵。
+    return {"fingerprint": cache["fingerprint"], "manifest_path": str(manifest_path), "manifest_sha256": file_sha(manifest_path), "vectors_path": str(vectors_path), "vectors_sha256": manifest["array_sha256"], "shape": list(vectors.shape), "dtype": str(vectors.dtype), "read_only": True, "status": "complete", "all_finite": True, "norm_min": norm_min, "norm_max": norm_max, "ordered_id_text_sha256": ordered.hexdigest(), "cache_hit": cache["cache_hit"], "initial_completed_rows": cache["initial_completed_rows"]}
+
+
 # 核验保存结果；checked_on由调用方传客户端日期。
 def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     # 限定到当前结果目录的单个文件名前缀。
@@ -73,6 +165,10 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     for metadata in audit["input_sha256"].values():
         # 任何输入变化都需要单独说明，不能沿用旧分数。
         assert file_sha(metadata["path"]) == metadata["sha256"], metadata["path"]
+    # 先前基线的原始产物不能被本轮对照覆盖或改写。
+    for name, expected in audit.get("protected_prior_outputs", {}).items():
+        # 只比较指纹，不重新运行旧基线。
+        assert file_sha(name) == expected, name
     # 核对执行前源码副本及当前工作区身份。
     for name, expected in audit["code_sha256"].items():
         # 快照必须完整且未被改写。
@@ -81,12 +177,18 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
         assert file_sha(ROOT / name) == expected, name
     # 确认摘要声明的数据集、划分和方法与启动回执一致。
     assert (summary["dataset_name"], summary["split"], summary["retrieval_method"]) == (audit["dataset_name"], audit["split"], audit["method"])
+    # 融合运行的实际参数必须与启动前固定值一致。
+    if audit["method"] == "rrf":
+        # 不允许运行后再更改候选预算或平滑常量。
+        assert summary["config"]["rrf"] == audit["expected_rrf"]
     # 摘要的三个输入身份必须各自与运行前回执相符。
     expected_inputs = {metadata["path"]: metadata["sha256"] for metadata in audit["input_sha256"].values()}
     # 不能把其他语料或划分的结果贴到本运行名下。
     assert {metadata["path"]: metadata["sha256"] for metadata in summary["input_sha256"].values()} == expected_inputs
     # 从摘要定位原始标准BEIR文件。
     data_dir = Path(summary["config"]["data_dir"])
+    # 仅Dense或RRF核对实际文档缓存，不启动任何编码。
+    dense_cache = validate_dense_cache(summary, audit, data_dir) if audit["method"] in {"dense", "rrf"} else None
     # 语料只需保留文档ID集合。
     with (data_dir / "corpus.jsonl").open(encoding="utf-8") as stream:
         # 按原始_id核验命中来源。
@@ -187,6 +289,8 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     assert same_number(summary["latency_ms"]["median"], median(row["latency_ms"] for row in rows))
     # 全部检查通过后才创建验证结果。
     validation = {"checked_on": checked_on, "status": "passed", "run_name": run_name, "dataset_name": audit["dataset_name"], "method": audit["method"], "split": audit["split"], "document_count": len(document_ids), "query_count": len(rows), "qrel_pairs": len(labels), "metrics": means, "mean_query_latency_ms": mean_latency, "process_wall_seconds": elapsed_seconds, "maximum_process_rss_kib": int(resources["Maximum resident set size (kbytes)"]), "exit_status": 0, "returned_count_distribution": hit_counts, "queries_with_positive_hit_at_max_k": positive_queries, "queries_without_positive_hit_at_max_k": len(rows) - positive_queries, "per_query_metrics_match_rescoring": True, "max_k_recall_matches_set_intersection": True, "inputs_and_snapshot_and_current_code_match_receipt": True, "output_sha256": {name: file_sha(path) for name, path in paths.items()}, "validator_sha256": file_sha(Path(__file__)), "validator_retrieval_or_model_calls": False, "scorer": summary["scorer"], "execution_git_commit": audit.get("git_commit")}
+    # 补充缓存与已有基线保护的实际检查结果。
+    validation.update(dense_cache=dense_cache, protected_prior_output_count=len(audit.get("protected_prior_outputs", {})))
     # 诊断留在本地结果目录，报告可以引用其指纹与结论。
     validation_path = result_dir / f"{run_name}_validation.json"
     # 保存完整验证结论。
