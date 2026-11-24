@@ -137,6 +137,38 @@ def validate_dense_cache(summary, audit, data_dir):
     return {"fingerprint": cache["fingerprint"], "manifest_path": str(manifest_path), "manifest_sha256": file_sha(manifest_path), "vectors_path": str(vectors_path), "vectors_sha256": manifest["array_sha256"], "shape": list(vectors.shape), "dtype": str(vectors.dtype), "read_only": True, "status": "complete", "all_finite": True, "norm_min": norm_min, "norm_max": norm_max, "ordered_id_text_sha256": ordered.hexdigest(), "cache_hit": cache["cache_hit"], "initial_completed_rows": cache["initial_completed_rows"]}
 
 
+# 用已经归档的两路排名重算RRF，独立核对实际融合而不调用原融合函数。
+def validate_rrf_reference(rows, audit, config):
+    # 只有RRF且已准备参考排名的运行才做此核对。
+    if audit["method"] != "rrf" or not audit.get("reference_rankings"):
+        # 其他方法没有RRF检查结果。
+        return None
+    # 读取固定的两路既有排名，不执行检索。
+    references = {method: {row["query_id"]: row for line in Path(path).read_text(encoding="utf-8").splitlines() for row in [json.loads(line)]} for method, path in audit["reference_rankings"].items()}
+    # 各路题号必须与当前运行一致。
+    assert all(set(items) == {row["query_id"] for row in rows} for items in references.values())
+    # 融合参数来自本轮实际配置和执行前回执。
+    candidate_k, constant = config["rrf"]["candidate_k"], config["rrf"]["rrf_constant"]
+    # 逐题比较实际融合后的顺序和分数。
+    for row in rows:
+        # 每题单独累加文档贡献。
+        fused = {}
+        # 与在线实现使用相同两路顺序。
+        for method in ("dense", "bm25"):
+            # 名次从1开始，不使用原检索分数。
+            for rank, identifier in enumerate(references[method][row["query_id"]]["retrieved_ids"][:candidate_k], start=1):
+                # 每一路出现的文档增加固定名次贡献。
+                fused[identifier] = fused.get(identifier, 0.0) + 1.0 / (constant + rank)
+        # 同分按ID升序，与已固定的融合排序规则一致。
+        expected = sorted(fused, key=lambda identifier: (-fused[identifier], identifier))[:max(audit["ks"])]
+        # 不一致时保留题号，不自动改动原始结果。
+        assert expected == row["retrieved_ids"], f"RRF reference ranking mismatch: {row['query_id']}"
+        # 分数也逐个核对，防止只验证排序而漏掉错误公式。
+        assert all(same_number(score, fused[identifier]) for identifier, score in zip(row["retrieved_ids"], row["scores"])), row["query_id"]
+    # 保存真正完成的检查范围。
+    return {"query_count": len(rows), "all_rankings_and_scores_match": True, "candidate_k": candidate_k, "rrf_constant": constant, "final_k": max(audit["ks"]), "references": audit["reference_rankings"]}
+
+
 # 核验保存结果；checked_on由调用方传客户端日期。
 def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     # 限定到当前结果目录的单个文件名前缀。
@@ -169,12 +201,14 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     for name, expected in audit.get("protected_prior_outputs", {}).items():
         # 只比较指纹，不重新运行旧基线。
         assert file_sha(name) == expected, name
-    # 核对执行前源码副本及当前工作区身份。
+    # 核对执行前源码副本，并单独记录当前工作区是否仍相同。
+    current_code_matches = True
+    # 历史运行以后续开发为背景，原始执行快照必须永久可核验。
     for name, expected in audit["code_sha256"].items():
         # 快照必须完整且未被改写。
         assert file_sha(Path(audit["code_snapshot"]) / name) == expected, name
-        # 当前首次核验要求工作区也仍为同一版本。
-        assert file_sha(ROOT / name) == expected, name
+        # 后续新增功能可以改变工作区，不能因此否定完整的历史快照。
+        current_code_matches = current_code_matches and (ROOT / name).is_file() and file_sha(ROOT / name) == expected
     # 确认摘要声明的数据集、划分和方法与启动回执一致。
     assert (summary["dataset_name"], summary["split"], summary["retrieval_method"]) == (audit["dataset_name"], audit["split"], audit["method"])
     # 融合运行的实际参数必须与启动前固定值一致。
@@ -223,6 +257,8 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     ks = audit["ks"]
     # 摘要不能误报另一个K集合。
     assert list(summary["config"]["ks"]) == ks
+    # 融合正确性独立于效果优劣，使用已有两路排名核对。
+    fusion_check = validate_rrf_reference(rows, audit, summary["config"])
     # 重新计分使用相同的评分包版本。
     assert summary["scorer"]["version"] == audit["packages"]["pytrec-eval-terrier"] == version("pytrec-eval-terrier")
     # 使用原始标注和已保存run独立重新调用评分器。
@@ -290,7 +326,7 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     # 全部检查通过后才创建验证结果。
     validation = {"checked_on": checked_on, "status": "passed", "run_name": run_name, "dataset_name": audit["dataset_name"], "method": audit["method"], "split": audit["split"], "document_count": len(document_ids), "query_count": len(rows), "qrel_pairs": len(labels), "metrics": means, "mean_query_latency_ms": mean_latency, "process_wall_seconds": elapsed_seconds, "maximum_process_rss_kib": int(resources["Maximum resident set size (kbytes)"]), "exit_status": 0, "returned_count_distribution": hit_counts, "queries_with_positive_hit_at_max_k": positive_queries, "queries_without_positive_hit_at_max_k": len(rows) - positive_queries, "per_query_metrics_match_rescoring": True, "max_k_recall_matches_set_intersection": True, "inputs_and_snapshot_and_current_code_match_receipt": True, "output_sha256": {name: file_sha(path) for name, path in paths.items()}, "validator_sha256": file_sha(Path(__file__)), "validator_retrieval_or_model_calls": False, "scorer": summary["scorer"], "execution_git_commit": audit.get("git_commit")}
     # 补充缓存与已有基线保护的实际检查结果。
-    validation.update(dense_cache=dense_cache, protected_prior_output_count=len(audit.get("protected_prior_outputs", {})))
+    validation.update(dense_cache=dense_cache, protected_prior_output_count=len(audit.get("protected_prior_outputs", {})), rrf_reference_check=fusion_check, inputs_and_snapshot_match_receipt=True, current_code_matches_receipt=current_code_matches, inputs_and_snapshot_and_current_code_match_receipt=current_code_matches)
     # 诊断留在本地结果目录，报告可以引用其指纹与结论。
     validation_path = result_dir / f"{run_name}_validation.json"
     # 保存完整验证结论。

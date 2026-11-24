@@ -1,6 +1,6 @@
 # NFCorpus 检索评测接入任务
 
-当前数据已准备：3,633篇文档，2,590 train／324 dev／323 test查询。来源版本、原始文件、转换记录和校验见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。读取、评测与入口均已验收，BM25与Dense dev已实测；当前由用户执行RRF dev。核心仍由用户编写。
+当前数据已准备：3,633篇文档，2,590 train／324 dev／323 test查询。来源版本、原始文件、转换记录和校验见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。读取、评测与入口均已验收，BM25／Dense／RRF dev均已实测核验，当前Dense四指标均值最高。本节点完成，下一步是[固定Dense候选的重排函数](reranking_task.md)。核心仍由用户编写。
 
 ## 已验收：数据读取函数
 
@@ -78,7 +78,7 @@ CLI提供--method（默认bm25）、--data-dir（Path，默认root/data/external
 
 验收先用临时BEIR目录、真实小型BM25和假Dense模型检查参数到结果的完整链路，确认配置、文件、预算与索引只建一次；用户先写完整入口，不由助手代写。通过并同步后再给用户可见终端命令跑真实BM25 dev，继而Dense与RRF。test与MIRAGE当前不运行。
 
-保存辅助写入三个文件：{run_name}_results.jsonl保留全部逐题字段；{run_name}_run.json保留题号到文档和检索分数；{run_name}_summary.json保存全部查询的指标均值、耗时、方法配置、评分包版本、输入文件SHA。当前没有任何真实NFCorpus模型成绩；辅助测试的0.5仍是临时验收值。
+保存辅助写入三个文件：{run_name}_results.jsonl保留全部逐题字段；{run_name}_run.json保留题号到文档和检索分数；{run_name}_summary.json保存全部查询的指标均值、耗时、方法配置、评分包版本、输入文件SHA。辅助测试的0.5仅为临时验收值；真实三方法开发集结果在下面单独记录。
 
 ## 已完成：BM25 dev 首轮运行
 
@@ -118,11 +118,11 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /usr/bin/time -v -o results/nfcorpus_den
 
 运行回执results/nfcorpus_dense_dev_01_run_audit.json状态complete_integrity_validated，包含9份源码指纹、相同输入、模型版本和5份BM25原产物保护指纹。用户运行结束或遇到错误后保留输出，助手检查实际文件，不能把准备状态或临时验收值写成Dense成绩，也不擅自后台启动或重新跑BM25。通过Dense核验和同步后再做RRF；test和MIRAGE当前不运行。
 
-## 当前任务：用户终端运行 RRF dev
+## 已完成：RRF dev 首轮运行
 
-Dense核验报告先提交同步，再运行本轮。保持相同文档、原query、dev标注与模型，使用已固定的两路各Top100、rrf_constant=60、最终Top100；查询编码仍用GPU，BM25检索和排名融合使用CPU。
+2026-11-24用户执行完成并通过独立核验：nDCG@10=0.312468299806529、Recall@10=0.1406747396163073、nDCG@100=0.28137851892188376、Recall@100=0.3003347087049922。平均检索35.872ms，324题均返回100条；归档两路排名独立计算的融合顺序／分数324题全部一致，审计complete_integrity_validated。RRF四指标均低于Dense，保留负结果，完整资源及逐题比较见[开发集对照报告](nfcorpus_retrieval_baselines.md)。
 
-Dense文档缓存已完成，本轮应cache_hit=true、initial_completed_rows=3633，向量指纹4aa389bc2d522a2fc285b6065a93e38de9516d6dfa7265c1e614a4761109c3f0；无需再生成3633篇文档向量。启动回执results/nfcorpus_rrf_dev_01_run_audit.json保存两路已有排名、相同输入与源码、两路原10份产物和缓存2文件的保护SHA。状态仍为prepared_for_user_terminal_not_started，未提前计算或登记RRF效果。
+保持相同文档、原query、dev标注与模型，两路各Top100、rrf_constant=60、最终Top100；查询编码仍用GPU，BM25检索和融合使用CPU。实际cache_hit=true、initial_completed_rows=3633，指纹4aa389bc2d522a2fc285b6065a93e38de9516d6dfa7265c1e614a4761109c3f0。两路原10份产物和缓存2文件SHA全部未变；启动回执保留执行前源码快照与参数。下面是已执行命令的复现记录，不再次以原名称覆盖结果。
 
 ```bash
 # 进入项目目录定位本轮结果。
@@ -133,12 +133,12 @@ set -o pipefail
 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /usr/bin/time -v -o results/nfcorpus_rrf_dev_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_benchmark_eval.py --method rrf --data-dir data/external/nfcorpus/prepared/nfcorpus --split dev --run-name nfcorpus_rrf_dev_01 2>&1 | tee results/nfcorpus_rrf_dev_01_run.log
 ```
 
-完成后助手读取本地文件，核验缓存实际复用、参数与保护文件、逐题指标和资源，再与两路基线比较。不把Top200并集或假想候选覆盖当作RRF实测；如发生错误，先保留本轮日志排查，不重新启动BM25或Dense。通过并同步后再讨论重排，当前不运行test或MIRAGE。
+该节点已完成，提交同步后继续重排；不再重复运行三条基线。不把两路最多200条的并集覆盖当作最终100条的融合成绩，当前不运行test或MIRAGE。
 
 ## 后续接入保持同一接口
 
 数据适配通过后，查询循环直接将query传给统一retrieve_fn(query,k)，复用现有Dense／BM25／RRF与文档缓存；不经过CT的Report/Question模板。公开基准新增评测函数，不伪造report、gold_evidence_groups来迎合旧保存接口。
 
-之后以BEIR使用的pytrec_eval指标实现核对nDCG@10、Recall@100，用户已完成查询编排和评分，助手已提供保存辅助；当前继续接运行入口。当前评分包已安装，评测函数已通过7项临时数据验收。RRF基准候选预算每路100、常量60，默认CT设置不改。
+BEIR同口径pytrec_eval评分、查询编排、保存和三方法运行入口均已实现并实测。下一步新增重排纯函数，再接dense_rerank方法；当前入口与保存辅助尚未支持这个新方法，助手先补齐辅助支持再交用户接线。RRF既有预算每路100、常量60，默认CT设置不改。
 
 运行入口与结果按数据集／方法／划分命名，dev用于调试，test等方法固定后再完整评测。模型版本、原始语料、标题拼接、512-token截断、候选预算和计时范围均入配置。MIRAGE依然负责最终问答，CT合成题只作产品场景回归，三类评测分别报告。

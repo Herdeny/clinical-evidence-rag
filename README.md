@@ -4,7 +4,7 @@
 
 代码目录已整理：根目录现有11个开发模块（含已验收benchmark_data.py和benchmark_eval.py，以及已验收run_benchmark_eval.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
 
-**当前任务：公开检索基准对照。** NFCorpus配套3633文档／324条dev查询，两路均已真实运行并核验：BM25的nDCG@10／Recall@100为0.265738／0.205678、平均查询2.839ms；Dense为0.327186／0.315082、平均查询23.262ms。Dense自身3633×384文档缓存完整并通过身份／数值检查，BM25产物未改。见[开发集对照报告](docs/nfcorpus_retrieval_baselines.md)。当前由用户终端跑[RRF dev](docs/nfcorpus_benchmark_task.md)，复用该缓存；RRF与MIRAGE7663尚无真实成绩，CT题继续用于产品回归。
+**当前任务：固定Dense候选加入重排。** NFCorpus配套3633文档／324条dev查询，三种方法均已实测核验：BM25的nDCG@10／Recall@100为0.265738／0.205678、平均查询2.839ms；Dense为0.327186／0.315082、23.262ms；RRF为0.312468／0.300335、35.872ms。RRF实际复用完整文档缓存，324题融合排名／分数与独立计算一致；本轮Dense四指标均值最高，保留RRF负结果。见[开发集对照报告](docs/nfcorpus_retrieval_baselines.md)。下一步用户实现[重排纯函数](docs/reranking_task.md)，尚无重排或MIRAGE7663成绩，官方test未运行，CT题继续用于产品回归。
 
 **2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
 
