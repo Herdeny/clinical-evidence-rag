@@ -23,7 +23,7 @@
 
 ## 数据维护模块
 
-configs/reranker_profiles.json保存三种重排候选的固定版本与初始运行参数。tests现有19个模块，test_reranking_support.py的7项检查针对真实构造签名转发、合成实际属性及重排结果来源／候选集合／计时范围；test_reranking_entry.py新增4项覆盖导入保护、三profile默认／显式名称、CLI和原生输入错误的加载顺序。加原相关39项共50项通过，使用临时CPU假模型与真实其余链路。用户下一项见reranking_runtime_task.md下载节，结果results/reranking_entry_validation.json。文末“17个模块”属于此前整理记录。
+configs/reranker_profiles.json保存三种重排候选的固定版本与初始运行参数。tests现有20个模块，test_reranking_support.py的6项检查针对真实构造签名转发、合成实际属性及重排结果来源／候选集合／计时范围；test_reranking_entry.py的4项覆盖导入保护、三profile默认／显式名称、CLI和原生输入错误的加载顺序，加原相关40项共50项通过。新增test_reranker_preflight.py有4项辅助检查，验证联合长度／prompt／原始logit／导入与CUDA边界；加直接依赖10项共14项通过，不是实际GPU预检结果。用户下一项见reranking_runtime_task.md真实预检节，文末“17个模块”属于此前整理记录。
 
 | scripts/data 内的模块 | 保留理由 |
 | --- | --- |
@@ -45,6 +45,8 @@ configs/reranker_profiles.json保存三种重排候选的固定版本与初始�
 这些脚本不进入检索／编码运行时的隐式调用。日常从根目录入口开发；需要维护数据时，按[下载和处理记录](data_acquisition_and_processing.md)使用 `python -m scripts.data.模块名`。
 
 ## 评测核验工具
+
+scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度，再对最多3对样本打分，记录实际CUDA／BF16／预算／显存及来源指纹；不运行完整排序评分。Qwen4B下载已核对，工具14项相关辅助检查通过，真实运行等待用户终端执行。命令与验收见reranking_runtime_task.md真实预检节。
 
 scripts/evaluation/validate_beir_run.py从已保存run及原始标注重新评分，检查题目覆盖、原query、分数、指标均值、输入／源码与资源统计，验证通过后更新本地审计。它不重新检索或加载模型，不在检索入口中隐式运行。三种方法首轮均通过；Dense缓存分块核对形状、数值、范数与文件身份，RRF还从归档两路排名独立重算324题的名次贡献并检查旧产物未改。历史执行快照必须匹配回执，后续开发后的当前工作区是否一致另报布尔值；结果汇总见docs/nfcorpus_retrieval_baselines.md。
 

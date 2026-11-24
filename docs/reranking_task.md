@@ -1,5 +1,7 @@
 # Cross-Encoder重排任务
 
+**2026-11-25模型已下载，预检待用户运行：** 固定Qwen4B的17文件／2个BF16分片已核对完整，索引、内容哈希和离线分词器通过。助手新增scripts/evaluation/preflight_reranker.py，4项工具＋支持6项＋入口4项共14项辅助检查通过；实际模型、联合输入长度与显存仍需用户终端预检。工具先扫描32400联合长度，再对最多3对样本真实打分，命令见[真实预检](reranking_runtime_task.md#真实预检)。当前没有真实重排效果。
+
 **2026-11-25运行入口已验收：** 用户run_reranking_eval.py的4项编排检查及相关46项共50项全部通过，模型只构造一次、默认命名不含时间戳，原始候选来源和本轮模型属性完整进入保存结果。当前没有真实模型或GPU运行；下一步用户在可见终端下载固定Qwen4B，命令与后续预检顺序见[运行任务下载节](reranking_runtime_task.md#用户终端下载)。下载完成核对后再准备真实小批预检，不直接完整重排。
 
 **2026-11-25运行辅助已提供：** configs/reranker_profiles.json固定Qwen4B／8B与BGE配置，8B revision=77d193c791ed757ca307ee72715aa132723da912；reranker_adapter.py提供build_reranker和describe_reranker，save_beir_results已支持frozen_rerank、候选来源核对和独立重排计时。相关46项检查通过，未下载或加载真实模型。4096联合长度／batch1待预检。用户下一项新增运行入口，完整接口、参数理由和配置对应见[运行任务](reranking_runtime_task.md)。以下待实现描述属于此前阶段。

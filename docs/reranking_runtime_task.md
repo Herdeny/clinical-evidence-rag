@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25预检工具已实现。** 助手新增scripts/evaluation/preflight_reranker.py，4项新辅助检查与支持6项／入口4项共14项通过，CLI帮助可运行，尚未执行真实GPU预检。工具沿用同一配置、加载及候选来源；统计全部联合长度后，只打分最多3对样本。完整用户命令见文末“真实预检”。根目录核心保持原样。
+
 **2026-11-25下载已核对。** 固定Qwen4B快照17文件全部齐全，2权重分片8043614960字节，内容哈希与项目blobs地址一致；索引、BF16头部及张量总字节核对通过，无未完成分片。离线配置／分词器与yes/no ID检查成功，未加载真实权重。用户终端下载10:29.07、退出0，记录results/qwen3_reranker_4b_download_validation.json。下一项是小批真实预检，下载成功不等于模型推理通过。
 
 **2026-11-25入口已验收。** 用户已完成run_reranking_eval.py，助手未改核心源码，4项入口检查及原相关46项共50项全部通过；记录results/reranking_entry_validation.json及源码快照。实际Python3.12.7接受当前f-string复用引号语法，不要求改写。三种profile的默认／显式名称、只加载一次模型、config_path指向文件、batch透传、真实临时加载／描述／评分／保存及CLI参数映射均通过。假模型只含CPU单参数，不是GPU或模型效果验收。下一步用户终端下载，命令见文末。以下任务说明保留本工作单元的设计与接口。
@@ -13,7 +15,7 @@
 | configs/reranker_profiles.json | 助手 | 保存三种候选的固定版本、精度、输入长度、批次、指令和打分含义 |
 | reranker_adapter.py | 助手 | build_reranker按配置创建一次CrossEncoder；describe_reranker读取真实设备／精度／长度等属性，返回可保存的元数据 |
 | retrieval_results_io.py | 助手扩展原文件 | 现有save_beir_results新增frozen_rerank方法，保留候选来源、核对原候选集合并记录正确计时范围 |
-| tests/test_reranking_support.py | 助手 | 7项辅助检查；不进入正式运行入口，不运行真实模型 |
+| tests/test_reranking_support.py | 助手 | 6项辅助检查；不进入正式运行入口，不运行真实模型 |
 
 原有frozen_candidates_io.py负责读旧候选，用户rerank_core.py负责重排，benchmark_eval.py负责逐题调用和评分。上述辅助不重新实现这些核心算法。
 
@@ -85,7 +87,7 @@ run_name沿用既有命名方式：用户传--run-name时优先使用；未传�
 - 真实模型预检后才能运行324题。固定100候选、返回全部100时Recall@100应保持原值；nDCG@10／Recall@10能否提高由真实模型成绩决定。
 - 逐题latency_ms覆盖候选副本读取和重排，排除原Dense检索、文件／模型加载和指标计算；这不是单进程端到端延迟。正式运行的整进程时间和资源由终端另行记录。
 
-当前辅助验收记录results/reranking_support_validation.json及_run.log：新辅助7项、原BEIR保存6项、CT保存5项、评测10项、加载6项、rerank12项，共46项通过。构造器检查使用真实类签名的autospec；运行属性检查用小型CPU参数；保存用合成冻结文件和假打分，不是下载或模型推理验收。
+当前辅助验收记录results/reranking_support_validation.json及_run.log：新辅助6项、原BEIR保存6项、CT保存6项、评测10项、加载6项、rerank12项，共46项通过。构造器检查使用真实类签名的autospec；运行属性检查用小型CPU参数；保存用合成冻结文件和假打分，不是下载或模型推理验收。
 
 ## 用户终端下载
 
@@ -105,3 +107,24 @@ HF_HUB_DISABLE_PROGRESS_BARS=0 TQDM_POSITION=-1 bash scripts/project_env.sh /usr
 单文件进度说明：本地huggingface_hub0.36.2的hf download没有show-progress参数，quiet用于关闭进度；文件进度的tqdm会在输出经过tee等非终端场景时自动隐藏。此处显式设置HF_HUB_DISABLE_PROGRESS_BARS=0，并用该版本实际支持的TQDM_POSITION=-1使文件字节进度在管道输出下保持显示。已用真实_get_progress_bar_context模拟10字节进度核对：普通非终端disable=True，加这两个变量后disable=False并实际输出字节进度；未下载权重。不要为了显示进度切换模型、缓存布局或下载后端。
 
 实际缓存路径已通过包装器启动的子进程读取确认：HF_HUB_CACHE=/home/wzh/clinical-evidence-rag/cache/huggingface/hub，HF_XET_CACHE=/home/wzh/clinical-evidence-rag/cache/huggingface/xet。模型目录是hub/models--Qwen--Qwen3-Reranker-4B；snapshots/22e683669bc0f0bd69640a1354a6d0aebcfeede5提供原始文件名入口，Linux默认通常通过链接指向同模型目录下blobs中的实际文件。路径由scripts/project_env.sh设置，无需再增加local-dir或另放全局缓存。
+
+## 真实预检
+
+新增scripts/evaluation/preflight_reranker.py是助手编写的运行检查工具，复用正式build_reranker和describe_reranker；不是用户需要重写的核心，也不是新模型封装。工具验收并提交同步后，由用户在可见4090终端执行。
+
+工具分三个阶段：先加载唯一重排模型并检查实际设备／精度／长度／指令；再用真实preprocess统计全部32400句对的联合长度，包含原query、完整文档、指令与模板；最后选原首两对和最长一对去重，最多3个句对使用真实predict打分。长度统计仅分词，不对32400句对做模型推理；内部CPU分词批次32不改变GPU配置batch_size=1。
+
+统计时明确关闭截断，若任何输入超过当前4096，先显示超限数量与最长值，再停止，依据输出调整配置，不擅自切短正文。真实打分沿用正常模型输入处理，保留原始logit，一维、数量一致、有限即可，负数／大于1均合法，不做向量L2范数检查。
+
+```bash
+# 进入项目目录，保持结果路径与此前一致。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 离线加载固定模型，保存真实预检结果、日志与资源统计。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/time -v -o results/nfcorpus_rerank_qwen3_4b_preflight_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u -m scripts.evaluation.preflight_reranker --config-dir configs --data-dir data/external/nfcorpus/prepared/nfcorpus --receipt results/nfcorpus_qwen3_8b_frozen_candidates.json --profile qwen3_4b --output results/nfcorpus_rerank_qwen3_4b_preflight_01.json 2>&1 | tee results/nfcorpus_rerank_qwen3_4b_preflight_01_run.log
+```
+
+预期通过范围：status=passed，query_count=324、length_check.pair_count=32400、pairs_over_limit=0，实际CUDA／BF16／4096与配置一致，score_check形状为样本数量的一维数组且全部有限。显存峰值属于本次模型加载＋少量样本打分，不能替代完整运行峰值；sample_predict_seconds也不是稳定查询延迟。报告绑定配置、代码、原描述文件、三输入和三产物身份，不修改旧检索结果或向量缓存。
+
+当前辅助验证报告results/reranker_preflight_helper_validation.json：新4项＋模型支持6项＋用户入口4项，共14项通过，均未加载真实模型。真实预检结果只有用户执行上述命令后才能确认。报告拒绝覆盖，失败日志保留，必要重跑改成preflight_02等独立编号。通过并归档后，再准备完整324题重排命令。

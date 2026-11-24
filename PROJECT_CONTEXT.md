@@ -6,6 +6,10 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新：下载节点804b1dc已同步，真实重排预检工具已实现，等待用户终端执行。** 新scripts/evaluation/preflight_reranker.py由助手编写，复用现有build_reranker／describe_reranker及固定候选加载器，不改用户核心。先核对来源并在CUDA加载唯一reranker，然后用实际CrossEncoder.preprocess、原query／完整正文／同一默认指令统计全部32400联合输入长度（含模板），统计时关闭截断；首两对加最长一对去重，最多3对真实predict。输入超4096则在打分前停止，不默默裁剪；输出只检查一维、数量、有限性，允许负数和大于1的原始logit，不要求L2或概率。记录真实设备／BF16／长度／指令、显存峰值、加载与小批打分耗时及输入前后指纹；不算完整排序指标，不将样本耗时当稳定查询延迟。
+
+tests/test_reranker_preflight.py的4项辅助检查，加原支持6项及入口4项，共14项通过；报告results/reranker_preflight_helper_validation.json及快照，命令行help实际通过，旧输入／产物SHA未变。仅CPU假预处理器／假模型，不是实际GPU预检通过。原文“支持7项＋CT保存5项”系模块计数笔误，已改为实际6＋6，原46与50总数不变，未改用户实现或新增验收要求。tests现20模块，根模块仍16。当前用户命令见docs/reranking_runtime_task.md真实预检节：显式config-dir／data-dir／receipt／profile=qwen3_4b／output，离线环境经project_env.sh运行，保存nfcorpus_rerank_qwen3_4b_preflight_01.json、日志、资源。工具验收提交同步后交用户运行；收到输出再核对真实结果，通过后才准备完整324题重排。当前无真实模型推理或完整重排成绩。
+
 **2026-11-25最新下载验收：Qwen3-Reranker-4B固定版本已完整下载，尚未加载真实模型。** 用户终端download_01完成17/17、退出0，耗时10:29.07，主机RSS3860552KiB；单文件字节进度已实际显示。快照位于项目cache/huggingface/hub/models--Qwen--Qwen3-Reranker-4B/snapshots/22e683669bc0f0bd69640a1354a6d0aebcfeede5。17文件均为有效项目内blobs链接，流式校验LFS SHA256／普通Git对象SHA1与缓存地址一致；索引引用2个分片，文件合计8043614960字节，张量数据8043569152字节、均BF16，头部张量名／归属／shape字节与索引一致，无.incomplete。离线AutoConfig及AutoTokenizer成功，yes9693／no2152与LogitScore一致。记录results/qwen3_reranker_4b_download_validation.json，助手未加载权重或执行GPU。先归档同步下载节点，再由助手新增scripts/evaluation/preflight_reranker.py复用build_reranker／describe_reranker，统计32400个联合输入长度、选少量样本真实打分并记录显存；预检仍由用户可见终端执行，完整重排尚未运行。
 
 **2026-11-25下载命令说明修正：必须解释单文件进度与实际缓存位置。** 用户追问未见进度参数和下载位置。已核对真实huggingface_hub0.36.2 CLI及file_download／utils.tqdm源码：hf download无show-progress，quiet关闭进度；tee使文件tqdm的disable=None按非终端自动隐藏，所以原命令只说默认显示不充分。命令现补进程级HF_HUB_DISABLE_PROGRESS_BARS=0 TQDM_POSITION=-1，模拟真实_get_progress_bar_context的10字节检查已确认disable从True变False并输出字节进度，不下载权重、不切换Xet后端。路径已在包装器子进程实际读取：/home/wzh/clinical-evidence-rag/cache/huggingface/hub与同级xet；模型子目录models--Qwen--Qwen3-Reranker-4B，snapshots固定revision为原文件名入口，blobs通常保存实际字节。已更新docs/reranking_runtime_task.md下载节，当前为下载说明纠正阶段，随下载核对节点再提交；用户尚未报告下载完成，不启动第二个后台下载。
@@ -20,7 +24,7 @@
 
 **2026-11-25最新：真实重排配置／加载与保存辅助已实现，用户下一项新增run_reranking_eval.py。** 助手新增configs/reranker_profiles.json和reranker_adapter.py，扩展原retrieval_results_io.save_beir_results支持frozen_rerank，不改用户benchmark_eval.py／rerank_core.py。新辅助build_reranker(profile)返回一个CrossEncoder；describe_reranker(model,*,profile_name,profile,config_path)返回实际设备、权重精度、长度、激活／指令和库版本等可保存字典。候选来源与本轮模型分置config.candidate_source和config.rerank，来源描述文件／原三产物／三输入重新核对，逐题输出只能来自自己原候选；latency.scope明确只含候选副本读取＋重排，排除原召回／文件模型加载／计分，旧方法范围保持。
 
-三候选Qwen4B／8B／BGE-v2-m3保留；8B固定revision=77d193c791ed757ca307ee72715aa132723da912，4B和BGE固定版本沿用。已读官方模型卡／公开API／固定版本小配置，Qwen为Transformer＋LogitScore，yes9693／no2152、默认query指令、Identity原始差值。实际ST5.7.0类位于cross_encoder/model.py（并非大写CrossEncoder.py），构造签名已直接核对。初始4096联合输入上限、batch1、CUDA BF16 SDPA；这是待真实预检的起点，不是最优或已验证显存配置。没有权重下载、模型推理或GPU运行。相关46项全部通过：新辅助7＋原BEIR保存6＋CT保存5＋评测10＋加载6＋rerank12。报告results/reranking_support_validation.json，真实构造仅autospec检查签名转发，不能写成模型加载通过。
+三候选Qwen4B／8B／BGE-v2-m3保留；8B固定revision=77d193c791ed757ca307ee72715aa132723da912，4B和BGE固定版本沿用。已读官方模型卡／公开API／固定版本小配置，Qwen为Transformer＋LogitScore，yes9693／no2152、默认query指令、Identity原始差值。实际ST5.7.0类位于cross_encoder/model.py（并非大写CrossEncoder.py），构造签名已直接核对。初始4096联合输入上限、batch1、CUDA BF16 SDPA；这是待真实预检的起点，不是最优或已验证显存配置。没有权重下载、模型推理或GPU运行。相关46项全部通过：新辅助6＋原BEIR保存6＋CT保存6＋评测10＋加载6＋rerank12。报告results/reranking_support_validation.json，真实构造仅autospec检查签名转发，不能写成模型加载通过。
 
 下一项完整说明见docs/reranking_runtime_task.md：用户写main(config_dir,data_dir,receipt_path,profile_name,run_name,result_dir)及CLI；显式读配置→加载冻结候选→创建一次reranker并取得真实描述→调用既有evaluate_frozen_reranking，batch_size须来自profile→构建7字段config→save_beir_results→返回summary。split从冻结来源取，不设冲突参数；不重建embedding／Dense，不复制循环，不让用户调用不存在辅助。本轮先写入口，保存后语义审核＋假模型编排检查，通过同步再准备用户终端下载和真实小批预检。新增文件的来源／用途／输入输出必须在交任务前讲清，不再直接引入未说明对象。
 
