@@ -4,8 +4,11 @@ import pandas as pd
 from tqdm import tqdm
 from time import perf_counter
 from math import isfinite
+from rerank_core import rerank
 
-def evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10, 100)):
+import retrieval_results_io
+
+def evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10, 100), pass_query_id=False):
     if not ks or any(type(k) is not int or k <= 0 for k in ks) or len(ks) != len(set(ks)):
         raise ValueError(f"ks should be positive int, not NaN and different, but got {ks}")
     if queries_df.empty:
@@ -23,9 +26,14 @@ def evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10, 100)):
         query_id = query["id"]
         run[query_id] = {}
         try:
-            time_1 = perf_counter()
-            retrieved_results = retrieve_fn(query_text, max(ks))
-            time_2 = perf_counter()
+            if pass_query_id:
+                time_1 = perf_counter()
+                retrieved_results = retrieve_fn(query_text, max(ks), query_id=query_id)
+                time_2 = perf_counter()
+            else:
+                time_1 = perf_counter()
+                retrieved_results = retrieve_fn(query_text, max(ks))
+                time_2 = perf_counter()
             if len(retrieved_results) > max(ks):
                 raise ValueError("retrieved results exceed the max ks")
             duration_ms = (time_2 - time_1) * 1000
@@ -76,3 +84,13 @@ def evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10, 100)):
     eval_df = pd.DataFrame(eval_rows)
     return eval_df, run
         
+def evaluate_frozen_reranking(frozen, reranker, ks=(10, 100), *, batch_size=16):    
+    def retrieve_fn(query, k, *, query_id):
+        query_hits = frozen.get_hits(query_id) # 取回已经检索过的结果
+        results = rerank(query, query_hits, k, reranker=reranker, batch_size=batch_size)
+        return results
+    
+    eval_df, run = evaluate_beir_retrieval(frozen.queries_df, frozen.qrels, retrieve_fn=retrieve_fn, ks=ks, pass_query_id=True)
+    return eval_df, run
+    
+    

@@ -4,7 +4,7 @@
 
 代码目录已整理：根目录现有14个开发模块（含已验收benchmark_data.py和benchmark_eval.py，以及已验收run_benchmark_eval.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
 
-**当前任务：接入冻结候选的重排评测。** 冻结加载辅助已完成6项关联检查，真实恢复Qwen开发集324题各100候选、共32400个句对所需文档；不加载模型／向量、不执行评分。用户按[冻结重排评测任务](docs/frozen_reranking_eval_task.md)在benchmark_eval.py增加可选query_id透传，并用已完成的rerank包装原评测循环，保留原BM25／Dense／RRF调用。候选和来源按ID关联，原query与标签不变；真实数据有同文不同ID，但本轮候选相同，没有旧结果混淆证据。模型／CLI／重排保存扩展待后续，暂无真实重排成绩。既有Qwen Dense对照见[开发集归档](docs/nfcorpus_retrieval_baselines.md)，核心仍由用户写，检查先审语义再用测试复查。
+**当前进展：冻结候选重排评测已接通。** 用户已在benchmark_eval.py完成可选query_id透传及evaluate_frozen_reranking，复用原评分循环；原BM25／Dense／RRF调用保留，相关28项检查全部通过。真实324题／32400句对以假打分完整验证了ID关联、候选集合和Recall@100不变量，原数据／产物未改，不是重排模型效果。见[冻结重排评测任务](docs/frozen_reranking_eval_task.md)。下一步准备真实重排的配置、保存辅助和运行入口，暂无真实重排成绩。既有Qwen Dense对照见[开发集归档](docs/nfcorpus_retrieval_baselines.md)，核心仍由用户写，检查先审语义再用测试复查。
 
 **2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
 

@@ -1,5 +1,7 @@
 # 冻结候选与重排评测衔接
 
+**2026-11-25已验收。** 用户已完成本文的两个改动，助手未改核心源码。原评测7项加ID回调／包装函数／空题3项共10项通过，加载器6项与rerank核心12项同时通过，共28项。真实324题／32400句对经过完整包装函数，假打分反转顺序后各题候选集合与原query仍保持，Recall@100=0.39709670188154617，原产物和输入未改。假打分只验证衔接，不是模型效果；未加载模型或向量。记录results/frozen_reranking_eval_validation.json及代码快照。下一步是配置、保存辅助与真实模型入口，本文件后续内容保留本工作单元的设计与验收理由。
+
 2026-11-25。用户的rerank纯函数已完成。本轮先由助手提供只读候选加载辅助，用户再复用现有评分循环接入重排。没有真实reranker成绩，不下载或加载模型。
 
 ## 已提供的辅助
@@ -25,7 +27,7 @@ frozen_candidates_io.py提供load_frozen_candidates(receipt_path, *, data_dir)�
 
 原evaluate_beir_retrieval没有错误。BM25／Dense／RRF按问题文字检索，原回调接口足够；读取已保存候选这个新增用途需要query_id。保留原有计时、run构造、pytrec_eval和返回结构，不复制一份评分算法。
 
-第一处改动：在evaluate_beir_retrieval现有参数后增加仅关键字选项pass_query_id=False。默认调用仍为retrieve_fn(query_text, max(ks))。开启时仍保留这两个位置参数，额外传query_id=query_id，ID来自当前查询行。该选项用于给回调提供查询身份，不参与文本改写、模型编码或评分。
+第一处改动：在evaluate_beir_retrieval现有参数后增加选项pass_query_id=False。默认调用仍为retrieve_fn(query_text, max(ks))。开启时仍保留这两个位置参数，额外传query_id=query_id，ID来自当前查询行。该选项用于给回调提供查询身份，不参与文本改写、模型编码或评分；实际用户签名允许该选项使用位置或关键字，不限制这项实现选择。
 
 第二处改动：新增evaluate_frozen_reranking(frozen, reranker, ks=(10,100), *, batch_size=16)。frozen就是上述辅助返回的对象，reranker由外部初始化后注入，函数内不创建或下载模型。batch_size只是传给已完成的rerank接口，真实模型运行批次稍后预检确定。
 

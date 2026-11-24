@@ -4,8 +4,16 @@ import unittest
 import pandas as pd
 # 测试时关闭进度条显示，保留实际循环逻辑。
 from unittest.mock import patch
+# 记录假打分器收到的句对和批次参数。
+from unittest.mock import Mock
+# 比较调用前后的候选内容。
+from copy import deepcopy
+# 构造只有predict方法的打分器，不加载模型。
+from types import SimpleNamespace
+# 复用已实现的候选容器。
+from frozen_candidates_io import FrozenCandidates
 # 只调用用户实际保存的评测函数。
-from benchmark_eval import evaluate_beir_retrieval
+from benchmark_eval import evaluate_beir_retrieval, evaluate_frozen_reranking
 
 
 # 每次生成独立输入，避免不同用例互相影响。
@@ -171,6 +179,94 @@ class BenchmarkEvalTests(unittest.TestCase):
             evaluate_beir_retrieval(queries, {query_id: {"A": 1}}, broken)
         # 确认调用确实进入上游检索。
         self.assertEqual(calls, [("Fail upstream", 100)])
+
+    # 同文查询仍须把各自ID传给回调，保留独立结果。
+    def test_query_id_callback_preserves_same_text_queries(self):
+        # 非连续行标签不能被当成问题ID。
+        queries = pd.DataFrame([{"id": "01", "query": "same query?"}, {"id": "02", "query": "same query?"}], index=[9, 3])
+        # 两题的正确文档不同。
+        qrels = {"01": {"A": 1}, "02": {"C": 1}}
+        # 回调按题号恢复候选。
+        pools = {"01": [{"id": "A", "score": 0.2}], "02": [{"id": "C", "score": 0.8}]}
+        # 记录原文、预算和当前题号。
+        calls = []
+        # 新接口的ID由关键字提供。
+        def retrieve(query, k, *, query_id):
+            # 只记录输入，不读取标注。
+            calls.append((query, k, query_id))
+            # 返回该题自己的候选。
+            return pools[query_id]
+        # 运行用户新增的ID传递分支。
+        frame, run = evaluate_beir_retrieval(queries, qrels, retrieve, ks=(1, 2), pass_query_id=True)
+        # 每题只调用一次，预算取最大K。
+        self.assertEqual(calls, [("same query?", 2, "01"), ("same query?", 2, "02")])
+        # 同文问题不能被合并。
+        self.assertEqual(frame["query_id"].tolist(), ["01", "02"])
+        # 两题的文档和分数分别保存。
+        self.assertEqual(run, {"01": {"A": 0.2}, "02": {"C": 0.8}})
+        # 本例两题都命中自己的正确文档。
+        self.assertEqual(frame["recall_at_1"].tolist(), [1.0, 1.0])
+
+    # 构造只含两题的小候选容器，便于解释实际重排链路。
+    def make_frozen(self, *, empty_second=False):
+        # 两题文字相同，题号不同。
+        queries = pd.DataFrame([{"id": "01", "query": "same original query?"}, {"id": "02", "query": "same original query?"}], index=[8, 4])
+        # 标注仅由评分器使用。
+        qrels = {"01": {"A": 1}, "02": {"C": 2}}
+        # 正文和嵌套定位字段用于检查完整传递与副本隔离。
+        documents = {identifier: {"id": identifier, "text": f"{identifier} full\nbody", "source_id": f"source-{identifier}", "locator": {"page": 1}} for identifier in ("A", "B", "C")}
+        # 两个题号指向不同的候选列表。
+        rows = {"01": {"retrieved_ids": ["B", "A"], "scores": [0.9, 0.1]}, "02": {"retrieved_ids": ["C", "B"], "scores": [0.8, 0.2]}}
+        # 空候选仍保留该题的记录。
+        if empty_second:
+            # 同步清空文档列表和对应分数。
+            rows["02"] = {"retrieved_ids": [], "scores": []}
+        # 容器不执行模型推理。
+        return FrozenCandidates(queries, qrels, documents, rows, {"candidate_k": 2})
+
+    # 通过用户的包装函数运行真实rerank和真实指标评分。
+    def test_frozen_wrapper_uses_correct_pairs_and_preserves_candidates(self):
+        # 创建独立候选输入。
+        frozen = self.make_frozen()
+        # 留存调用前的文档、分数和定位内容。
+        before = deepcopy({identifier: frozen.get_hits(identifier) for identifier in ("01", "02")})
+        # 只替换模型打分，保留用户的排序与评分逻辑。
+        scorer = SimpleNamespace(predict=Mock(side_effect=[[-2.0, 3.0], [-2.0, 3.0]]))
+        # 每题全部两篇重排一次，同时评估K为1和2。
+        frame, run = evaluate_frozen_reranking(frozen, scorer, ks=(1, 2), batch_size=3)
+        # 每个题号取得自己的正文，且每题只调用一次模型。
+        self.assertEqual([call.args[0] for call in scorer.predict.call_args_list], [[("same original query?", "B full\nbody"), ("same original query?", "A full\nbody")], [("same original query?", "C full\nbody"), ("same original query?", "B full\nbody")]])
+        # 运行参数沿用rerank与实际predict的接口。
+        self.assertTrue(all(call.kwargs == {"batch_size": 3, "show_progress_bar": False, "convert_to_numpy": True} for call in scorer.predict.call_args_list))
+        # 保存的是重排分数，允许合法负分。
+        self.assertEqual(run, {"01": {"A": 3.0, "B": -2.0}, "02": {"B": 3.0, "C": -2.0}})
+        # 结果按用户重排分数排序。
+        self.assertEqual(frame["retrieved_ids"].tolist(), [["A", "B"], ["B", "C"]])
+        # 排序会影响前一位召回。
+        self.assertEqual(frame["recall_at_1"].tolist(), [1.0, 0.0])
+        # 全部候选仍返回时召回集合保持。
+        self.assertEqual(frame["recall_at_2"].tolist(), [1.0, 1.0])
+        # 运行不改写原候选与嵌套定位。
+        self.assertEqual({identifier: frozen.get_hits(identifier) for identifier in ("01", "02")}, before)
+
+    # 空候选题不能丢失，也无需调用模型。
+    def test_frozen_wrapper_keeps_empty_query_in_metrics(self):
+        # 第二题合法但没有候选。
+        frozen = self.make_frozen(empty_second=True)
+        # 模型应只收到第一题的两篇文档。
+        scorer = SimpleNamespace(predict=Mock(return_value=[-2.0, 3.0]))
+        # 沿用同一条用户评测链路。
+        frame, run = evaluate_frozen_reranking(frozen, scorer, ks=(1, 2))
+        # 空题仍有结果行。
+        self.assertEqual(frame["query_id"].tolist(), ["01", "02"])
+        # 空题仍进入评分输入。
+        self.assertEqual(run["02"], {})
+        # 只有非空题调用模型。
+        self.assertEqual(scorer.predict.call_count, 1)
+        # 一题全命中、一题空，平均召回为0.5。
+        self.assertEqual(frame["recall_at_2"].tolist(), [1.0, 0.0])
+        # 汇总保留两题的分母。
+        self.assertEqual(frame["recall_at_2"].mean(), 0.5)
 
 
 # 支持从项目根目录单独运行这组检查。
