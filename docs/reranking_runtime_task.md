@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25下载已核对。** 固定Qwen4B快照17文件全部齐全，2权重分片8043614960字节，内容哈希与项目blobs地址一致；索引、BF16头部及张量总字节核对通过，无未完成分片。离线配置／分词器与yes/no ID检查成功，未加载真实权重。用户终端下载10:29.07、退出0，记录results/qwen3_reranker_4b_download_validation.json。下一项是小批真实预检，下载成功不等于模型推理通过。
+
 **2026-11-25入口已验收。** 用户已完成run_reranking_eval.py，助手未改核心源码，4项入口检查及原相关46项共50项全部通过；记录results/reranking_entry_validation.json及源码快照。实际Python3.12.7接受当前f-string复用引号语法，不要求改写。三种profile的默认／显式名称、只加载一次模型、config_path指向文件、batch透传、真实临时加载／描述／评分／保存及CLI参数映射均通过。假模型只含CPU单参数，不是GPU或模型效果验收。下一步用户终端下载，命令见文末。以下任务说明保留本工作单元的设计与接口。
 
 2026-11-25。本轮助手辅助已完成并通过相关46项检查；尚未下载任何reranker权重，没有真实模型效果或显存结论。用户下一项只新增根目录run_reranking_eval.py，把已有模块串起来。核心算法和评测已经实现，不重写。
@@ -95,7 +97,11 @@ cd /home/wzh/clinical-evidence-rag
 # 即使经过tee，也保留下载命令失败时的退出状态。
 set -o pipefail
 # 下载固定模型，终端显示进度，同时保存资源统计和运行日志。
-bash scripts/project_env.sh /usr/bin/time -v -o results/qwen3_reranker_4b_download_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/hf download Qwen/Qwen3-Reranker-4B --revision 22e683669bc0f0bd69640a1354a6d0aebcfeede5 2>&1 | tee results/qwen3_reranker_4b_download_01_run.log
+HF_HUB_DISABLE_PROGRESS_BARS=0 TQDM_POSITION=-1 bash scripts/project_env.sh /usr/bin/time -v -o results/qwen3_reranker_4b_download_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/hf download Qwen/Qwen3-Reranker-4B --revision 22e683669bc0f0bd69640a1354a6d0aebcfeede5 2>&1 | tee results/qwen3_reranker_4b_download_01_run.log
 ```
 
 本轮日志名称固定为download_01，若单独重试且需要保留失败日志，使用download_02等新编号；Hub缓存会复用已经完整下载的文件，无需force-download。下载完成应显示项目cache/huggingface/hub/models--Qwen--Qwen3-Reranker-4B/snapshots/固定revision路径。用户贴出末尾输出后，助手只读核对文件及权重身份，再准备真实预检。此时不运行完整run_reranking_eval.py，也没有真实重排成绩。
+
+单文件进度说明：本地huggingface_hub0.36.2的hf download没有show-progress参数，quiet用于关闭进度；文件进度的tqdm会在输出经过tee等非终端场景时自动隐藏。此处显式设置HF_HUB_DISABLE_PROGRESS_BARS=0，并用该版本实际支持的TQDM_POSITION=-1使文件字节进度在管道输出下保持显示。已用真实_get_progress_bar_context模拟10字节进度核对：普通非终端disable=True，加这两个变量后disable=False并实际输出字节进度；未下载权重。不要为了显示进度切换模型、缓存布局或下载后端。
+
+实际缓存路径已通过包装器启动的子进程读取确认：HF_HUB_CACHE=/home/wzh/clinical-evidence-rag/cache/huggingface/hub，HF_XET_CACHE=/home/wzh/clinical-evidence-rag/cache/huggingface/xet。模型目录是hub/models--Qwen--Qwen3-Reranker-4B；snapshots/22e683669bc0f0bd69640a1354a6d0aebcfeede5提供原始文件名入口，Linux默认通常通过链接指向同模型目录下blobs中的实际文件。路径由scripts/project_env.sh设置，无需再增加local-dir或另放全局缓存。
