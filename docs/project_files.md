@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-25。根目录现有15个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。Qwen完整Dense dev已实测核验，用户rerank及冻结候选评测已接通。真实重排配置、模型加载／运行描述与保存辅助已提供，相关46项无权重检查通过；当前用户新增run_reranking_eval.py，尚无真实重排成绩。
+整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。Qwen完整Dense dev已实测核验，用户rerank及冻结候选评测已接通。运行辅助与用户run_reranking_eval.py共50项相关检查通过；下一步用户终端下载固定模型，尚无真实重排成绩。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -19,10 +19,11 @@
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分；新增可选query_id回调和冻结候选重排包装，10项小样本检查通过，真实324题假打分衔接核对通过 | 用户 |
 | run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
+| run_reranking_eval.py | 固定候选重排运行入口，模型仅创建一次，按profile传批次，保留默认／显式命名与来源；4项编排检查通过，真实模型尚未下载或运行 | 用户 |
 
 ## 数据维护模块
 
-configs/reranker_profiles.json保存三种重排候选的固定版本与初始运行参数。tests现有18个模块，新增test_reranking_support.py的7项检查针对真实构造签名转发、合成实际属性及重排结果来源／候选集合／计时范围；加现有相关39项共46项通过。说明与用户下一项见reranking_runtime_task.md，结果results/reranking_support_validation.json。文末“17个模块”属于此前整理记录。
+configs/reranker_profiles.json保存三种重排候选的固定版本与初始运行参数。tests现有19个模块，test_reranking_support.py的7项检查针对真实构造签名转发、合成实际属性及重排结果来源／候选集合／计时范围；test_reranking_entry.py新增4项覆盖导入保护、三profile默认／显式名称、CLI和原生输入错误的加载顺序。加原相关39项共50项通过，使用临时CPU假模型与真实其余链路。用户下一项见reranking_runtime_task.md下载节，结果results/reranking_entry_validation.json。文末“17个模块”属于此前整理记录。
 
 | scripts/data 内的模块 | 保留理由 |
 | --- | --- |

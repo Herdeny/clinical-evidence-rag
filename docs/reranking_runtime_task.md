@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25入口已验收。** 用户已完成run_reranking_eval.py，助手未改核心源码，4项入口检查及原相关46项共50项全部通过；记录results/reranking_entry_validation.json及源码快照。实际Python3.12.7接受当前f-string复用引号语法，不要求改写。三种profile的默认／显式名称、只加载一次模型、config_path指向文件、batch透传、真实临时加载／描述／评分／保存及CLI参数映射均通过。假模型只含CPU单参数，不是GPU或模型效果验收。下一步用户终端下载，命令见文末。以下任务说明保留本工作单元的设计与接口。
+
 2026-11-25。本轮助手辅助已完成并通过相关46项检查；尚未下载任何reranker权重，没有真实模型效果或显存结论。用户下一项只新增根目录run_reranking_eval.py，把已有模块串起来。核心算法和评测已经实现，不重写。
 
 ## 新辅助的来源和职责
@@ -66,7 +68,9 @@ main内部依次完成以下工作。调用必须发生在main里或其调用链
 
 describe_reranker的返回内容包含profile_name、model_name、revision、max_length、batch_size、score_type，以及actual_device／actual_weight_dtype／actual_max_length、实际指令和库版本。保存模块不需要也不能接收模型对象。
 
-CLI选项建议为--config-dir、--data-dir、--receipt、--profile、--run-name、--result-dir。前后路径参数type=Path，--profile可choices设为qwen3_4b／qwen3_8b／bge_v2_m3。各选项本轮显式提供；args.receipt要对应main的receipt_path，不按变量名猜位置。使用if __name__ == '__main__'保护解析与调用。CLI命名只要一致即可，不按命名偏好验收。
+CLI选项建议为--config-dir、--data-dir、--receipt、--profile、--run-name、--result-dir。前后路径参数type=Path，--profile可choices设为qwen3_4b／qwen3_8b／bge_v2_m3。main六参数显式传入，CLI本身可以保留有效默认值；args.receipt要对应main的receipt_path，不按变量名猜位置。使用if __name__ == '__main__'保护解析与调用。CLI命名只要一致即可，不按命名偏好验收。
+
+run_name沿用既有命名方式：用户传--run-name时优先使用；未传时，在取得source_info之后、加载模型之前，用数据集、rerank、profile_name和split拼接默认名，例如nfcorpus_rerank_qwen3_4b_dev。独立实验可显式传入nfcorpus_rerank_qwen3_4b_dev_01或_02，不引入时间戳。已有同名结果仍由保存器拒绝覆盖。用户于2026-11-25重申保持前后一致，助手此前临时时间戳建议已撤回，不作为验收要求。
 
 真实后续输入是项目results/nfcorpus_qwen3_8b_frozen_candidates.json及data/external/nfcorpus/prepared/nfcorpus；第一轮profile为qwen3_4b。此时用户只写入口，不启动下载或完整运行。保存后先审实际语义，以假模型核对编排，再提交同步；之后准备用户终端下载与真实小批预检。
 
@@ -80,3 +84,18 @@ CLI选项建议为--config-dir、--data-dir、--receipt、--profile、--run-name
 - 逐题latency_ms覆盖候选副本读取和重排，排除原Dense检索、文件／模型加载和指标计算；这不是单进程端到端延迟。正式运行的整进程时间和资源由终端另行记录。
 
 当前辅助验收记录results/reranking_support_validation.json及_run.log：新辅助7项、原BEIR保存6项、CT保存5项、评测10项、加载6项、rerank12项，共46项通过。构造器检查使用真实类签名的autospec；运行属性检查用小型CPU参数；保存用合成冻结文件和假打分，不是下载或模型推理验收。
+
+## 用户终端下载
+
+入口验收并提交同步后，由用户在自己的终端执行以下命令。固定版本来自当前qwen3_4b配置；环境内hf download --help已实际核对支持revision参数。包装器设置项目内Hub／Xet等缓存，不改全局环境。命令只下载，不加载模型或运行评测。
+
+```bash
+# 进入项目目录，使日志路径指向项目results。
+cd /home/wzh/clinical-evidence-rag
+# 即使经过tee，也保留下载命令失败时的退出状态。
+set -o pipefail
+# 下载固定模型，终端显示进度，同时保存资源统计和运行日志。
+bash scripts/project_env.sh /usr/bin/time -v -o results/qwen3_reranker_4b_download_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/hf download Qwen/Qwen3-Reranker-4B --revision 22e683669bc0f0bd69640a1354a6d0aebcfeede5 2>&1 | tee results/qwen3_reranker_4b_download_01_run.log
+```
+
+本轮日志名称固定为download_01，若单独重试且需要保留失败日志，使用download_02等新编号；Hub缓存会复用已经完整下载的文件，无需force-download。下载完成应显示项目cache/huggingface/hub/models--Qwen--Qwen3-Reranker-4B/snapshots/固定revision路径。用户贴出末尾输出后，助手只读核对文件及权重身份，再准备真实预检。此时不运行完整run_reranking_eval.py，也没有真实重排成绩。

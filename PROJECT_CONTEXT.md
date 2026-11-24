@@ -6,11 +6,19 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新验收：用户run_reranking_eval.py已完成，4项入口及相关46项共50项全部通过。** 当前入口SHA=96743186288c98436424061a9a1f2de9732f536731058bfda27341ffbd56488a，助手未改源码。配置文件路径已修正、receipt默认指向真实描述文件，默认run_name在模型构造前按dataset_rerank_profile_split生成，显式名称优先，不加时间戳。当前Python3.12.7实际compile通过，f-string中表达式复用双引号合法，不按旧Python语法要求改引号。main／CLI、唯一模型构造、配置batch=1透传、真实描述文件指纹、完整候选来源／模型元数据与三类保存产物均通过临时数据联结；未知profile及缺失receipt自然在加载模型前报错，未新增核心守卫或异常包装。未使用urllib.parse不作为阻断项。
+
+记录results/reranking_entry_validation.json、_run.log及_accepted_code_snapshot。4项入口检查覆盖导入无自动运行、3个profile各自默认／显式名称、真实CLI参数映射、原生输入错误的加载顺序；临时CPU单参数假模型配合真实候选加载／describe／用户重排评分／保存，不是模型效果或真实GPU运行。原描述文件／三检索产物／三输入SHA保持。根目录现16个Python模块，tests19个。本单元验收后先提交同步，再让用户在可见终端下载Qwen/Qwen3-Reranker-4B固定revision=22e683669bc0f0bd69640a1354a6d0aebcfeede5；使用scripts/project_env.sh和环境内hf download，保留实时日志与资源统计，缓存位于项目内。完整命令见docs/reranking_runtime_task.md下载节。尚未下载／加载真实reranker、没有真实重排成绩；下载完成后助手核对文件身份，再准备真实联合输入长度／小批打分／GPU显存预检，通过后才跑324题，不能直接跳到完整重排。
+
+**2026-11-25最新合作要求：始终保持前后一致，禁止临时改变既有标准。** 用户指出此前run_name没有时间戳，助手临时建议加入时间戳已撤回。重排默认名沿用数据集／方法／模型配置／划分拼接，例如nfcorpus_rerank_qwen3_4b_dev；显式--run-name优先，例如带_01／_02的名称，不自动加入时间戳。这不局限于命名，接口、配置、文件职责、评测口径和任务验收均应先核对已定约定。必要变更先解释具体证据、原因及影响，不把临时建议追溯升级为旧任务的硬要求；发现真实错误仍须明确纠正。长期规则见13.13。当前入口仍在修订阶段，文档随该工作单元验收后一并提交。
+
+**2026-11-25最新入口初审：用户已新建run_reranking_eval.py，主调用链正确，当前处于三项修订阶段，尚未提交入口。** main六参数、按配置读模型、先核对冻结候选、唯一模型构造、batch取profile、完整7字段config、评测／保存／CLI传参均已写好。实际第21行describe_reranker的config_path却传config_dir目录，应使用第13行已有的reranker_profile_path文件；已直接验证Path('configs').read_bytes()原生抛IsADirectoryError，没有运行模型来复现。CLI第52行默认root/'receipt'不存在，实际描述文件为results/nfcorpus_qwen3_8b_frozen_candidates.json，可改有效默认或要求显式--receipt。第54行--run-name既无默认又非必填，省略时None会在整轮评测后被保存器拒绝，应设必填或在模型加载前生成名称。其他有效CLI默认值不强制改为必填，无用urllib.parse不作返工门槛。不代写核心、不为旧测试格式改异常，无真实模型／GPU运行。用户源码注释询问source_info和describe_reranker含义，需要在聊天解释：前者保存原Dense候选来源、配置和文件指纹，后者读取本轮实际模型属性、核对配置并返回记录字典。修正保存后重读实际文件再用小型假模型核对main／CLI，通过后提交同步并准备下载预检。
+
 **2026-11-25最新：真实重排配置／加载与保存辅助已实现，用户下一项新增run_reranking_eval.py。** 助手新增configs/reranker_profiles.json和reranker_adapter.py，扩展原retrieval_results_io.save_beir_results支持frozen_rerank，不改用户benchmark_eval.py／rerank_core.py。新辅助build_reranker(profile)返回一个CrossEncoder；describe_reranker(model,*,profile_name,profile,config_path)返回实际设备、权重精度、长度、激活／指令和库版本等可保存字典。候选来源与本轮模型分置config.candidate_source和config.rerank，来源描述文件／原三产物／三输入重新核对，逐题输出只能来自自己原候选；latency.scope明确只含候选副本读取＋重排，排除原召回／文件模型加载／计分，旧方法范围保持。
 
 三候选Qwen4B／8B／BGE-v2-m3保留；8B固定revision=77d193c791ed757ca307ee72715aa132723da912，4B和BGE固定版本沿用。已读官方模型卡／公开API／固定版本小配置，Qwen为Transformer＋LogitScore，yes9693／no2152、默认query指令、Identity原始差值。实际ST5.7.0类位于cross_encoder/model.py（并非大写CrossEncoder.py），构造签名已直接核对。初始4096联合输入上限、batch1、CUDA BF16 SDPA；这是待真实预检的起点，不是最优或已验证显存配置。没有权重下载、模型推理或GPU运行。相关46项全部通过：新辅助7＋原BEIR保存6＋CT保存5＋评测10＋加载6＋rerank12。报告results/reranking_support_validation.json，真实构造仅autospec检查签名转发，不能写成模型加载通过。
 
-下一项完整说明见docs/reranking_runtime_task.md：用户写main(config_dir,data_dir,receipt_path,profile_name,run_name,result_dir)及CLI；显式读配置→加载冻结候选→创建一次reranker并取得真实描述→调用既有evaluate_frozen_reranking，batch_size须来自profile→构建8字段config→save_beir_results→返回summary。split从冻结来源取，不设冲突参数；不重建embedding／Dense，不复制循环，不让用户调用不存在辅助。本轮先写入口，保存后语义审核＋假模型编排检查，通过同步再准备用户终端下载和真实小批预检。新增文件的来源／用途／输入输出必须在交任务前讲清，不再直接引入未说明对象。
+下一项完整说明见docs/reranking_runtime_task.md：用户写main(config_dir,data_dir,receipt_path,profile_name,run_name,result_dir)及CLI；显式读配置→加载冻结候选→创建一次reranker并取得真实描述→调用既有evaluate_frozen_reranking，batch_size须来自profile→构建7字段config→save_beir_results→返回summary。split从冻结来源取，不设冲突参数；不重建embedding／Dense，不复制循环，不让用户调用不存在辅助。本轮先写入口，保存后语义审核＋假模型编排检查，通过同步再准备用户终端下载和真实小批预检。新增文件的来源／用途／输入输出必须在交任务前讲清，不再直接引入未说明对象。
 
 **2026-11-25最新验收：用户已完成冻结候选重排评测衔接，相关28项检查全部通过。** benchmark_eval.py保留默认两参数检索回调，新增pass_query_id=False选项；开启时传当前行query_id。用户新增evaluate_frozen_reranking(frozen,reranker,ks=(10,100),*,batch_size=16)，内部按ID取候选、调用现有rerank，并复用原计时和pytrec_eval循环返回eval_df／run。选项可由位置或关键字传入，不因原任务建议仅关键字而强制用户修改合法签名。原有未使用导入不作为本轮返工门槛。助手未改用户核心源码，只在tests/test_benchmark_eval.py添加3项已说明的行为检查：同文不同ID回调、真实rerank句对／批次／候选副本衔接、空题保留分母；该模块10项，加加载器6项、rerank核心12项，共28项通过。
 
@@ -797,6 +805,16 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 - Python惯例为类型不适当用TypeError、值不合法用ValueError。没有真实错误协议或调用方依赖时，不强制把原生异常统一包装成某一类；若需要统一，应先解释用途、边界和代价。
 - 区分会导致候选错配、来源丢失、非法推理或非有限分数的实质问题，与个人风格、冗余表达式、错误信息措辞等非阻断问题。不要把普通细节拆成多轮返工，也不要为覆盖用例而增加无实际用途的防御分支。
 - 代码审查结论与测试通过范围分别说明，绿灯不证明全部语义正确。指出助手先前误判并修测试／文档，不将其算作用户缺陷或简历贡献。核心由用户写的约定继续有效。
+
+### 13.13 保持既有约定一致，必要变更说明依据和影响
+
+用户于2026-11-25明确要求：“请你始终保持前后一致性。” 直接背景是助手临时给run_name加入此前没有使用的时间戳，已撤回该建议。本要求覆盖全部后续指导。
+
+- 下达任务或审查实现前，先核对当前代码、已验收接口、项目记录及用户最新选择；沿用已有命名、参数角色、目录、缓存和评测口径，不按当次想到的偏好另定标准。
+- 保留有效的实现选择。可选建议不自动成为验收条件；新阶段要求不得追溯将此前正确、已验收的实现判为错误，不因测试偏好新增限制或让用户反复返工。
+- 需要改变既定方案时，先说明旧方案的具体问题、依据、拟改内容及对现有代码／数据／结果的影响，再更新相关说明，不能直接换一套做法。发现真实错误应如实纠正，不能以一致性为由延续错误。
+- run_name默认沿用dataset_method_profile_split的可读形式，本轮为nfcorpus_rerank_qwen3_4b_dev；用户显式提供的名称优先，_01／_02等实验编号由其显式名称体现，不引入时间戳或擅自重命名旧产物。保存器继续拒绝覆盖。
+- main的config_dir仍显式传入；CLI有有效默认值与此并不冲突，不再反复要求所有CLI选项改成必填。每次解释先分清函数参数、命令行默认和实际运行配置各自的职责。
 
 ## 14. 恢复工作与维护本文
 
