@@ -80,11 +80,13 @@ CLI提供--method（默认bm25）、--data-dir（Path，默认root/data/external
 
 保存辅助写入三个文件：{run_name}_results.jsonl保留全部逐题字段；{run_name}_run.json保留题号到文档和检索分数；{run_name}_summary.json保存全部查询的指标均值、耗时、方法配置、评分包版本、输入文件SHA。当前没有任何真实NFCorpus模型成绩；辅助测试的0.5仍是临时验收值。
 
-## 当前任务：用户终端运行 BM25 dev
+## 已完成：BM25 dev 首轮运行
+
+2026-11-24用户执行完成并核验：nDCG@10=0.2657379994665381、Recall@100=0.20567783238375933，平均检索2.839ms，整进程1.99s，324题均返回100条。逐题重评分、输入／源码及产物身份均通过，审计complete_integrity_validated。完整四指标与边界见[开发集对照报告](nfcorpus_retrieval_baselines.md)。
 
 入口验收后先提交并同步GitHub，再执行下面命令。该轮使用配套3633篇文档、324条dev查询和11385条标注，CPU BM25一次建索引，每题返回最多100条；指标由已验收函数和真实pytrec_eval计算。当前没有预设分数，也不以临时两题的0.5作为真实期望。
 
-输入已按固定清单验证SHA，9份执行源码已快照。启动回执results/nfcorpus_bm25_dev_01_run_audit.json明确标记尚未开始。由用户在可见终端执行，助手不另开后台任务。
+输入已按固定清单验证SHA，9份执行源码已快照。运行回执results/nfcorpus_bm25_dev_01_run_audit.json已更新为complete_integrity_validated。由用户在可见终端执行，助手不另开后台任务。
 
 ```bash
 # 从项目目录运行，让日志路径对应本轮身份。
@@ -96,6 +98,23 @@ set -o pipefail
 ```
 
 成功后results下生成同前缀的_results.jsonl、_run.json、_summary.json，以及上面保存的_run.log、_resources.txt。返回终端打印的指标或说明运行结束，助手读取本地文件核验；如失败，保留日志并按本轮运行记录排错，不静默删除失败题或覆盖旧结果。正式数据第一次运行在此时才开始，test与MIRAGE仍未参与。
+
+## 当前任务：用户终端运行 Dense dev
+
+BM25已核验，先提交同步其报告和核验工具，再执行本轮。使用同一配套文档、原query、dev标注与Top-100预算，独立结果名nfcorpus_dense_dev_01；固定模型配置沿用已验收入口，文档与查询编码用CUDA，相似度及Top-K仍是NumPy。
+
+本地固定revision的模型权重和所需配置已检查存在，但准备阶段未加载模型或检测GPU。设置两个离线开关，避免模型封装探测未缓存的远端元数据。首次将生成NFCorpus的3633×384文档向量，外层512条保存检查点、模型batch8；后续复用。固定模型输入上限512，330篇长文档将按既定模型规则截断，完整原文保持。医学主库向量与BM25基线均保留。
+
+```bash
+# 使用项目目录定位本轮日志和结果。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 离线使用已缓存模型，在GPU编码，并保存资源统计和终端输出。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /usr/bin/time -v -o results/nfcorpus_dense_dev_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_benchmark_eval.py --method dense --data-dir data/external/nfcorpus/prepared/nfcorpus --split dev --run-name nfcorpus_dense_dev_01 2>&1 | tee results/nfcorpus_dense_dev_01_run.log
+```
+
+启动回执results/nfcorpus_dense_dev_01_run_audit.json状态prepared_for_user_terminal_not_started，包含9份源码指纹、相同输入、模型版本和5份BM25原产物保护指纹。用户运行结束或遇到错误后保留输出，助手检查实际文件，不能把准备状态或临时验收值写成Dense成绩，也不擅自后台启动或重新跑BM25。通过Dense核验和同步后再做RRF；test和MIRAGE当前不运行。
 
 ## 后续接入保持同一接口
 

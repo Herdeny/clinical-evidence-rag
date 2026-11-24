@@ -6,15 +6,17 @@
 
 ## 1. 当前应从哪里继续
 
-**2026-11-24最新：run_benchmark_eval.py入口验收完成。** 源码SHA61477fca26a322e10aa30dcbff649d12390204e46f133013f9fc3a43355ed87e，既有tests/test_benchmark_entry.py原6方法全部通过。使用4篇／2题临时BEIR、真实小型BM25／缓存／Dense相似度／RRF／评测／保存及假模型，确认三方法各索引只建一次、Dense第二轮复用不再编码文档、缓存输入corpus.jsonl、CLI默认值与动态运行名、无效方法前置拒绝。结果results/benchmark_entry_validation.json及2026-11-24_revision1，旧初检保留。助手未改用户核心，未加载真实权重或GPU，也未运行公开查询。
+**2026-11-24最新：NFCorpus BM25 dev首轮真实结果已独立核验通过。** 用户终端run_name=nfcorpus_bm25_dev_01，执行提交c952d3d417420544ebfa2d1220d4f827c9f40f75，3633文档／324查询／11385标注，每题100条唯一命中。nDCG@10=0.2657379994665381、Recall@10=0.11019220670002704、nDCG@100=0.2179337579681252、Recall@100=0.20567783238375933；平均查询检索2.839211916625011ms、中位2.3038175004330697ms，整进程1.99s、峰值RSS236356KiB、退出0。238题Top100至少命中一篇相关文档，86题零召回。报告docs/nfcorpus_retrieval_baselines.md；当前只有BM25有真实NFCorpus成绩，Dense／RRF／MIRAGE仍无成绩，不与CT自建题分数直接比较。
 
-**当前任务：先提交推送该入口节点，再由用户可见终端运行首轮NFCorpus BM25 dev。** 预定run_name=nfcorpus_bm25_dev_01，3633文档／324查询／11385条标注，ks=[10,100]，主要报告nDCG@10和Recall@100。三个实际输入SHA已与固定source_manifest核对一致；9个模块的执行前源码副本位于results/nfcorpus_bm25_dev_01_code_snapshot，启动回执results/nfcorpus_bm25_dev_01_run_audit.json状态prepared_for_user_terminal_not_started。源码／文件身份已固定，尚无任何真实NFCorpus检索成绩，不擅自后台启动。
+**核验与归档：** 新增scripts/evaluation/validate_beir_run.py，以原始dev标签和保存run重新计分，324题四指标逐题匹配，最大K召回再以正相关文档集合交集复核；核对所有题号／原query／顺序、分数与run、均值和耗时、终端输出、退出码，三个输入和9份当前／执行前源码指纹均匹配。results/nfcorpus_bm25_dev_01_validation.json已通过，_run_audit.json状态complete_integrity_validated，原始5份产物未改写。此核验不重新检索或加载模型。入口源码61477fca26a322e10aa30dcbff649d12390204e46f133013f9fc3a43355ed87e保持，6项临时集成检查此前通过。
 
-**用户下次说“好了”时：** 先检查nfcorpus_bm25_dev_01的_results.jsonl、_run.json、_summary.json、_run.log、_resources.txt与_run_audit.json，对照输入和源码回执独立核验324题、3633文档、Top100预算、所有题号、指标均值及保存分数，再更新审计为完成；不要直接重复运行。随后按约定提交核验记录／报告并同步后，再给用户Dense运行命令。test与MIRAGE暂不运行；本地benchmark_data.ipynb删除与.vscode不恢复也不默认纳入本节点。
+**当前任务：先提交推送BM25核验工具与基线报告，再交用户终端运行Dense dev。** 预定run_name=nfcorpus_dense_dev_01，相同3633文档／324查询／Top100，BAAI/bge-small-en-v1.5固定revision=5c38ec7c405ec4b44b94cc5a9bb96e735b38267a，CUDA编码，NumPy相似度与排序。已离线确认本地权重、分词器及池化配置存在，sentence_bert_config声明512；没有实际加载权重或检测GPU。冻结诊断330篇标题加正文超512，按原计划允许模型截断并记录。运行时设置HF_HUB_OFFLINE=1和TRANSFORMERS_OFFLINE=1，避免此前远端HEAD探测。文档向量为NFCorpus自身3633×384缓存，不重做医学主库。
+
+**Dense准备与下一次接手：** results/nfcorpus_dense_dev_01_run_audit.json状态prepared_for_user_terminal_not_started，9份源码已快照，输入与BM25一致，记录5份BM25原产物SHA作为保护。助手不后台运行GPU或真实查询。用户完成后先读Dense的结果／run／摘要／日志／资源及缓存manifest，核对3633×384向量、归一化与身份、324题重算指标及BM25产物未变；核验通过并提交同步后再推进RRF。test与MIRAGE未运行，本地Notebook删除与.vscode不恢复、不默认纳入该节点。
 
 **2026-11-24：benchmark_eval.py验收完成。** 实际验收源码SHAae8ba1240f9fcc9ca79dfbe029c2ecaa305c1887af7c7a8222aae67244254f6d，tests/test_benchmark_eval.py原7方法全部通过，pytrec-eval-terrier==0.5.11。覆盖原query不变、每题max(ks)只检索一次、结果行与真实float分数保留、空命中计0且保留分母、相关等级排序、自定义K、非法输入／命中拒绝及逐题异常定位。两题临时验收的四指标为[1,0]且均值0.5；这是可解释的小样本验收，绝非NFCorpus成绩。结果results/benchmark_eval_validation.json及2026-11-24_revision5，之前失败快照保留。核心由用户完成，助手未改。
 
-**同步与接续：** 评测节点777d784已推送origin/main，本地与远端一致。随后助手在既有retrieval_results_io.py新增save_beir_results(result_df,run,*,config,run_name,result_dir)，只校验／汇总／保存，不编码检索或重新逐题评分；新增6项和旧保存6项共12项通过，记录results/beir_results_io_validation.json。三类产物为_results.jsonl、_run.json、_summary.json，含全部题目的均值、耗时范围、方法层配置、评分包版本与三输入SHA；拒绝丢题、矛盾run、非法数值和同名覆盖。辅助节点b185eeb也已同步GitHub，当前用户继续修订入口。
+**同步与接续：** 评测节点777d784已推送origin/main，本地与远端一致。随后助手在既有retrieval_results_io.py新增save_beir_results(result_df,run,*,config,run_name,result_dir)，只校验／汇总／保存，不编码检索或重新逐题评分；新增6项和旧保存6项共12项通过，记录results/beir_results_io_validation.json。三类产物为_results.jsonl、_run.json、_summary.json，含全部题目的均值、耗时范围、方法层配置、评分包版本与三输入SHA；拒绝丢题、矛盾run、非法数值和同名覆盖。辅助节点b185eeb也已同步GitHub，入口及BM25 dev均已完成，当前准备Dense dev对照。
 
 **已验收的运行入口：** run_benchmark_eval.py已完成main(method,data_dir,split,cache_dir,run_name)及CLI，复用load_beir_dataset／evaluate_beir_retrieval与已存在save_beir_results，不修改CT入口。三方法复用当前Dense、BM25、RRF；BM25仅CPU构建一次，Dense沿用冻结的LangChain模型和缓存，RRF每路100／常量60。common config提供dataset_name／data_dir／split／retrieval_method／ks=[10,100]，保留原query模板及标题拼接规则；模型参数保留在dense／bm25／rrf子配置。完整参数、各阶段调用和验收见docs/nfcorpus_benchmark_task.md。先助手以临时数据和假模型检查入口，再由用户可见终端跑BM25 dev，之后Dense／RRF；目前无真实公开检索成绩。数据／缓存／本地结果与.vscode保持原策略。
 
@@ -24,7 +26,7 @@
 
 **已完成的评测接口：** benchmark_eval.py实现evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10,100))，返回逐题eval_df与run（query→doc→真实float检索分数）。直接使用原query，每题调用一次retrieve_fn(query,max(ks))；perf_counter只计检索调用，支持tqdm进度。评分用BEIR同口径pytrec_eval.RelevanceEvaluator及ndcg_cut／recall，按全部输入查询保留行，空hits计0；不传qrels给检索器。完整列、输入约束和无模型验收例见docs/nfcorpus_benchmark_task.md。用户核心已完成，保存辅助也已提供；当前继续实现公开运行入口。
 
-**依赖和边界：** 2026-11-23核查评分API时未安装；2026-11-24已确认用户安装pytrec-eval-terrier==0.5.11，导入名pytrec_eval，助手仅以临时标签与run核验真实返回结构。评测函数已通过7项临时数据验收，尚无公共检索成绩。待函数通过后接新公开基准入口与独立保存，先BM25 dev再Dense／RRF，主库矩阵继续保留且NFCorpus使用自身文档缓存。test和MIRAGE不做模型调用。
+**依赖和边界：** 2026-11-23核查评分API时未安装；2026-11-24已确认用户安装pytrec-eval-terrier==0.5.11，导入名pytrec_eval，助手仅以临时标签与run核验真实返回结构。评测函数已通过7项临时数据验收，BM25 dev真实成绩也已核验；Dense／RRF公开成绩仍待运行。待函数通过后接新公开基准入口与独立保存，先BM25 dev再Dense／RRF，主库矩阵继续保留且NFCorpus使用自身文档缓存。test和MIRAGE不做模型调用。
 
 ### 以下为上一版真实dev已通过的历史结果
 
