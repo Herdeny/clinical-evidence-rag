@@ -38,11 +38,13 @@ Path可用斜杠组合子路径；rename(columns=...)统一字段名；Series.st
 
 助手还会用小型临时BEIR目录检查路径可配置、标签多对多、无关查询过滤、重复及悬空ID拒绝，确保不是只能读取一份nfcorpus。用户贴代码或保存后说“好了”，助手重读实际文件再验收，不代写核心。
 
-## 当前任务：公共检索评测函数
+## 已验收：公共检索评测函数
 
-由用户新建 /home/wzh/clinical-evidence-rag/benchmark_eval.py，实现 evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10, 100))，返回 (eval_df, run)。本步不创建模型、构建索引或保存文件，已有读取模块与Dense／BM25／RRF接口继续复用。
+2026-11-24最新检查：原7方法全部通过，实际源码SHAae8ba1240f9fcc9ca79dfbe029c2ecaa305c1887af7c7a8222aae67244254f6d。验证每题一次检索、原查询与分数保真、空命中保留及分母、等级排序、自定义K、输入／命中校验与异常定位。结果见results/benchmark_eval_validation.json及revision5；两题均值0.5仅为临时验收期望，不是公开基准分数。用户核心未由助手修改，无公开题库或模型运行；按约定先提交推送，再接运行入口与保存。
 
-依赖：pandas、time、math、tqdm以及pytrec_eval。2026-11-23检查发现tqdm已安装，pytrec_eval／ir_measures／beir未安装。用户在all-in-rag环境安装 pytrec-eval-terrier==0.5.11；安装名与import名不同。该依赖与[BEIR pyproject](https://github.com/beir-cellar/beir/blob/main/pyproject.toml)一致；接口见[BEIR官方评分实现](https://github.com/beir-cellar/beir/blob/main/beir/retrieval/evaluation.py)，版本文件见[PyPI](https://pypi.org/project/pytrec-eval-terrier/0.5.11/)。本轮仅核查，尚未安装或运行评分库。
+用户已完成 /home/wzh/clinical-evidence-rag/benchmark_eval.py，实现 evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10, 100))，返回 (eval_df, run)。本步不创建模型、构建索引或保存文件，已有读取模块与Dense／BM25／RRF接口继续复用。
+
+依赖：pandas、time、math、tqdm以及pytrec_eval。2026-11-24已确认用户安装pytrec-eval-terrier==0.5.11，tqdm可用；安装名与import名不同。该依赖与[BEIR pyproject](https://github.com/beir-cellar/beir/blob/main/pyproject.toml)一致；接口见[BEIR官方评分实现](https://github.com/beir-cellar/beir/blob/main/beir/retrieval/evaluation.py)，版本文件见[PyPI](https://pypi.org/project/pytrec-eval-terrier/0.5.11/)。真实依赖的临时两题探针通过，正确排序题四项指标1、空命中题四项0；仅属依赖核验，不是用户函数验收或公开基准成绩。
 
 输入queries_df使用读取器返回的id、query两列，qrels保持原等级字典。每条原query只调用一次retrieve_fn(query, max(ks))；检索调用不接收qrels，不加CT模板。time.perf_counter()仅计量retrieve_fn调用，换算ms；索引初始化与指标计算不计入该列。循环可用tqdm，给出total=len(queries_df)。
 
@@ -60,6 +62,6 @@ eval_df每查询一行，列为query_id、query、retrieved_ids、scores、laten
 
 数据适配通过后，查询循环直接将query传给统一retrieve_fn(query,k)，复用现有Dense／BM25／RRF与文档缓存；不经过CT的Report/Question模板。公开基准新增评测函数，不伪造report、gold_evidence_groups来迎合旧保存接口。
 
-之后以BEIR使用的pytrec_eval指标实现核对nDCG@10、Recall@100，用户实现查询编排和评分调用，助手提供保存辅助。当前评分包未安装，不在数据读取任务中引入额外依赖。RRF基准候选预算每路100、常量60，默认CT设置不改。
+之后以BEIR使用的pytrec_eval指标实现核对nDCG@10、Recall@100，用户实现查询编排和评分调用，助手提供保存辅助。当前评分包已安装，评测函数已通过7项临时数据验收。RRF基准候选预算每路100、常量60，默认CT设置不改。
 
 运行入口与结果按数据集／方法／划分命名，dev用于调试，test等方法固定后再完整评测。模型版本、原始语料、标题拼接、512-token截断、候选预算和计时范围均入配置。MIRAGE依然负责最终问答，CT合成题只作产品场景回归，三类评测分别报告。
