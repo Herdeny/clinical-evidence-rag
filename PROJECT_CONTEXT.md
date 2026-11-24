@@ -14,9 +14,17 @@
 
 **逐题比较：** nDCG@10 Dense高147／BM25高76／相同101；Recall@100 Dense高184／BM25高52／相同88。Top100两路均命中相关文档231题、仅BM25命中7、仅Dense命中47、两路均零39。均值绝对差分别0.06144802743057999和0.10940456446186769，保留results/nfcorpus_bm25_vs_dense_dev_01_comparison.json。候选互补只支持继续验证RRF，不是融合已取得收益。
 
-**当前任务：用户编写rerank_core.py的rerank(query,hits,k,*,reranker,batch_size=16)。** RRF归档已推送cacf463。用户进一步明确正式项目不默认偏向轻量模型，具体长期约束见13.10。撤回MiniLM直接定为成品模型的决定；重新查阅官方来源后，Qwen3-Reranker-4B为优先效果候选（revision22e683669bc0f0bd69640a1354a6d0aebcfeede5），BGE-reranker-v2-m3为对照（revision953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e），均Apache-2.0。发布方同候选设置的英文汇总分数支持优先验证4B，不能当作本项目医学成绩。两者未下载、初始化或运行；本地sentence-transformers5.7.0／transformers4.57.6及CrossEncoder相关支持已检查。完整接口和来源见docs/reranking_task.md；本轮纯函数契约不变，模型注入、一次predict全部句对、复制元数据、原score留作retrieval_score、新score保留原始模型相关性分数、按(-score,id)排序。核心由用户写，助手随后用假打分器验收，不提前启动GPU。
+**当前任务：先接入Qwen3-Embedding-8B的独立Dense对照，再做真实重排。** 用户在询问embedding选型后明确“继续”，当前完整工作单元见docs/dense_model_selection_task.md：用户修改embedding_index.py，为prepare_document_embeddings增加关键字dimension=384并传给现有DocumentEmbeddingCache；修改run_benchmark_eval.py，为main增加仅关键字embedding_profile="bge_small"与--embedding-profile CLI，读取助手已准备的configs/embedding_profiles.json，按配置初始化、核对真实维度／长度、传入缓存维度并记录实际配置。两个配置为bge_small（原模型与参数不变）和qwen3_8b（revision1d8ad4ca9b3dd8059ad90a75d4983776a23d44af，4096维，BF16权重、float32归一化输出、SDPA、processor输入上限8192、batch1、官方query指令）。batch／长度在用户终端小批预检后才能当作正式可运行配置。核心仍由用户写，尚无接入代码或Qwen权重下载／模型实测。旧缓存／三条基线保留，不先重编码医学783847行主库。
 
-**用户下一次返回代码或“好了”：** 重读rerank_core.py实际文件并检查上述完整契约；不能沿用旧版代码诊断，不代写核心。函数通过并提交推送后再接公开基准入口dense_rerank，助手先扩展保存辅助与配置支持，再交用户接线。固定Dense Top100→重排100→返回100，只改排序，Recall@100应不变；观察nDCG@10／Recall@10／成本，真实模型运行由用户终端执行。不重复运行三条旧基线，不同时调RRF，test与MIRAGE未运行，Notebook删除及.vscode继续保留本地。
+**本轮助手辅助已验收：** 两个静态配置通过真实LangChain构造器＋替换底层SentenceTransformer的参数转发检查，不加载权重。既有缓存类对同一合成模型的384／4096维分别建库、只读输出及重新打开复用通过，目录分离。以真实NFCorpus输入和新bge_small配置只计算身份，仍匹配原指纹4aa389bc2d522a2fc285b6065a93e38de9516d6dfa7265c1e614a4761109c3f0；前两路10份原产物及缓存2文件SHA全部未变。结果results/embedding_profiles_validation.json，配置SHA81204fc0b0f7db38027ddaadfd02ed7967a8da1374f2c28e4013a9c318a02ff3。检查的是配置与助手缓存能力，不是用户尚未修改的编排，也不是Qwen效果或GPU预检。
+
+**用户下一次返回代码或“好了”：** 重读embedding_index.py和run_benchmark_eval.py当前文件，按完整工作单元集中验收维度、配置初始化、缓存复用、摘要与CLI，不沿用旧版诊断、不代写核心。已有分块／入口检查应继续通过，再加4096维及两配置隔离的合成检查；假模型需有真实接口的max_seq_length／get_sentence_embedding_dimension，临时入口目录要复制受版本管理的配置，不能因测试没准备依赖误判用户。代码通过并提交推送后，再交用户可见终端的固定版本下载、小批预检和真实NFCorpus dev命令。暂不启动权重下载／GPU或全量编码，不重复三条旧基线。rerank_core.py的稳定接口继续保留，Dense选型后再实现／接真实重排；test与MIRAGE未运行，Notebook删除及.vscode继续保留本地。
+
+**同日8B候选补充：** 用户追问Qwen3-Reranker-8B，已复查官方同一张分项表：4B英文MTEB-R为69.76、8B为69.02，但8B的中文、多语言、长文档项更高。当前英文汇总只支持优先验证4B，不能排除8B或证明医学任务优劣；明确将8B加入正式候选，与4B在同一Dense Top100上直接比较后选择。8B模型卡／Apache-2.0及官方predict用法已核查，revision下载前冻结，尚无任何重排模型加载或成绩。当前函数与验收不变，见docs/reranking_task.md。
+
+**同日Dense模型选型咨询：** 用户进一步询问BGE-small是否有更好的embedding选择。已查[Qwen3-Embedding-8B](https://huggingface.co/Qwen/Qwen3-Embedding-8B)、[4B](https://huggingface.co/Qwen/Qwen3-Embedding-4B)、[BGE-M3](https://huggingface.co/BAAI/bge-m3)及[MedCPT Query Encoder](https://huggingface.co/ncbi/MedCPT-Query-Encoder)／[Article Encoder](https://huggingface.co/ncbi/MedCPT-Article-Encoder)官方来源。Qwen8B是建议优先验证的通用Dense升级候选：官方32K上限、最大4096维、Apache-2.0；4B最大2560维，模型卡英文MTEB(eng v2)的Retri.列为8B69.44／4B68.46，不要混用之前reranker的分数或全任务均值，也不称为当前最新榜首。BGE-M3是多语言／长文档备选，8192tokens、1024维、MIT，只测Dense时不顺带启用其稀疏／多向量能力。MedCPT是英文医学文献领域对照，查询／文章两个编码器、768维，官方基于255M PubMed query-article对训练、模型卡标public-domain；训练日志未公开，不能声称本项目取得该训练集。原任务主要短查询到标题摘要，不预设适合中文、指南或说明书，也不能用医学背景替代实测。
+
+**建议实验与实现边界：** 第一轮在同一NFCorpus 3633文档／324 dev、相同正文和Top100上，将Qwen3-Embedding-8B与现有BGE-small基线独立比较nDCG@10／Recall@100及成本，先不加重排。用户随后“继续”，已转为上面的配置接入任务；模型revision、指令、输出维度及初始推理配置已准备，未开始模型下载／编码。明确截断差异，随后固定Dense候选再比较重排。现有783847行BGE缓存和NFCorpus缓存均保留。DocumentEmbeddingCache已支持dimension参数，用户需在prepare_document_embeddings中透传；不能只改model_name或混用新查询与旧文档向量。Qwen和BGE-M3沿用LangChain HuggingFaceEmbeddings接口但各用官方query配置；MedCPT需另适配双编码器、CLS pooling与原始inner-product语义。没有新的embedding模型实测成绩。
 
 **2026-11-24：benchmark_eval.py验收完成。** 实际验收源码SHAae8ba1240f9fcc9ca79dfbe029c2ecaa305c1887af7c7a8222aae67244254f6d，tests/test_benchmark_eval.py原7方法全部通过，pytrec-eval-terrier==0.5.11。覆盖原query不变、每题max(ks)只检索一次、结果行与真实float分数保留、空命中计0且保留分母、相关等级排序、自定义K、非法输入／命中拒绝及逐题异常定位。两题临时验收的四指标为[1,0]且均值0.5；这是可解释的小样本验收，绝非NFCorpus成绩。结果results/benchmark_eval_validation.json及2026-11-24_revision5，之前失败快照保留。核心由用户完成，助手未改。
 
@@ -687,7 +695,7 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 - 以固定语料、题目和候选预算的开发集对照评价效果及逐题失败，再结合延迟、吞吐、显存和API费用作决定。模型规模和排行榜均不替代本任务实测；成本是有证据的权衡，不能凭假想资源限制排除强模型。
 - 区分官方结果、待验证候选与本项目已实现／实测。面试选型理由应能回到候选比较、实测增益与失败边界；未做的对照不能写成自己的实验结论。检索相关性模型不自动等于医学适用性判断或临床决策能力。
 - 既有BGE-small、DeepSeek及缓存保留为已有基线；成品模型没有因此被永久锁定。模型配置通过已定接口接入，升级向量模型确需新编码与索引，但不让用户重写核心，也不与新检索模块同时改动。
-- 本轮撤回未经效果对照的MiniLM成品选型，优先验证Qwen3-Reranker-4B，并与BGE-reranker-v2-m3对照；当前rerank纯函数及验收不变。模型权重、dtype、输入模板、长度和batch在真实运行前核定并冻结，尚无重排模型成绩。
+- 本轮撤回未经效果对照的MiniLM成品选型，Qwen3-Reranker-4B／8B作为同家族效果候选直接比较，BGE-reranker-v2-m3保留对照；不以英文单项排除8B。当前rerank纯函数及验收不变。模型权重、dtype、输入模板、长度和batch在真实运行前核定并冻结，尚无重排模型成绩。
 
 ## 14. 恢复工作与维护本文
 

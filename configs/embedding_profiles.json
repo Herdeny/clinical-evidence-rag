@@ -1,0 +1,52 @@
+{
+  "bge_small": {
+    "model_name": "BAAI/bge-small-en-v1.5",
+    "dimension": 384,
+    "max_seq_length": 512,
+    "model_kwargs": {
+      "device": "cuda",
+      "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+      "local_files_only": true
+    },
+    "encode_kwargs": {
+      "batch_size": 8,
+      "normalize_embeddings": true,
+      "prompt": ""
+    },
+    "query_encode_kwargs": {
+      "batch_size": 1,
+      "normalize_embeddings": true,
+      "prompt": "Represent this sentence for searching relevant passages: "
+    }
+  },
+  "qwen3_8b": {
+    "model_name": "Qwen/Qwen3-Embedding-8B",
+    "dimension": 4096,
+    "max_seq_length": 8192,
+    "model_kwargs": {
+      "device": "cuda",
+      "revision": "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af",
+      "local_files_only": true,
+      "model_kwargs": {
+        "torch_dtype": "bfloat16",
+        "attn_implementation": "sdpa"
+      },
+      "processor_kwargs": {
+        "padding_side": "left",
+        "model_max_length": 8192
+      }
+    },
+    "encode_kwargs": {
+      "batch_size": 1,
+      "normalize_embeddings": true,
+      "prompt": "",
+      "precision": "float32"
+    },
+    "query_encode_kwargs": {
+      "batch_size": 1,
+      "normalize_embeddings": true,
+      "prompt": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+      "precision": "float32"
+    }
+  }
+}

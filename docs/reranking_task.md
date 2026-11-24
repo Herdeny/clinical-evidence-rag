@@ -2,6 +2,8 @@
 
 任务确定与来源核查：2026-11-24。NFCorpus三种检索开发集已实测，Dense四项均值最高；本步固定Dense Top100候选，只改变候选排序。核心函数由用户编写，助手检查实际文件并验收。当前尚无重排实现或实测成绩，官方test及MIRAGE未运行。
 
+**同日工作次序更新：** 用户继续询问embedding候选并要求推进后，当前先做[Dense模型配置接入与独立对照](dense_model_selection_task.md)。本文件的rerank函数接口及验收保留，真实重排实验等待Dense选型并固定候选；不同时更换embedding与重排模型。
+
 ## 参考实现、模型与使用条件
 
 [Sentence Transformers官方两阶段说明](https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html)及其[固定提交示例](https://github.com/huggingface/sentence-transformers/blob/cddcaee3405a5efde83c1d98f89c6ebd6733dab6/examples/sentence_transformer/applications/retrieve_rerank/retrieve_rerank_simple_wikipedia.ipynb)使用检索候选再交叉编码重排。已查阅该示例，不能将示例输出当成本项目的分数；本项目不复制其Wikipedia数据管线。
@@ -11,9 +13,10 @@
 | 已核查候选 | 任务能力与使用条件 | 本轮定位 |
 | --- | --- | --- |
 | [Qwen/Qwen3-Reranker-4B](https://huggingface.co/Qwen/Qwen3-Reranker-4B) | 4B，多语言、指令感知，官方报告32K上下文，Apache-2.0；revision=22e683669bc0f0bd69640a1354a6d0aebcfeede5 | 优先验证的效果候选，尚未下载／运行，不能称为最终胜出模型 |
+| [Qwen/Qwen3-Reranker-8B](https://huggingface.co/Qwen/Qwen3-Reranker-8B) | 8B，多语言、指令感知，官方报告32K上下文，Apache-2.0；下载前再固定revision | 与4B做同家族直接对照，官方中文／多语言／长文档项更高；尚未下载／运行 |
 | [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) | 多语言联合编码相关性打分，Apache-2.0；revision=953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e | 效果与成本对照，尚未下载／运行，不因规模较小预设为最终模型 |
 
-候选依据：[Qwen官方同一评测表](https://huggingface.co/Qwen/Qwen3-Reranker-4B#evaluation)中，Qwen3-Reranker-4B的MTEB-R为69.76，BGE-reranker-v2-m3为57.03，Qwen3-Reranker-8B为69.02；该表均由发布方在Qwen3-Embedding-0.6B检索的Top100上运行。它支持优先验证4B，不证明本项目BGE-small候选、NFCorpus或医学专项上必然有收益，也不证明4B在所有任务优于8B。两个候选都是通用模型，不能当作医学专用或已具备指南适用性判断能力。
+候选依据：[Qwen官方同一评测表](https://huggingface.co/Qwen/Qwen3-Reranker-4B#evaluation)中，Qwen3-Reranker-4B的MTEB-R为69.76，BGE-reranker-v2-m3为57.03，Qwen3-Reranker-8B为69.02；该表均由发布方在Qwen3-Embedding-0.6B检索的Top100上运行。当前英文任务支持先验证4B，但不足以排除8B。8B在CMTEB-R（77.45对75.94）、MMTEB-R（72.94对72.74）、MLDR（70.19对69.97）更高，4B在FollowIR（14.84对8.05）更高；汇总项不能代替医学专项，未提供误差范围也不宣称差异显著。用户追问8B后，明确将其加入正式候选，在相同Dense Top100、相同实际输入内容／预算与任务指令下与4B直接比较，记录截断和显存／延迟；模型格式差异必须如实配置。先验候选顺序不是最终胜出结论。这些模型都是通用模型，不能当作医学专用或已具备指南适用性判断能力。
 
 选型按任务适配、同候选集实测、长文本／语言覆盖、许可与可复现性作判断，同时报告延迟、吞吐和显存；资源成本是实际约束，不能替代效果证据。NFCorpus用于公共排序对照，临床专项仍要检验适用条件、否定、数字、来源与定位；后续以留出集核验已固定方案，不用官方test反复选模型。现有BGE-small成绩保留为基线，不等于它已经通过成品选型；更换向量模型须作为独立实验，不能与本次重排同时改动。
 
