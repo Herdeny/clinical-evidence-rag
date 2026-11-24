@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-24。根目录现有12个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。用户已完成Qwen固定配置与维度接入，缓存编排9项、入口15项合成检查通过，参数位于configs/embedding_profiles.json。正式入口15项及真实GPU预检03均通过，当前由用户运行Qwen完整Dense dev，尚无新模型检索成绩。rerank_core.py尚未实现，不计入现有模块。
+整理日期：2026-11-19，进度更新2026-11-24。根目录现有12个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。用户已完成Qwen固定配置与维度接入，缓存编排9项、入口15项合成检查通过，参数位于configs/embedding_profiles.json。正式入口15项及真实GPU预检03均通过，Qwen完整Dense dev已实测核验，当前用户实现rerank纯函数，尚无重排成绩。rerank_core.py尚未实现，不计入现有模块。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -15,7 +15,7 @@
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；新增save_beir_results，支持方法层配置，保留旧接口 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分，7项临时数据验收通过，三种方法dev均已实际评分与核验 | 用户 |
-| run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen小批GPU预检通过、完整dev待跑，未接重排 | 用户 |
+| run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
 
 ## 数据维护模块
 

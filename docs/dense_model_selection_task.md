@@ -1,5 +1,7 @@
 # Dense模型选型：接入可切换的固定配置
 
+**当前结论，2026-11-24：完整Qwen Dense dev已完成并核验，进入重排纯函数开发。** 同一3633文档／324题，四指标0.392196／0.192203／0.370125／0.397097；nDCG@10与Recall@100相对BGE提高19.87%／26.03%，平均query53.693ms，为BGE的2.308倍。资源、逐题变化、矩阵身份与归因边界见[开发集归档](nfcorpus_retrieval_baselines.md)。原qrels独立重评分、源码／输入与25份历史产物核验通过。固定本轮Qwen Top100，用户下一步实现[rerank纯函数](reranking_task.md)，当前无重排成绩。以下下载、预检、完整dev命令均为已完成过程，不要求重跑。
+
 ## 当前结果：GPU预检03通过，准备完整Dense dev
 
 2026-11-24，用户在提交b4625a2的源码上完成真实GPU预检03，独立核验通过。设备为RTX4090／cuda:0，权重BF16，完整4096维，输入上限8192。3633篇文档最长2335 tokens，324条dev查询最长40 tokens，两类均0截断；实际只编码前两篇和最长文档、第一条原query，没有运行检索或评分。
@@ -127,7 +129,7 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/tim
 
 用户返回输出或“好了”后，助手先读实际报告、日志和资源，检查配置与输入身份、样本和显存；只有通过并同步后，再给完整3633文档／324题的Qwen Dense dev运行命令。当前不自动执行正式开发集，更不先重编码医学主库。
 
-## 当前下一步：用户终端完整Dense dev
+## 已完成：用户终端完整Dense dev
 
 预检通过后已准备独立回执results/nfcorpus_dense_qwen3_8b_dev_01_run_audit.json及12份代码／配置快照。25份历史基线、缓存、失败与预检产物受保护。新Qwen文档缓存初始不存在，计划指纹f57e042cca31d1d4e4fcc61d84d576d2b6ad4b247c7490d03188c16144fd54c1，最终矩阵应为3633×4096 float32；原BGE缓存保留。文档仍每512条提交检查点，实际GPU batch=1。
 

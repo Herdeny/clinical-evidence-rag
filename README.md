@@ -4,7 +4,7 @@
 
 代码目录已整理：根目录现有12个开发模块（含已验收benchmark_data.py和benchmark_eval.py，以及已验收run_benchmark_eval.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
 
-**当前任务：用户终端运行Qwen Dense完整开发集。** 两个现有核心模块的配置／维度接入已完成，缓存编排9项、入口15项无权重验收通过；config_dir必填，BGE／Qwen结果名都可包含配置名称。预检辅助另有4项无权重检查通过。固定版本已完整下载至项目cache，4个权重分片共15,134,634,568字节，SHA-256逐个核验通过；通过项目缓存入口离线读取配置成功。预检02已成功加载并进入正文编码，单位范数检查失败；共享FP32输出适配的27项无权重检查通过，用户正式入口接线及真实GPU预检03均通过：RTX4090／BF16／4096维，全文最大2335 tokens、0截断，FP32处理后样本范数接近1。下一步按[模型选型任务](docs/dense_model_selection_task.md)运行完整3633文档／324 dev的Qwen Dense对照，尚无其检索成绩。模型命令通过[项目缓存包装器](scripts/project_env.sh)运行。已有NFCorpus3633文档／324条dev三方法均核验：BM25的nDCG@10／Recall@100为0.265738／0.205678；BGE-small Dense为0.327186／0.315082；RRF为0.312468／0.300335。旧缓存、结果和RRF负结果保留，见[开发集报告](docs/nfcorpus_retrieval_baselines.md)。先独立比较新embedding，选定Dense后再测[重排](docs/reranking_task.md)；官方test和MIRAGE7663仍未运行。
+**当前任务：实现重排纯函数。** Qwen3-Embedding-8B完整NFCorpus dev已实测核验：3633文档／324题，nDCG@10=0.392196、Recall@100=0.397097，相对BGE-small提高19.87%／26.03%；平均query53.693ms，为BGE的2.308倍。四指标、逐题变化、完整4096维缓存、输入和源码身份均核验，25份历史产物未变，见[开发集归档](docs/nfcorpus_retrieval_baselines.md)。当前冻结Qwen Top100，用户按[重排任务](docs/reranking_task.md)实现rerank_core.py，先假打分器验收，暂无重排成绩；后续比较4B／8B等模型时复用同一候选。原BGE及RRF负结果保留，阶段选型不能替代医学专项、官方test或MIRAGE全量评测。模型命令继续通过[项目缓存包装器](scripts/project_env.sh)。
 
 **2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
 
