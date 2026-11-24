@@ -1,7 +1,9 @@
 import argparse
 from functools import partial
+import json
 from langchain_huggingface import HuggingFaceEmbeddings
 from pathlib import Path
+
 from benchmark_data import load_beir_dataset
 from benchmark_eval import evaluate_beir_retrieval
 from embedding_index import prepare_document_embeddings
@@ -11,12 +13,22 @@ from retrieve_bm25 import retrieve_bm25
 from retrieve_core import retrieve
 from retrieve_rrf import retrieve_rrf
 
-def main(method, data_dir, split, cache_dir, run_name):
-    if not method in ("dense", "bm25", "rrf"): raise ValueError(f"Unknown method: {method}")
+def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_embedding_model="bge_small"):
+    if not method in ("bm25", "dense", "rrf"): raise ValueError("Unknown method: " + method)
+
+    if method == "bm25" and config_embedding_model == "qwen3_8b": raise ValueError("qwen3_8b doesn't fit with bm25.")
+
+    config_path = config_dir / "embedding_profiles.json"
     evidence_path = data_dir / "corpus.jsonl"
-    
+
+    profiles = json.loads(config_path.read_text(encoding="utf-8"))
+
+    if not config_embedding_model in profiles: raise ValueError("Unknown embedding model profile: " + config_embedding_model)
+
+    embedding_profile = profiles[config_embedding_model]
+
     corpus_df, queries_df, qrels = load_beir_dataset(data_dir, split=split)
-     
+
     config = {
             "cache_path": str(cache_dir.resolve()),
             "corpus_text": "title + space + body; strip",
@@ -27,20 +39,25 @@ def main(method, data_dir, split, cache_dir, run_name):
             "split": split,
             "retrieval_method": method
         }
-    
-    if method in ("dense", "rrf"):
 
-        PREFIX = "Represent this sentence for searching relevant passages: "
-        
+    if method in ("dense", "rrf"):
         embedding_model = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-small-en-v1.5",
-            model_kwargs = {"device": "cuda", "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a", "local_files_only": True}, # 最后两个参数的意义是什么？
-            encode_kwargs = {"batch_size": 8, "normalize_embeddings": True, "prompt": ""},
-            query_encode_kwargs = {"batch_size": 1, "normalize_embeddings": True, "prompt": PREFIX}
+            model_name=embedding_profile['model_name'],
+            model_kwargs=embedding_profile['model_kwargs'],
+            encode_kwargs=embedding_profile['encode_kwargs'],
+            query_encode_kwargs=embedding_profile['query_encode_kwargs']
         )
 
+        # 核对模型的真实维度、长度与配置一致
+        if not (
+            embedding_model._client.get_embedding_dimension() == embedding_profile['dimension']
+            and
+            embedding_model._client.max_seq_length == embedding_profile['max_seq_length']
+            ):
+            raise ValueError("embedding_profile is not consistent with the real model")
+
         embeddings, cache_info = prepare_document_embeddings(
-            corpus_df, embedding_model, evidence_path=evidence_path, cache_dir=cache_dir, chunk_size=512
+            corpus_df, embedding_model, evidence_path=evidence_path, cache_dir=cache_dir, chunk_size=512, dimension=embedding_profile['dimension']
             )
 
         dense_retrieve_fn = partial(
@@ -51,17 +68,19 @@ def main(method, data_dir, split, cache_dir, run_name):
         )
         config["dense"] = {
             "device": embedding_model.model_kwargs["device"],
+            "embedding_dimension": embedding_profile['dimension'],
+            "embedding_profile": config_embedding_model,
             "embeddings_cache": cache_info,
             "embeddings_shape": embeddings.shape,
             "encode_kwargs": embedding_model.encode_kwargs,
-            "max_seq_length": 512,
+            "max_seq_length": embedding_profile['max_seq_length'],
             "model_kwargs": embedding_model.model_kwargs,
             "model_name": embedding_model.model_name,
             "query_encode_kwargs": embedding_model.query_encode_kwargs,
-            "query_prefix": PREFIX
+            "query_prefix": embedding_model.query_encode_kwargs["prompt"]
         }
 
-        
+
     if method in ("bm25", "rrf"):
         bm25_results = build_bm25(corpus_df, k1=1.5, b=0.75, epsilon=0.25)
         bm25_retrieve_fn = partial(
@@ -77,7 +96,7 @@ def main(method, data_dir, split, cache_dir, run_name):
             "b": 0.75,
             "epsilon": 0.25
         }
-        
+
     if method == "dense":
         retrieve_fn = dense_retrieve_fn
         config["retrieval_method"] = "dense"
@@ -97,7 +116,7 @@ def main(method, data_dir, split, cache_dir, run_name):
             "candidate_k": 100,
             "rrf_constant": 60
         }
-    
+
     eval_df, run = evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10,100))
     summary = save_beir_results(
         eval_df,
@@ -111,21 +130,25 @@ def main(method, data_dir, split, cache_dir, run_name):
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--method", choices=["dense", "bm25", "rrf"], default="bm25") # 指定检索方法
     parser.add_argument("--cache", type=Path, default=root / "cache" / "embeddings") # 指定缓存文件路径
+    parser.add_argument("--config", type=Path, default=root / "configs") # 指定配置文件路径
     parser.add_argument("--data-dir", type=Path, default=root / "data" / "external" / "nfcorpus" / "prepared" / "nfcorpus" ) # 指定数据文件路径
+    parser.add_argument("--config-embedding-model", choices=["bge_small", "qwen3_8b"], default="bge_small")
     parser.add_argument("--split", choices=["dev", "train", "test"], default="dev") # 指定划分方式
     parser.add_argument("--run-name") # 指定本次结果名称
     args = parser.parse_args()
-    
+
     method = args.method
     cache_dir = args.cache
+    config_dir = args.config
+    config_embedding_model = args.config_embedding_model
     data_dir =  args.data_dir
     split = args.split
-    run_name = args.run_name if args.run_name else f"{data_dir.name}_{method}_{split}"
-    
-    summary = main(method, data_dir, split, cache_dir, run_name)
-    
+    run_name = args.run_name if args.run_name else f"{data_dir.name}_{method}_{config_embedding_model}_{split}"
+
+    summary = main(method, config_dir, data_dir, split, cache_dir, run_name, config_embedding_model=config_embedding_model)
+
     print(summary["metrics"])

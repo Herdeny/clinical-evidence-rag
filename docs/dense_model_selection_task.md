@@ -2,6 +2,10 @@
 
 2026-11-24，用户在查询模型候选后要求继续。当前工作单元改为先接入Qwen3-Embedding-8B的独立Dense对照，再固定候选测试重排。核心由用户编写；助手提供已核查的静态配置、测试与结果辅助。现有BM25／Dense／RRF成绩和两份BGE文档缓存均保留。本轮尚未加载、下载或运行Qwen模型，也没有新模型成绩。
 
+**代码验收revision5已通过。** 用户已将CLI调用与必填config_dir的六参数接口对齐，缓存编排9项、入口14项全部通过；包括Qwen4096维、两配置缓存隔离、再次零文档编码、实际元数据、参数拒绝和CLI转发。核心由用户完成，助手仅移除未使用的logging.config／matplotlib rainbow导入并清理行尾空白。源码SHA：embedding_index.py为dbdd1baca3a0dc85bd8853c8c6cb8763919af8c59eb4eec2cc075bc559e6fd49，run_benchmark_eval.py为b6d2472690e42519657766e5f8f2c56a1302b7938c38f271d06503ec228f6f3b。两路旧结果10文件及NFCorpus缓存2文件SHA未变。记录results/embedding_model_integration_validation.json及revision5_accepted快照；假模型通过不表示Qwen已下载或实测。
+
+**已纠正的旧指导：** 用户使用get_embedding_dimension()正确；5.7.0旧名称get_sentence_embedding_dimension已弃用。旧测试替身遗漏新方法导致助手误判，现以真实类规格和无权重Pooling检查验证。BGE自动名nfcorpus_dense_bge_small_dev已认可；旧命名和旧五参数调用都不再是必须保留的验收条件。历史报告保留并明确其失效范围。
+
 ## 已准备的资料与选择依据
 
 静态参数在configs/embedding_profiles.json，两个键分别为bge_small与qwen3_8b。bge_small四项模型构造配置逐值保留现有入口的设置，目标是复用既有缓存和命令。Qwen使用[官方模型及Apache-2.0许可](https://huggingface.co/Qwen/Qwen3-Embedding-8B)，冻结[revision 1d8ad4ca9b3dd8059ad90a75d4983776a23d44af](https://huggingface.co/Qwen/Qwen3-Embedding-8B/tree/1d8ad4ca9b3dd8059ad90a75d4983776a23d44af)。官方目录的权重约15.2GB，不能把它当作显存测量。
@@ -24,17 +28,17 @@ prepare_document_embeddings的现有关键字参数末尾增加dimension=384，�
 
 ### 2. run_benchmark_eval.py：读配置并接入入口
 
-main保留原五个位置参数，新增仅关键字参数embedding_profile="bge_small"。CLI新增--embedding-profile，choices为bge_small／qwen3_8b，默认bge_small；传给main。现有method仍为dense／bm25／rrf，不增加名为qwen的检索算法。
+main按用户当前接口为main(method,config_dir,data_dir,split,cache_dir,run_name,*,config_embedding_model="bge_small")，config_dir必填。CLI使用--config（默认脚本下configs目录）和--config-embedding-model（choices为bge_small／qwen3_8b，默认bge_small），将目录和配置名实际传入main；具体参数名称按用户保存的接口，不为命名重写。现有method仍为dense／bm25／rrf，不增加名为qwen的检索算法。
 
-使用json和pathlib.Path读取脚本目录下configs/embedding_profiles.json。校验配置名有效，method=bm25时只允许默认bge_small（BM25本身不加载向量模型），不静默接受无效模型选择。只在dense／rrf分支初始化HuggingFaceEmbeddings，并从选中的配置传入model_name、model_kwargs、encode_kwargs、query_encode_kwargs四项；dimension与max_seq_length是项目元数据，不能将整个配置直接展开给模型构造器。
+使用json和pathlib.Path读取显式config_dir下的embedding_profiles.json，不在main内部补默认目录。校验配置名有效，method=bm25时只允许默认bge_small（BM25本身不加载向量模型），不静默接受无效模型选择。只在dense／rrf分支初始化HuggingFaceEmbeddings，并从选中的配置传入model_name、model_kwargs、encode_kwargs、query_encode_kwargs四项；dimension与max_seq_length是项目元数据，不能将整个配置直接展开给模型构造器。
 
-构造模型后核对embedding_model._client.max_seq_length和embedding_model._client.get_sentence_embedding_dimension()与所选配置一致；不一致抛ValueError，避免摘要与真正编码不同。这里_client是当前LangChain封装持有的SentenceTransformer对象，该访问只用于运行入口检查，检索核心继续使用embed_query／embed_documents接口。
+构造模型后核对embedding_model._client.max_seq_length和embedding_model._client.get_embedding_dimension()与所选配置一致；不一致抛ValueError，避免摘要与真正编码不同。这里_client是当前LangChain封装持有的SentenceTransformer对象，该访问只用于运行入口检查，检索核心继续使用embed_query／embed_documents接口。此前要求旧名称是助手的错误，当前采用已核查安装版本的推荐API。
 
 调用prepare_document_embeddings时传实际dimension，evidence_path继续为data_dir/corpus.jsonl，cache_dir与chunk_size不改。模型对象与文档矩阵仍在查询循环外创建一次，Dense／BM25／RRF的检索编排与评分不改。
 
 config["dense"]保留现有字段，新增embedding_profile与embedding_dimension；max_seq_length使用已核对的真实值，query_prefix取实际query_encode_kwargs["prompt"]，不再写死BGE前缀。模型／编码参数继续保存实际对象持有的字典，嵌套精度／长度也因此进入缓存身份和摘要。
 
-自动run_name保持默认bge_small时的原规则dataset_method_split；Qwen自动名增加profile，例如nfcorpus_dense_qwen3_8b_dev。显式--run-name优先，同名覆盖仍由现有保存辅助拒绝。bm25不会在配置中冒充使用Qwen；三条旧基线和旧缓存不重新运行。
+自动run_name按用户最新决定可以统一包含profile，例如nfcorpus_dense_bge_small_dev和nfcorpus_dense_qwen3_8b_dev，RRF也标所用embedding配置。BM25实际不使用embedding，结果元数据应如实记录；文件名是否带默认配置标签不作为正确性阻断。显式--run-name优先，同名覆盖仍由现有保存辅助拒绝。三条旧基线原文件名与旧缓存保留，不为命名重跑。
 
 ## 需要的API和参数位置
 
@@ -53,3 +57,29 @@ HuggingFaceEmbeddings.model_kwargs传给SentenceTransformer构造器，所以Qwe
 - 输入／代码／旧结果及真实BGE矩阵身份保留。假模型验收不是Qwen性能或GPU可运行性证明。
 
 代码通过后先提交同步GitHub，再提供用户可见终端的固定版本下载、小批预检和正式dev命令；预检记录模型设备、dtype、维度、归一化、长度／截断和GPU内存。正式使用新run_name与新文档缓存，先NFCorpus，不直接重编码783847行医学主库。官方test和MIRAGE仍不运行；rerank函数接口继续保留，真实重排等待Dense选型结果。
+
+## 当前下一步：用户终端下载与小批预检
+
+辅助scripts/evaluation/preflight_embeddings.py已准备。它使用与入口相同的四项模型配置，只统计配套语料／dev查询的输入长度，实际编码前两篇及最长文档（最多三篇）、第一条原query；检查真实设备、权重BF16、4096维、归一化、输入上限及峰值GPU分配／保留内存。完整参数、输入和辅助源码指纹写入独立JSON。它不调用检索、不计算效果分数、不创建文档向量缓存，也不访问test／MIRAGE。
+
+4项无权重检查已通过：换行／prompt／分词批次、向量异常拒绝、替换CUDA和模型后的完整报告／样本范围、无GPU时初始化前失败。--help也已检查。本轮工具没有加载预训练权重或运行真实GPU；显存和性能只在用户执行后报告。huggingface-hub0.36.2的hf入口存在，命令参数已核查；固定版本的Qwen权重／配置当前未缓存。
+
+先运行下载，结束成功后再运行预检。模型约15.2GB，该数字来自官方文件目录，下载量与实际显存分开记录。下载命令使用Hub标准缓存，正式模型配置也从同一缓存加载；不升级库、不切换镜像或改模型。
+
+```bash
+# 从项目目录保存本轮下载日志。
+cd /home/wzh/clinical-evidence-rag
+# 保留下载失败时的退出状态。
+set -o pipefail
+# 下载冻结版本，终端保留实时进度；不使用force-download覆盖已有文件。
+HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 /home/wzh/miniforge3/envs/all-in-rag/bin/hf download Qwen/Qwen3-Embedding-8B --revision 1d8ad4ca9b3dd8059ad90a75d4983776a23d44af --max-workers 4 2>&1 | tee results/qwen3_8b_download_01.log
+```
+
+```bash
+# 预检使用已下载的固定权重，禁止依赖链再联网探测。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /usr/bin/time -v -o results/nfcorpus_qwen3_8b_preflight_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u -m scripts.evaluation.preflight_embeddings --config-dir configs --data-dir data/external/nfcorpus/prepared/nfcorpus --profile qwen3_8b --output results/nfcorpus_qwen3_8b_preflight_01.json 2>&1 | tee results/nfcorpus_qwen3_8b_preflight_01_run.log
+```
+
+验收观察：status=passed、实际CUDA设备、torch.bfloat16权重、4096维、实际输入上限8192、3633文档／324 dev查询，文档样本形状最多3×4096、query为1×4096，数值有限且L2范数接近1。长度统计中的超限文档／查询数按真实分词器结果核查，不提前填写0；峰值GPU字节不能称为整进程RSS。失败保留终端日志，不改成CPU或缩小模型冒充通过。同名预检报告拒绝覆盖，重跑用新的后缀。
+
+用户返回输出或“好了”后，助手先读实际报告、日志和资源，检查配置与输入身份、样本和显存；只有通过并同步后，再给完整3633文档／324题的Qwen Dense dev运行命令。当前不自动执行正式开发集，更不先重编码医学主库。

@@ -2,13 +2,15 @@ from tqdm import tqdm
 from embedding_cache_io import DocumentEmbeddingCache
 
 def prepare_document_embeddings(
-    evidences, embedding_model, *, evidence_path, cache_dir, chunk_size=512 # 512 是一次保存进度的证据条数，模型的 batch_size是 GPU 每次前向处理的条数，即使一次提交 512 条，GPU 每次仍只处理 batch_size 条
+    evidences, embedding_model, *, evidence_path, cache_dir, chunk_size=512, # 512 是一次保存进度的证据条数，模型的 batch_size是 GPU 每次前向处理的条数，即使一次提交 512 条，GPU 每次仍只处理 batch_size 条
+    dimension=384
 ):
     if not type(chunk_size) is int or chunk_size <= 0: raise ValueError("chunk_size should be positive int")
     with DocumentEmbeddingCache(
         evidences, embedding_model,
         evidence_path=evidence_path,
-        cache_dir=cache_dir
+        cache_dir=cache_dir,
+        dimension=dimension
     ) as cache:
         if cache.is_complete:
             embeddings = cache.load()

@@ -4,7 +4,7 @@
 
 代码目录已整理：根目录现有11个开发模块（含已验收benchmark_data.py和benchmark_eval.py，以及已验收run_benchmark_eval.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
 
-**当前任务：接入Qwen3-Embedding-8B的独立Dense对照。** 用户先按[模型选型任务](docs/dense_model_selection_task.md)将固定配置和维度接入两个现有模块；[配置文件](configs/embedding_profiles.json)已准备并通过无权重辅助检查，Qwen尚未下载／运行。已有NFCorpus3633文档／324条dev三方法均实测核验：BM25的nDCG@10／Recall@100为0.265738／0.205678、平均查询2.839ms；BGE-small Dense为0.327186／0.315082、23.262ms；RRF为0.312468／0.300335、35.872ms。旧缓存、结果和RRF负结果继续保留，见[开发集报告](docs/nfcorpus_retrieval_baselines.md)。选定Dense后再比较[重排](docs/reranking_task.md)；尚无新embedding、重排或MIRAGE7663成绩，官方test未运行。
+**当前任务：用户终端下载并小批预检Qwen3-Embedding-8B。** 两个现有核心模块的配置／维度接入已完成，缓存9项、入口14项无权重验收通过；config_dir必填，BGE／Qwen结果名都可包含配置名称。预检辅助另有4项无权重检查通过，命令与边界见[模型选型任务](docs/dense_model_selection_task.md)。Qwen尚未下载／实测。已有NFCorpus3633文档／324条dev三方法均核验：BM25的nDCG@10／Recall@100为0.265738／0.205678；BGE-small Dense为0.327186／0.315082；RRF为0.312468／0.300335。旧缓存、结果和RRF负结果保留，见[开发集报告](docs/nfcorpus_retrieval_baselines.md)。先独立比较新embedding，选定Dense后再测[重排](docs/reranking_task.md)；官方test和MIRAGE7663仍未运行。
 
 **2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
 

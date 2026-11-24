@@ -30,7 +30,7 @@ from embedding_index import prepare_document_embeddings
 # 定义可计数、可模拟失败的编码器，公开配置与现有模型接口一致。
 class CountingEncoder:
     # 初始化合成配置；可指定在哪一次调用中模拟模型失败。
-    def __init__(self, fail_on_call=None):
+    def __init__(self, fail_on_call=None, dimension=384):
         # 虚构模型名称只用于缓存身份，不下载模型。
         self.model_name = "test/synthetic-encoder"
         # 固定虚构版本，满足缓存的可复现配置要求。
@@ -43,6 +43,8 @@ class CountingEncoder:
         self.calls = []
         # 保存本次测试指定的失败调用序号。
         self.fail_on_call = fail_on_call
+        # 按测试指定的真实输出维度生成向量，默认保留旧384维用例。
+        self.dimension = dimension
 
     # 为每条合成正文生成不同的单位向量，便于核对输出行序。
     def embed_documents(self, texts):
@@ -54,8 +56,12 @@ class CountingEncoder:
             raise RuntimeError("simulated encoder failure")
         # 从正文中的编号取得对应向量位置。
         positions = [int(text.split()[-1]) for text in texts]
-        # 返回与真实接口相同的二维浮点列表，每行维度固定为 384。
-        return np.eye(384, dtype=np.float32)[positions].tolist()
+        # 只分配当前批次所需的行，避免构造4096乘4096的无用单位矩阵。
+        vectors = np.zeros((len(texts), self.dimension), dtype=np.float32)
+        # 每条正文按原始编号在对应列写入单位值，便于核对行序。
+        vectors[np.arange(len(texts)), positions] = 1.0
+        # 保持与LangChain编码接口相同的二维浮点列表返回值。
+        return vectors.tolist()
 
 
 # 定义编码编排与缓存持久化之间的集成测试。
@@ -218,6 +224,67 @@ class EmbeddingIndexTests(unittest.TestCase):
         # 参数不合法时不应创建任何向量缓存目录。
         self.assertFalse(self.cache_dir.exists())
 
+    # 验证用户已将4096维传入缓存，并保持384维缓存独立和零调用复用。
+    def test_dimension_forwarding_and_separate_cache_reuse(self):
+        # 先建立原384维缓存，随后对照新缓存身份。
+        _, legacy = self.prepare(CountingEncoder())
+        # 4096维假编码器只在本地生成七行向量。
+        encoder = CountingEncoder(dimension=4096)
+        # 输出文本不是本项断言对象，捕获正常进度。
+        with redirect_stdout(StringIO()):
+            # 实际调用用户新增的dimension参数及真实缓存辅助。
+            matrix, info = prepare_document_embeddings(self.frame, encoder, evidence_path=self.evidence_path, cache_dir=self.cache_dir, chunk_size=3, dimension=4096)
+        # 七行文档必须保持4096列且只读。
+        self.assertEqual(matrix.shape, (7, 4096))
+        # 存储精度继续为float32。
+        self.assertEqual(matrix.dtype, np.dtype('float32'))
+        # 已发布缓存不得被下游原地更改。
+        self.assertFalse(matrix.flags.writeable)
+        # 对照完整矩阵，检查正确维度与原始证据行序。
+        np.testing.assert_array_equal(matrix, np.eye(7, 4096, dtype=np.float32))
+        # 同一模型配置在不同输出维度时必须分离目录。
+        self.assertNotEqual(info['fingerprint'], legacy['fingerprint'])
+        # 再创建同配置编码器用于检测多余文档调用。
+        reused_encoder = CountingEncoder(dimension=4096)
+        # 读取完整缓存时不应再次编码。
+        with redirect_stdout(StringIO()):
+            # 外层批次变化不改变文档向量身份。
+            reused, reused_info = prepare_document_embeddings(self.frame, reused_encoder, evidence_path=self.evidence_path, cache_dir=self.cache_dir, chunk_size=2, dimension=4096)
+        # 完整缓存应零文档编码调用。
+        self.assertEqual(reused_encoder.calls, [])
+        # 返回的缓存必须命中原4096维矩阵。
+        self.assertTrue(reused_info['cache_hit'])
+        # 行数与值必须保持一致。
+        np.testing.assert_array_equal(reused, matrix)
+
+    # 验证非法维度由真实辅助层在调用模型前拒绝。
+    def test_invalid_dimensions_rejected_before_encoding(self):
+        # 逐个检查既定非正或非整数输入。
+        for dimension in (0, -1, True, 1.5, '4096'):
+            # 每个子用例独立报告参数。
+            with self.subTest(dimension=dimension):
+                # 创建可计数假编码器。
+                encoder = CountingEncoder()
+                # 明确无效维度应失败，不允许静默回退384。
+                with self.assertRaises(ValueError):
+                    # 仅使用临时输入，不涉及正式缓存。
+                    prepare_document_embeddings(self.frame, encoder, evidence_path=self.evidence_path, cache_dir=self.cache_dir, dimension=dimension)
+                # 拒绝参数不能消耗模型调用。
+                self.assertEqual(encoder.calls, [])
+
+    # 验证编码器输出与声明维度不符时不提交错误批次。
+    def test_mismatched_output_dimension_keeps_zero_checkpoint(self):
+        # 假编码器实际产生4096维。
+        encoder = CountingEncoder(dimension=4096)
+        # 声明384维但返回4096维时必须明确失败。
+        with self.assertRaises(ValueError), redirect_stdout(StringIO()):
+            # 实际调用用户函数，错误应由真实缓存写入检查发现。
+            prepare_document_embeddings(self.frame, encoder, evidence_path=self.evidence_path, cache_dir=self.cache_dir, dimension=384)
+        # 检查失败批次没有推进断点。
+        with self.open_cache(CountingEncoder(dimension=4096)) as cache:
+            # 错误的第一批不得标记为已保存。
+            self.assertEqual(cache.completed_rows, 0)
+
 
 # 仅在直接执行测试模块时运行测试并保存本轮验收结果。
 if __name__ == "__main__":
@@ -227,7 +294,7 @@ if __name__ == "__main__":
     checked_paths = [project_root / "embedding_index.py", project_root / "embedding_cache_io.py"]
     # 记录测试开始前的源码指纹。
     before = {str(path.relative_to(project_root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in checked_paths}
-    # 只加载本文件定义的六项集成检查。
+    # 加载本文件定义的编码编排、维度与缓存复用检查。
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(EmbeddingIndexTests)
     # 执行合成测试，不运行真实模型或临床评测。
     result = unittest.TextTestRunner(verbosity=2).run(suite)
