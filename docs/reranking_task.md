@@ -6,9 +6,18 @@
 
 [Sentence Transformers官方两阶段说明](https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html)及其[固定提交示例](https://github.com/huggingface/sentence-transformers/blob/cddcaee3405a5efde83c1d98f89c6ebd6733dab6/examples/sentence_transformer/applications/retrieve_rerank/retrieve_rerank_simple_wikipedia.ipynb)使用检索候选再交叉编码重排。已查阅该示例，不能将示例输出当成本项目的分数；本项目不复制其Wikipedia数据管线。
 
-本步选择[cross-encoder/ms-marco-MiniLM-L6-v2](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L6-v2)，英文、22.7M参数、Apache-2.0，训练来源为MS MARCO Passage Ranking。固定revision=233902d25c440f23af6f7d6e94d2946bac0bee0a；权重model.safetensors约90.9MB，无需下载仓库所有ONNX／其他后端。模型卡及官方API已核查，本地尚无该权重、未初始化模型、未发起下载。它是通用英文相关性模型，医学任务收益须实测，不能宣称医学专用或已微调。
+**2026-11-24选型修正。** 用户明确要求按正式项目的任务效果选模型，不默认偏向轻量。撤回此前将MiniLM-L6-v2直接确定为成品重排模型的决定：此前只核对了模型条件和API，没有医学任务效果对照，选型依据不足。MiniLM未下载或实测，无相关代码需要重写；以下候选通过同一接口接入。
 
-本地sentence-transformers==5.7.0已安装，CrossEncoder构造与predict签名已通过本地检查，不需要为本步升级。这个库与现有LangChain HuggingFaceEmbeddings分别承担重排打分与向量编码，向量部分继续沿用现有接口。见[官方CrossEncoder用法](https://www.sbert.net/docs/cross_encoder/usage/usage.html)。
+| 已核查候选 | 任务能力与使用条件 | 本轮定位 |
+| --- | --- | --- |
+| [Qwen/Qwen3-Reranker-4B](https://huggingface.co/Qwen/Qwen3-Reranker-4B) | 4B，多语言、指令感知，官方报告32K上下文，Apache-2.0；revision=22e683669bc0f0bd69640a1354a6d0aebcfeede5 | 优先验证的效果候选，尚未下载／运行，不能称为最终胜出模型 |
+| [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) | 多语言联合编码相关性打分，Apache-2.0；revision=953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e | 效果与成本对照，尚未下载／运行，不因规模较小预设为最终模型 |
+
+候选依据：[Qwen官方同一评测表](https://huggingface.co/Qwen/Qwen3-Reranker-4B#evaluation)中，Qwen3-Reranker-4B的MTEB-R为69.76，BGE-reranker-v2-m3为57.03，Qwen3-Reranker-8B为69.02；该表均由发布方在Qwen3-Embedding-0.6B检索的Top100上运行。它支持优先验证4B，不证明本项目BGE-small候选、NFCorpus或医学专项上必然有收益，也不证明4B在所有任务优于8B。两个候选都是通用模型，不能当作医学专用或已具备指南适用性判断能力。
+
+选型按任务适配、同候选集实测、长文本／语言覆盖、许可与可复现性作判断，同时报告延迟、吞吐和显存；资源成本是实际约束，不能替代效果证据。NFCorpus用于公共排序对照，临床专项仍要检验适用条件、否定、数字、来源与定位；后续以留出集核验已固定方案，不用官方test反复选模型。现有BGE-small成绩保留为基线，不等于它已经通过成品选型；更换向量模型须作为独立实验，不能与本次重排同时改动。
+
+本地sentence-transformers==5.7.0、transformers==4.57.6已安装；本地CrossEncoder包含因果模型及LogitScore处理，Qwen官方模型卡也提供CrossEncoder.predict句对接口及默认原始logit差值用法。模型输入模板、prompt和实际返回结构仍需在真实小批中核对，目前仅完成文档／源码检查，不是模型加载验收。这个库与现有LangChain HuggingFaceEmbeddings分别承担重排打分与向量编码，向量部分继续沿用现有接口。见[官方CrossEncoder用法](https://www.sbert.net/docs/cross_encoder/usage/usage.html)。
 
 ## 本轮完整工作单元
 
@@ -24,13 +33,13 @@
 | hits | 现有检索器返回的列表，每条含id、text、score及原有来源定位元数据 |
 | k | 正整数，重排后保留数量；超过候选数时返回全部候选 |
 | reranker | 已初始化的CrossEncoder对象；由运行入口创建一次并注入 |
-| batch_size | 正整数，默认16；控制一次前向的句对数，起步值须在实际设备上核验成本 |
+| batch_size | 正整数，函数默认16；只是可覆盖的接口默认值，4B模型的实际运行批次须小批预检后单独冻结 |
 
 构造与候选同序的(query, hit["text"])句对列表，对整个列表调用一次reranker.predict，参数batch_size=batch_size、show_progress_bar=False、convert_to_numpy=True。一次调用由库内部按batch处理，不是把所有100对同时塞进显存，也不要逐条调用100次。
 
 用numpy.asarray整理返回值，要求一维、长度等于候选数、全部有限。每个输出对应同位置输入句对。复制每个候选字典，把原score保存为float类型retrieval_score，把模型相关性分数保存为float类型score，保留id、text、source_id、locator等字段。按(-score, id)排序后取前k条，不原地改hits。
 
-模型输出使用原始logits，允许负数和大于1，不是概率；不做归一化或强制裁剪。原Dense分数与重排分数语义不同，不相加。只在后续明确设计消融时才引入混合权重。
+按已核查模型的官方CrossEncoder用法保留原始打分：分类模型logit或Qwen的logit差值，允许负数和大于1，不是概率；不做归一化或强制裁剪。候选模型不同，分数不直接跨模型比较；原Dense分数与重排分数也不相加。只在后续明确设计消融时才引入混合权重。
 
 输入检查集中在函数入口：query有效；k与batch_size为非bool正整数；hits中id为非空且唯一的字符串、text为非空字符串、原score可转有限float。输入候选有效但为空时返回[]，不调用predict。模型输出长度错误、维度错误或NaN／Inf时明确抛ValueError，不丢候选掩盖失败。真正的模型运行异常向上传递，不吞掉后继续给出答案。
 
@@ -38,7 +47,7 @@
 
 本函数只需numpy与Python内置功能，不必在模块顶层导入CrossEncoder或初始化GPU。numpy.asarray接收模型返回值；.ndim／.shape检查结构，numpy.isfinite(...).all()检查数值。dict.copy()复制候选字典，本函数只改顶层分数字段；zip对应候选与分数，sorted(..., key=...)指定排序，列表切片保留前k条。字典复制不会递归复制嵌套对象，因此不要修改locator等嵌套元数据。
 
-模型类在后续运行入口使用sentence_transformers.CrossEncoder。届时固定模型与revision、device="cuda"、max_length=512、activation_fn=torch.nn.Identity()，下载完成后启用local_files_only=True与进程级离线模式。max_length是query与候选联合输入的token预算，包含特殊token，超过预算由模型分词器截断；原始完整正文继续保留。现在先完成并验收纯函数，不提前粘贴缺少权重的真实模型初始化。
+模型类在后续运行入口使用sentence_transformers.CrossEncoder，固定模型revision并用CUDA。实际dtype、batch、联合输入长度、官方输入模板／指令与打分模块，在真实开发集运行前结合官方配置、样本长度和可见GPU做一次预检并冻结；不把MiniLM的512-token限制机械套给新模型，也不默认启用完整32K输入。下载后启用local_files_only=True与进程级离线模式。原始完整正文继续保留；函数只接收已初始化打分器，模型运行配置的核定不改变其接口或排序逻辑。现在先完成并验收纯函数，不提前下载权重或启动GPU。
 
 ## 函数验收
 
