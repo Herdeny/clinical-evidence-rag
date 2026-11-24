@@ -2,9 +2,9 @@
 
 项目完整背景、当前进度、后续路线与合作约定见 [项目交接总记录](PROJECT_CONTEXT.md)。继续开发或切换对话时先读该文件，再核对最新代码和输出。
 
-代码目录已整理：根目录现有13个开发模块（含已验收benchmark_data.py和benchmark_eval.py，以及已验收run_benchmark_eval.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
+代码目录已整理：根目录现有14个开发模块（含已验收benchmark_data.py和benchmark_eval.py，以及已验收run_benchmark_eval.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
 
-**当前任务：准备冻结候选的重排评测。** 用户已完成rerank_core.py，12项假打分器检查全部通过，覆盖排序、来源保留、输入不变、调用次数及错误处理；尚无真实重排成绩。原分数转换保留Python原生TypeError／ValueError，无需专为测试包装。下一步先补冻结Qwen Top100的加载、身份核验和分阶段评测辅助，再由用户接入口。Qwen Dense完整dev的nDCG@10=0.392196、Recall@100=0.397097，相对BGE提升19.87%／26.03%，平均query53.693ms，为BGE的2.308倍；见[开发集归档](docs/nfcorpus_retrieval_baselines.md)与[重排任务](docs/reranking_task.md)。4B／8B等reranker尚待同候选比较，官方test和MIRAGE全量仍未运行。模型命令继续使用[项目缓存包装器](scripts/project_env.sh)。
+**当前任务：接入冻结候选的重排评测。** 冻结加载辅助已完成6项关联检查，真实恢复Qwen开发集324题各100候选、共32400个句对所需文档；不加载模型／向量、不执行评分。用户按[冻结重排评测任务](docs/frozen_reranking_eval_task.md)在benchmark_eval.py增加可选query_id透传，并用已完成的rerank包装原评测循环，保留原BM25／Dense／RRF调用。候选和来源按ID关联，原query与标签不变；真实数据有同文不同ID，但本轮候选相同，没有旧结果混淆证据。模型／CLI／重排保存扩展待后续，暂无真实重排成绩。既有Qwen Dense对照见[开发集归档](docs/nfcorpus_retrieval_baselines.md)，核心仍由用户写，检查先审语义再用测试复查。
 
 **2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
 

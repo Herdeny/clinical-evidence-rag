@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-24。根目录现有13个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。用户已完成Qwen固定配置与维度接入，缓存编排9项、入口15项合成检查通过，参数位于configs/embedding_profiles.json。正式入口15项及真实GPU预检03均通过，Qwen完整Dense dev已实测核验，当前用户实现rerank纯函数，尚无重排成绩。rerank_core.py纯函数12项验收通过，真实模型和入口待接。
+整理日期：2026-11-19，进度更新2026-11-24。根目录现有14个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。用户已完成Qwen固定配置与维度接入，缓存编排9项、入口15项合成检查通过，参数位于configs/embedding_profiles.json。正式入口15项及真实GPU预检03均通过，Qwen完整Dense dev已实测核验，当前用户实现rerank纯函数，尚无重排成绩。rerank_core.py纯函数12项验收通过，真实模型和入口待接。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -8,6 +8,7 @@
 | retrieve_bm25.py | 分词、BM25 构建与检索 | 用户 |
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
 | rerank_core.py | 纯函数12项无权重验收全部通过；原分数转换保留原生异常，尚未接真实模型 | 用户；助手仅整理异常提示及无用导入／空白 |
+| frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
 | retrieve_evalution.py | 两类 Recall 与逐题批量评测，沿用实际文件名 | 用户 |
 | run_retrieval_eval.py | CLI、方法选择与评测入口 | 用户 |
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
@@ -49,7 +50,7 @@ scripts/evaluation/validate_beir_run.py从已保存run及原始标注重新评�
 
 本次将 10 个数据脚本移出根目录，同步脚本之间及测试中的导入，调整 3 个 ROOT 定位和构建清单中的代码路径。没有发现可以直接丢弃且完全没有复现／测试用途的独立临时源码，因此没有为了减少数量而删掉下载与验证能力。9 个旧路径的自动编译 .pyc 已删除，可由 Python 自动重建。
 
-tests中现有16个测试模块，均有逐行中文注释。test_embedding_index.py验证编码恢复；test_rrf_fusion.py含7项融合和5项编排，已通过。test_retrieval_entry.py的5项入口检查已通过，使用临时数据、假模型及真实小型检索／评分／保存。test_retrieval_results_io.py的6项检查验证分组／旧平铺保存、配置不变与错误定位。test_ct_evaluation.py的4项检查验证来源选择漂移、缺事实／缺规则分离、家族边界及实际快照重建／人工修改保护。test_benchmark_data.py的9个方法检查公开dev、通用目录和数据完整性，已全部通过。新增test_benchmark_eval.py的7个方法验证单次预算、原查询、等级排序、自定义K、空命中分母和异常输入，已全部通过；只用临时材料，不运行公开题库或模型。test_beir_results_io.py的6项检查验证BEIR三份产物、空题分母、输入指纹、配置保真、矛盾run拒绝与覆盖保护，已通过；旧保存6项也复验通过。test_benchmark_entry.py的15项检查使用临时BEIR、假模型和真实小型检索／保存验证入口，已全部通过。其他覆盖来源位置、数据划分和缓存恢复。scripts的两个__init__.py仅标记Python包。
+tests中现有17个测试模块，均有逐行中文注释。test_embedding_index.py验证编码恢复；test_rrf_fusion.py含7项融合和5项编排，已通过。test_retrieval_entry.py的5项入口检查已通过，使用临时数据、假模型及真实小型检索／评分／保存。test_retrieval_results_io.py的6项检查验证分组／旧平铺保存、配置不变与错误定位。test_ct_evaluation.py的4项检查验证来源选择漂移、缺事实／缺规则分离、家族边界及实际快照重建／人工修改保护。test_benchmark_data.py的9个方法检查公开dev、通用目录和数据完整性，已全部通过。新增test_benchmark_eval.py的7个方法验证单次预算、原查询、等级排序、自定义K、空命中分母和异常输入，已全部通过；只用临时材料，不运行公开题库或模型。test_beir_results_io.py的6项检查验证BEIR三份产物、空题分母、输入指纹、配置保真、矛盾run拒绝与覆盖保护，已通过；旧保存6项也复验通过。test_benchmark_entry.py的15项检查使用临时BEIR、假模型和真实小型检索／保存验证入口，已全部通过。其他覆盖来源位置、数据划分和缓存恢复。scripts的两个__init__.py仅标记Python包。
 
 原始数据、冻结清单、历史执行源码快照、结果及 Notebook 作为已有记录保留。Notebook 中的历史根目录导入可能是当时的路径，当前操作以脚本和本文目录为准，不把 Notebook 重新作为生产依赖。
 

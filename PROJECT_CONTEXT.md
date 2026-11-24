@@ -6,6 +6,10 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25当前进展：冻结候选加载辅助已实现并完成真实只读核对，下一步用户只改benchmark_eval.py。** 新frozen_candidates_io.py提供load_frozen_candidates(receipt_path,*,data_dir)，返回FrozenCandidates，公开queries_df／qrels／info副本和get_hits(query_id)。按查询ID联结原文，保留ID／score／source_id／locator及原始顺序；核对原results／run／summary、实际corpus／queries／qrels的指纹和内容对应，不加载模型／向量矩阵、不执行评分、不写原始产物。辅助6项检查通过，包括相同问题文字不同ID／候选、嵌套副本互不污染、源文件／数据改动、内容错配及空候选保留分母。真实NFCorpus324题各100、总32400候选全部恢复，首题PLAIN-1、首文档MED-2418，记录results/frozen_candidates_loading_validation.json；用户rerank_core SHA仍1e04ef...未改。
+
+真实PLAIN-237与PLAIN-2859同文，本轮候选及分数相同，没有观察到旧结果错误；不能把设计风险写成已发生的错误。原evaluate_beir_retrieval按query文本调用没有错误，这次新增用途需要传ID。用户按docs/frozen_reranking_eval_task.md完成一个连贯工作单元：(1)给原评测增加仅关键字pass_query_id=False，默认回调保持(query,k)，开启时额外传query_id=当前行ID；(2)新增evaluate_frozen_reranking(frozen,reranker,ks=(10,100),*,batch_size=16)，内部回调按ID取候选并调用现有rerank，再复用原计分循环，原样返回eval_df／run。核心仍用户写，不增无用守卫或指定异常名称。当前加载辅助已可用，模型配置／CLI／保存辅助的重排扩展尚未实现，不让用户调用；本轮不需要模型、GPU、文件保存或改rerank_core。计时为候选访问＋重排，不含原Dense召回，固定100候选时Recall@100仍应为0.39709670188154617。验收意图已写在任务文档并在聊天说明，保存后先审语义再验证，辅助通过同步后再交用户任务。
+
 **2026-11-25用户纠正导师工作方式：不能为隐藏测试脚本反复改核心，先判断代码语义，再用测试复查。** 用户明确指出多次因助手测试错误或偏好导致核心冗杂，float(None)的TypeError不应被强制包装成ValueError。这是助手判断错误，不能只称“偏严”；此前真实get_embedding_dimension合法却被错误替身判错也是同类问题。已取消重排测试中输入／输出验证对TypeError和ValueError的统一名称硬限制，仍检查非法输入在predict前被拒绝、输出结构与有限性、ID／分数对应、来源保留／输入不变、单次调用及运行异常传播。测试失败先排查用例与替身，未解释的脚本不是需求来源；具体错误协议只有在真实调用方依赖时才明示约束。永久约定见13.12。
 
 本轮仅修助手测试及文档，不改用户rerank_core.py，不加新的校验分支或引入新模块。现有isnan(x)或not isfinite(x)中的isnan、以及对已有seen集合重复set(seen)，属于代码审查应指出的冗余，不当作返工门槛或另布置练习。冻结候选加载辅助此前仅阅读设计资料，尚未实现；原项目目标和路线保留，先落实此检查方式再继续。当前核心已完成，不能再次以旧异常名称要求用户返工。

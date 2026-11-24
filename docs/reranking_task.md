@@ -1,5 +1,7 @@
 # Cross-Encoder重排任务
 
+**当前衔接，2026-11-25：** 冻结候选加载辅助已实现，真实324题／32400候选已只读恢复，6项关联检查通过；当前用户按[冻结重排评测任务](frozen_reranking_eval_task.md)在benchmark_eval.py接入可选query_id传递和复用原评分循环的重排包装函数。原检索评测没错，新增用途需要ID。模型／CLI／重排保存扩展仍待后续，不调用不存在接口，暂无真实重排成绩。
+
 **导师检查方式修正，2026-11-25。** 用户明确反对由不可见测试要求核心迁就错误异常约定。TypeError／ValueError按语义使用，不强制统一名称；本轮测试只核对非法输入／输出确实被拒绝、候选与分数对应、来源／输入不变、模型调用次数和运行异常传播。先审实际代码与API，再验证；若测试假设错，修测试，不反复改正确实现。用户无需再加异常包装，核心本轮不修改。此原则覆盖下文旧的强制ValueError要求，详见PROJECT_CONTEXT第13.12节。
 
 **2026-11-25最终验收：纯函数12项全部通过，真实重排模型尚未接入。** 原分数转换可保留Python原生TypeError／ValueError，撤回此前强制统一ValueError的验收要求；这是助手测试过严，不是重排算法错误。[Python异常说明](https://docs.python.org/3.12/library/exceptions.html#TypeError)区分类型不适当与值不合法。非法字段仍需在predict前拒绝，其他语义／调用次数／输入不变性要求不变。用户函数原逻辑未改，助手仅清理无用logging／空白，函数AST一致；最终SHA=1e04ef1809434bb57a30bc0a9cd903f597a29491c0d1c679d99793a86f1c32dc。记录results/rerank_core_validation_accepted.json和最终源码快照。当前完成归档同步，下一步先补冻结候选加载与评测辅助，再交入口接线；暂无真实重排效果。下文失败修订均为历史，旧“必须包装ValueError”条款失效。
