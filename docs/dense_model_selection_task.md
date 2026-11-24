@@ -1,5 +1,20 @@
 # Dense模型选型：接入可切换的固定配置
 
+## 当前结果：GPU预检03通过，准备完整Dense dev
+
+2026-11-24，用户在提交b4625a2的源码上完成真实GPU预检03，独立核验通过。设备为RTX4090／cuda:0，权重BF16，完整4096维，输入上限8192。3633篇文档最长2335 tokens，324条dev查询最长40 tokens，两类均0截断；实际只编码前两篇和最长文档、第一条原query，没有运行检索或评分。
+
+| 实测对象 | FP32后处理前的范数 | 后处理后的范数 |
+| --- | --- | --- |
+| 3篇文档 | 0.9986501650～1.0032141011 | 0.9999999706～0.9999999825 |
+| 1条查询 | 0.9993850897 | 1.0000000312 |
+
+这支持低精度归一化偏差的判断，FP32输出适配已在真实GPU路径通过；02没有保存的原始范数仍不能回填。峰值GPU已分配14.65656GiB、预留14.99023GiB；整进程5.93秒、峰值主机RSS6226840KiB、退出0。小批正文0.54619秒、单query0.03104秒是样本耗时，不能当稳定逐题检索延迟、全库编码时间或效果成绩。
+
+独立记录results/nfcorpus_qwen3_8b_preflight_03_validation.json核对8份源码／事前快照、输入、模型配置和项目缓存路径；17份原基线／缓存及4份失败日志资源均未变。03报告／日志／资源的SHA-256分别为274e36e0aa43173000b7b6ec4e1fcf994a86fcbcfd3ba475b73eaedba5bb48e3、9df12a2fb8e8e377f9c2879e898f62ecf620432fad49bb812d292277209ba5c1、3554f84f1d380e2609796d014a7b90c2d4992a6e1aaf3e89ddb9bb558212aabf。原始产物留本地，不提交权重或结果大文件。
+
+当前只启动末节nfcorpus_dense_qwen3_8b_dev_01，保持同一语料、原query、qrels、Top100、nDCG／Recall@10和@100，与已完成BGE Dense对照。BGE512有330篇超限，Qwen8192为0；模型、分词器、指令、长度和输出数值处理属于整套profile，不能把分数变化单独归因于参数量。以下接入和预检经过为历史，不要求再次下载或重跑03。
+
 ## 当前已验收：共享FP32输出适配及正式入口接线
 
 最新复验：用户已为getattr补默认None，入口15项全部通过，记录results/embedding_output_entry_validation_02.json；此前27项适配／缓存／编排／预检检查也通过。助手仅清理入口无用导入、注释旧参数与尾部空白，未改用户逻辑，最终入口SHA=9ca5bf87531b3adbda70371687bd5ffd442c261d8a972f927d5cb35394e52ce9。原BGE缓存指纹与17历史保护文件保持不变。汇总results/embedding_output_normalization_accepted.json。先同步本单元，再运行末节GPU预检03，无权重验收不代表修复后的GPU输出已经通过。
@@ -74,7 +89,7 @@ HuggingFaceEmbeddings.model_kwargs传给SentenceTransformer构造器，所以Qwe
 
 代码通过后先提交同步GitHub，再提供用户可见终端的固定版本下载、小批预检和正式dev命令；预检记录模型设备、dtype、维度、归一化、长度／截断和GPU内存。正式使用新run_name与新文档缓存，先NFCorpus，不直接重编码783847行医学主库。官方test和MIRAGE仍不运行；rerank函数接口继续保留，真实重排等待Dense选型结果。
 
-## 当前下一步：用户终端小批预检03
+## 已完成：用户终端小批预检03
 
 **2026-11-24下载验收完成。** 固定版本已下载至项目cache，下载日志17/17完成，索引要求的4个权重分片共15,134,634,568字节，逐个SHA-256匹配内容寻址文件名，未完成分片为0；results/qwen3_8b_download_validation.json保存核验结果。通过项目包装器离线读取AutoConfig成功，配置和全部权重均在项目内。本次只检查文件和配置，没有加载权重，不能作为显存或效果成绩。
 
@@ -111,3 +126,18 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/tim
 验收观察：status=passed、实际CUDA设备、torch.bfloat16权重、4096维、实际输入上限8192、3633文档／324 dev查询，文档样本形状最多3×4096、query为1×4096，数值有限且L2范数接近1。document_vectors及query_vectors各有output_normalization，保存before_norm_min／max和after_norm_min／max，只有本轮真实结果才能确认偏差与修复，不能回填CPU模拟值。超限文档／查询数按真实分词结果核查，不提前填写0；峰值GPU字节不能称为进程RSS。失败保留日志，不改CPU或缩模型冒充通过。同名预检报告拒绝覆盖，重跑用新后缀。
 
 用户返回输出或“好了”后，助手先读实际报告、日志和资源，检查配置与输入身份、样本和显存；只有通过并同步后，再给完整3633文档／324题的Qwen Dense dev运行命令。当前不自动执行正式开发集，更不先重编码医学主库。
+
+## 当前下一步：用户终端完整Dense dev
+
+预检通过后已准备独立回执results/nfcorpus_dense_qwen3_8b_dev_01_run_audit.json及12份代码／配置快照。25份历史基线、缓存、失败与预检产物受保护。新Qwen文档缓存初始不存在，计划指纹f57e042cca31d1d4e4fcc61d84d576d2b6ad4b247c7490d03188c16144fd54c1，最终矩阵应为3633×4096 float32；原BGE缓存保留。文档仍每512条提交检查点，实际GPU batch=1。
+
+```bash
+# 从项目目录运行正式开发集，显式提供配置目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 使用已通过预检的固定模型配置，保存资源、实时日志及独立结果。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/time -v -o results/nfcorpus_dense_qwen3_8b_dev_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_benchmark_eval.py --method dense --config configs --config-embedding-model qwen3_8b --data-dir data/external/nfcorpus/prepared/nfcorpus --split dev --cache cache/embeddings --run-name nfcorpus_dense_qwen3_8b_dev_01 2>&1 | tee results/nfcorpus_dense_qwen3_8b_dev_01_run.log
+```
+
+用户自行在可见GPU终端执行，助手不代跑。预期先完成3633条文档向量，再出现324题查询进度及四项指标，保存results／run／summary、终端日志和GNU time资源。返回后先用原qrels独立复评分、核对逐题和完整缓存，再与BGE比较效果与延迟。整进程含首次文档编码，逐题延迟包含query编码而不含建库；GPU预检显存与本轮主机RSS各按各自范围报告。当前不加重排或RRF、不跑test／MIRAGE、不重编码医学主库。

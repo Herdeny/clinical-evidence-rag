@@ -6,6 +6,10 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-24最新实测：Qwen预检03通过并独立核验，下一步用户终端跑完整NFCorpus Dense dev。** 真实执行提交b4625a2，RTX4090／cuda:0、BF16权重、4096维、8192输入上限。3633文档／324 dev查询的最大token为2335／40，均0截断；实际仅编码MED-10／MED-14／最长MED-957及原query PLAIN-1。文档归一化前范数0.9986501650037067～1.0032141011444935，FP32处理后0.9999999705619592～0.9999999824791376；query前0.9993850897037317、后1.000000031221733。该实测支持此前低精度归一化偏差判断，不能倒填为02原始向量的数值。峰值GPU已分配15737360384字节（14.65656GiB）、预留16095641600字节（14.99023GiB）；进程5.93秒、RSS6226840KiB、退出0。正文小批0.54619秒、单query0.03104秒只为样本计时，不当稳定查询延迟或全库性能。记录results/nfcorpus_qwen3_8b_preflight_03_validation.json：8份代码与运行前快照、输入、配置、17原结果／缓存及4份失败日志资源均通过；03独立日志无ValueError，终端开头错误属旧输出。弃用提示未阻断。
+
+**当前用户任务：** 同步后运行nfcorpus_dense_qwen3_8b_dev_01，完整3633文档／324 dev、原始query、Top100、同一qrels与四指标，不同时加RRF／重排／改写，不运行test／MIRAGE或医学全库。正式命令显式--config configs、--config-embedding-model qwen3_8b及项目缓存包装器，见docs/dense_model_selection_task.md末节。运行回执和12份代码快照已准备，保护25份历史产物；Qwen文档缓存初始不存在，计划指纹f57e042cca31d1d4e4fcc61d84d576d2b6ad4b247c7490d03188c16144fd54c1，3633×4096 float32。助手未加载模型或代跑GPU。用户返回后核对5个正式产物、输入／代码身份、全部324题／Top100、完整新矩阵、原qrels重评分、逐题增益与成本；仍无Qwen检索成绩。BGE512有330篇截断、Qwen8192本库0截断，应比较整套profile，不将差异独归8B容量。以下“预检03待运行”均为历史。
+
 **2026-11-24当前验收：共享FP32输出适配及用户入口接线均通过，下一步用户终端预检03。** 用户已为getattr补默认None，入口15项全部通过；此前适配6／缓存8／编排9／预检4项共27项也通过。助手仅清理入口未使用HFE导入、旧注释参数与尾部空白，未改用户逻辑。最终入口SHA=9ca5bf87531b3adbda70371687bd5ffd442c261d8a972f927d5cb35394e52ce9。原BGE指纹4aa...与17历史保护文件保持不变；Qwen的float32_l2_v1实际策略及适配类进入缓存身份，BF16权重／8B／4096维／8192上限不变。记录results/embedding_output_entry_validation_02.json及results/embedding_output_normalization_accepted.json，无权重通过不代表真实GPU修复已通过。
 
 **当前用户任务：** 提交同步后，按docs/dense_model_selection_task.md末节通过bash scripts/project_env.sh离线运行nfcorpus_qwen3_8b_preflight_03。03回执和源码快照已准备，01／02日志及资源保留。预检最多编码3篇正文＋1条原query，统计3633文档／324 dev长度；document_vectors和query_vectors分别记录output_normalization的before／after范数。返回后核查实际CUDA／BF16／维度／长度、前后范数、截断与峰值GPU内存，不回填CPU模拟值，不把进程RSS称作GPU显存。只有真实预检通过归档同步，才给正式Qwen Dense dev命令，不跑test／MIRAGE或医学主库编码。以下“getattr待修／入口待接线”为历史。本次数值边界问题记ENG-023，辅助与用户接线分工分别说明。

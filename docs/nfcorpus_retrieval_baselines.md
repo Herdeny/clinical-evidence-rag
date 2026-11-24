@@ -77,4 +77,4 @@ python -m scripts.evaluation.validate_beir_run nfcorpus_bm25_dev_01 --checked-on
 
 Dense沿用相同语料、原始query、dev划分与Top-100预算。使用已缓存BAAI/bge-small-en-v1.5，固定revision=5c38ec7c405ec4b44b94cc5a9bb96e735b38267a，文档和查询编码使用CUDA；文档batch8、查询batch1，归一化，查询使用既定BGE前缀。向量相似度与Top-K仍使用现有NumPy实现。
 
-原始全文继续保留。固定模型输入上限512 tokens，已有冻结分词器诊断显示330篇标题加正文超过该长度；Dense编码允许模型截断，BM25使用全文，因此记录这项输入处理差异。NFCorpus自身3,633×384缓存已完成并由RRF复用，已有医学主库783,847行缓存未参与该轮。下一步固定Dense Top100，只加入重排并仍返回100条：候选集合不变时Recall@100应保持不变，关注nDCG@10、Recall@10及成本。方法固定后再处理test与MIRAGE正式评测，不用测试集选择参数。
+原始全文继续保留。固定BGE输入上限512 tokens，冻结分词器诊断显示330篇标题加正文超限；Dense允许截断，BM25用全文，因此记录差异。NFCorpus自身3,633×384缓存已完成并由RRF复用，医学主库783,847行缓存未参与该轮。当前先独立比较Qwen3-Embedding-8B的完整Dense dev配置；其真实GPU预检03通过，输入上限8192、最长正文2335 tokens、0截断，完整开发集检索成绩仍未产生，详见[模型选型任务](dense_model_selection_task.md)。模型选定后再固定Top100加重排，若仍返回100条Recall@100应保持不变，关注前部排序与成本。方法固定后再处理test和MIRAGE，不用测试集选择参数。
