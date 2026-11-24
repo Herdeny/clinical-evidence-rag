@@ -58,11 +58,13 @@ eval_df每查询一行，列为query_id、query、retrieved_ids、scores、laten
 
 验收先用临时查询、标签和假retrieve_fn，无模型运行：两查询中一条按等级正确排序检出全部相关文档，另一条返回空；结果恰两行，前者四指标为1、后者为0，各指标均值0.5；每题调用一次、原query不变、K=max(ks)，run保留实际float分数。交换不同相关等级文档顺序应降低nDCG而不改变召回；重复ID及非有限分数应明确拒绝。用户保存后助手检查实际源码并验证，再接真实BM25开发集、Dense与RRF入口及保存，不直接消耗test。
 
-## 当前任务：公开基准运行入口
+## 已验收：公开基准运行入口
+
+2026-11-24复验：既有6方法全部通过，源码SHA61477fca26a322e10aa30dcbff649d12390204e46f133013f9fc3a43355ed87e。覆盖三方法索引一次初始化、Dense第二轮文档缓存复用、当前corpus路径、元数据、默认与显式CLI参数及无效方法拒绝。诊断results/benchmark_entry_validation.json及revision1。所有输入为临时材料，模型是假向量编码器；无真实权重／GPU或公开查询运行。按约定先提交推送后交用户在终端跑BM25 dev。
 
 评测节点777d784已同步GitHub。保存辅助已在retrieval_results_io.py中实现save_beir_results(result_df,run,*,config,run_name,result_dir)，6项新检查及6项旧保存检查全部通过；不调用模型或检索器，不重新计算逐题指标。助手准备好该辅助后再交接用户入口，避免引用尚不存在的函数。
 
-用户新建 /home/wzh/clinical-evidence-rag/run_benchmark_eval.py，实现main(method,data_dir,split,cache_dir,run_name)，返回保存辅助的summary，再添加__main__参数解析。使用argparse、pathlib.Path、functools.partial及现有项目模块；Dense继续使用langchain_huggingface.HuggingFaceEmbeddings。不要从Notebook导入。
+用户已完成 /home/wzh/clinical-evidence-rag/run_benchmark_eval.py，接口为main(method,data_dir,split,cache_dir,run_name)，返回保存辅助的summary，再添加__main__参数解析。使用argparse、pathlib.Path、functools.partial及现有项目模块；Dense继续使用langchain_huggingface.HuggingFaceEmbeddings。不要从Notebook导入。
 
 执行顺序：校验method为dense／bm25／rrf；load_beir_dataset(data_dir,split=split)读取配套语料与当前查询；在查询循环外构建所需索引并用partial得到retrieve_fn；evaluate_beir_retrieval(queries_df,qrels,retrieve_fn,ks=(10,100))；调用save_beir_results(eval_df,run,config=config,run_name=...,result_dir=root/results)，最后返回summary。
 
@@ -77,6 +79,23 @@ CLI提供--method（默认bm25）、--data-dir（Path，默认root/data/external
 验收先用临时BEIR目录、真实小型BM25和假Dense模型检查参数到结果的完整链路，确认配置、文件、预算与索引只建一次；用户先写完整入口，不由助手代写。通过并同步后再给用户可见终端命令跑真实BM25 dev，继而Dense与RRF。test与MIRAGE当前不运行。
 
 保存辅助写入三个文件：{run_name}_results.jsonl保留全部逐题字段；{run_name}_run.json保留题号到文档和检索分数；{run_name}_summary.json保存全部查询的指标均值、耗时、方法配置、评分包版本、输入文件SHA。当前没有任何真实NFCorpus模型成绩；辅助测试的0.5仍是临时验收值。
+
+## 当前任务：用户终端运行 BM25 dev
+
+入口验收后先提交并同步GitHub，再执行下面命令。该轮使用配套3633篇文档、324条dev查询和11385条标注，CPU BM25一次建索引，每题返回最多100条；指标由已验收函数和真实pytrec_eval计算。当前没有预设分数，也不以临时两题的0.5作为真实期望。
+
+输入已按固定清单验证SHA，9份执行源码已快照。启动回执results/nfcorpus_bm25_dev_01_run_audit.json明确标记尚未开始。由用户在可见终端执行，助手不另开后台任务。
+
+```bash
+# 从项目目录运行，让日志路径对应本轮身份。
+cd /home/wzh/clinical-evidence-rag
+# 保留管道前方Python运行失败的退出状态。
+set -o pipefail
+# 运行完整dev，保存进程资源统计与实时终端输出。
+/usr/bin/time -v -o results/nfcorpus_bm25_dev_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_benchmark_eval.py --method bm25 --data-dir data/external/nfcorpus/prepared/nfcorpus --split dev --run-name nfcorpus_bm25_dev_01 2>&1 | tee results/nfcorpus_bm25_dev_01_run.log
+```
+
+成功后results下生成同前缀的_results.jsonl、_run.json、_summary.json，以及上面保存的_run.log、_resources.txt。返回终端打印的指标或说明运行结束，助手读取本地文件核验；如失败，保留日志并按本轮运行记录排错，不静默删除失败题或覆盖旧结果。正式数据第一次运行在此时才开始，test与MIRAGE仍未参与。
 
 ## 后续接入保持同一接口
 
