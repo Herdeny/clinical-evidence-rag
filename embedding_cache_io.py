@@ -108,6 +108,12 @@ class DocumentEmbeddingCache:
             'document_input': 'text via HuggingFaceEmbeddings.embed_documents',
         # 结束上方的字典或集合。
         }
+        # 仅为声明输出适配策略的模型加入身份字段，旧BGE身份逐值保留。
+        output_normalization = getattr(embedding_model, 'output_normalization', None)
+        # 输出处理改变向量数值，必须和原生模型的文档缓存隔离。
+        if output_normalization is not None:
+            # 保存实际适配器的策略及版本，不依赖调用方另填描述。
+            config['output_normalization'] = output_normalization
         # 设置有序证据内容摘要：初始化 SHA-256 内容摘要。
         row_digest = hashlib.sha256()
         # 按证据实际行顺序读取 ID 和正文；不把 DataFrame 的行标签混入位置映射。

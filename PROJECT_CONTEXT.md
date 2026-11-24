@@ -6,6 +6,16 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-24当前验收：共享FP32输出适配及用户入口接线均通过，下一步用户终端预检03。** 用户已为getattr补默认None，入口15项全部通过；此前适配6／缓存8／编排9／预检4项共27项也通过。助手仅清理入口未使用HFE导入、旧注释参数与尾部空白，未改用户逻辑。最终入口SHA=9ca5bf87531b3adbda70371687bd5ffd442c261d8a972f927d5cb35394e52ce9。原BGE指纹4aa...与17历史保护文件保持不变；Qwen的float32_l2_v1实际策略及适配类进入缓存身份，BF16权重／8B／4096维／8192上限不变。记录results/embedding_output_entry_validation_02.json及results/embedding_output_normalization_accepted.json，无权重通过不代表真实GPU修复已通过。
+
+**当前用户任务：** 提交同步后，按docs/dense_model_selection_task.md末节通过bash scripts/project_env.sh离线运行nfcorpus_qwen3_8b_preflight_03。03回执和源码快照已准备，01／02日志及资源保留。预检最多编码3篇正文＋1条原query，统计3633文档／324 dev长度；document_vectors和query_vectors分别记录output_normalization的before／after范数。返回后核查实际CUDA／BF16／维度／长度、前后范数、截断与峰值GPU内存，不回填CPU模拟值，不把进程RSS称作GPU显存。只有真实预检通过归档同步，才给正式Qwen Dense dev命令，不跑test／MIRAGE或医学主库编码。以下“getattr待修／入口待接线”为历史。本次数值边界问题记ENG-023，辅助与用户接线分工分别说明。
+
+**2026-11-24最新入口复验：共享辅助已接线，剩getattr缺省回退一处。** 用户已保存run_benchmark_eval.py，SHA=c264c6fa5ab0cb5c521180dfd6c9e8b8caf552b57e0e0b209f0ccaa0606980c4。build_embedding_model(profile=embedding_profile)及Qwen输出策略记录正确，独立Qwen成功用例通过；原HFE导入和四行注释旧构造参数仅属可清理残留。入口测试已切到共享辅助，按实际profile模拟BGE无属性／Qwen有策略；新增完整profile传递及策略记录独立检查，共15项，11通过／4项被同一AttributeError阻断。第85行getattr(embedding_model,"output_normalization")缺第三默认参数，原生BGE无此属性时直接抛错，不能到else。保留用户if/else结构，给getattr默认None即可让BGE走model_native分支；若直接赋值才用model_native作默认，不要混淆两种结构。已使用真实HuggingFaceEmbeddings.model_construct复核同一行为，无权重／GPU，避免替身误判。记录results/embedding_output_entry_validation_01.json及_run.log；助手未改用户入口，不提交纠错阶段。下次保存重读并复验同一入口集，全部通过后同步，再准备预检03。
+
+**2026-11-24当前修订：预检02已成功加载Qwen并进入编码，但单位范数检查失败；先由用户完成共享输出适配接线。** 02日志显示4/4权重加载、3633文档／324 dev长度统计、3篇正文编码已到达检查器，随后退出1，未运行query编码／检索／评分，未生成通过JSON。旧检查未输出范数，不能声称已取得这三篇的实际偏差。已读本地Sentence Transformers5.7源码：Normalize和encode先按张量当前精度归一化，返回NumPy时才把BF16转FP32；precision=float32跳过输出量化，并不把之前的归一化算子升级。CPU合成100×4096的BF16双重归一化复现min=0.9980784463、max=1.0036273482，66行超过旧阈值；只作为机制复现，非真实Qwen样本测量。
+
+**辅助已写、核心待接线，纠错阶段未提交：** 新增embedding_adapter.py的build_embedding_model(profile)，原BGE使用原生HuggingFaceEmbeddings；Qwen显式output_normalization=float32_l2_v1，子类集中为文档／query在FP32再次归一化并记录前后范数，保留BF16权重、8B、4096维及原严格检查阈值。embedding_cache_io只为有策略的实际适配类添加身份字段，BGE指纹4aa...及17历史文件SHA均未变。预检已使用同一辅助并保存前后范数，错误也加入实际min／max。新增6项适配测试，加缓存8／编排9／预检4，共27项无权重通过；不代表GPU通过。记录results/embedding_output_normalization_validation.json。用户下一步只改run_benchmark_eval.py：导入build_embedding_model，将原四参数HFE构造替换为向辅助传所选embedding_profile，dense配置记录实际output_normalization（原生类无属性时model_native）。该入口尚未接入，不能声称预检和正式运行已经一致。用户保存后重读实际文件，补入口集成验收，通过后按约定提交推送，再准备预检03；02日志／资源不覆盖，不直接重跑原02命令。以下“等待预检02”均为历史。
+
 **2026-11-24最新：Qwen3-Embedding-8B项目内下载完整，等待用户重跑小批预检02。** 固定revision为1d8ad4ca9b3dd8059ad90a75d4983776a23d44af；download_02_project_cache日志显示17/17完成，索引要求的4个权重分片共15,134,634,568字节，逐分片流式SHA-256均与缓存内容哈希一致，该模型无.incomplete文件。核验记录results/qwen3_8b_download_validation.json。通过项目包装器离线AutoConfig读取成功，配置／分词器／权重全部位于项目cache；本次检查没有加载权重或执行GPU，不能称为Qwen效果或显存实测。
 
 **当前用户操作：** 用docs/dense_model_selection_task.md末节预检02命令，必须通过bash scripts/project_env.sh启动。预检01已经尝试并退出1，日志为离线文件缓存查找失败，未生成通过报告；保留01日志和资源记录，不覆盖。默认共享Hub下找不到该固定版本config／modules，项目包装器下二者及离线AutoConfig均成功，先统一缓存入口重试，不重新下载、不改模型或依赖。02回执为results/nfcorpus_qwen3_8b_preflight_02_run_audit.json。只有02真实GPU预检通过并同步后，才给正式Qwen Dense dev命令。以下“下载未完成／预检未执行”是历史记录，以本段为准。

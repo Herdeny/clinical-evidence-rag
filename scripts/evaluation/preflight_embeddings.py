@@ -14,8 +14,8 @@ import os
 import numpy as np
 # 读取真实GPU信息与权重精度，不改变驱动或模型规模。
 import torch
-# 复用成品入口的同一LangChain模型接口。
-from langchain_huggingface import HuggingFaceEmbeddings
+# 集中构造模型并选择同一输出适配策略，正式入口也应调用此辅助。
+from embedding_adapter import build_embedding_model
 # 保存Hub真实解析出的缓存路径，不读取认证信息。
 from huggingface_hub import constants as hub_constants
 # 复用已验收的BEIR读取器，只读取dev及其配套语料。
@@ -68,7 +68,7 @@ def check_vectors(values, rows, dimension):
     # 当前两套固定配置都要求单位向量。
     if not np.allclose(norms, 1.0, rtol=1e-3, atol=1e-5):
         # 显式暴露归一化偏差。
-        raise ValueError('Embeddings are not L2 normalized')
+        raise ValueError(f'Embeddings are not L2 normalized: min={norms.min():.9f}, max={norms.max():.9f}')
     # 保存数值检查摘要，不保存无用的完整向量。
     return {'shape': list(vectors.shape), 'dtype': str(vectors.dtype), 'all_finite': True, 'norm_min': float(norms.min()), 'norm_max': float(norms.max())}
 
@@ -95,8 +95,8 @@ def run_preflight(config_dir, data_dir, profile_name):
     print(f"加载固定模型：{profile['model_name']}", flush=True)
     # 记录实际加载开始时间。
     started = perf_counter()
-    # 只传入正式入口使用的四项模型构造参数。
-    model = HuggingFaceEmbeddings(**{key: profile[key] for key in ('model_name', 'model_kwargs', 'encode_kwargs', 'query_encode_kwargs')})
+    # 使用共享构造辅助，同时保留权重精度、prompt和输出策略。
+    model = build_embedding_model(profile)
     # 等待CUDA完成加载后再记录耗时。
     torch.cuda.synchronize(device)
     # 记录包含CPU初始化和GPU加载的实际耗时。
@@ -139,6 +139,8 @@ def run_preflight(config_dir, data_dir, profile_name):
     started = perf_counter()
     # 真实正文只调用一次编码接口。
     document_check = check_vectors(model.embed_documents(samples), len(samples), dimension)
+    # 保存正文输出归一化前后的实测范数，后续query不会覆盖此副本。
+    document_check['output_normalization'] = getattr(model, 'last_output_normalization', None)
     # 等待GPU完成再记录端到端小批耗时。
     torch.cuda.synchronize(device)
     # 这不是全库编码时间或逐题检索延迟。
@@ -147,6 +149,8 @@ def run_preflight(config_dir, data_dir, profile_name):
     started = perf_counter()
     # 查询采用dev第一条原文，不使用标签或答案。
     query_check = check_vectors([model.embed_query(questions[0])], 1, dimension)
+    # 查询也记录同一输出策略的实际效果。
+    query_check['output_normalization'] = getattr(model, 'last_output_normalization', None)
     # 等待查询编码完成。
     torch.cuda.synchronize(device)
     # 保存单条查询编码耗时，不声称稳定延迟。

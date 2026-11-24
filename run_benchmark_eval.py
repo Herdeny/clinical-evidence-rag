@@ -1,12 +1,12 @@
 import argparse
 from functools import partial
 import json
-from langchain_huggingface import HuggingFaceEmbeddings
 from pathlib import Path
 
 from benchmark_data import load_beir_dataset
 from benchmark_eval import evaluate_beir_retrieval
 from embedding_index import prepare_document_embeddings
+from embedding_adapter import build_embedding_model
 from retrieval_results_io import save_beir_results
 from retrieve_bm25 import build_bm25
 from retrieve_bm25 import retrieve_bm25
@@ -41,11 +41,8 @@ def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_emb
         }
 
     if method in ("dense", "rrf"):
-        embedding_model = HuggingFaceEmbeddings(
-            model_name=embedding_profile['model_name'],
-            model_kwargs=embedding_profile['model_kwargs'],
-            encode_kwargs=embedding_profile['encode_kwargs'],
-            query_encode_kwargs=embedding_profile['query_encode_kwargs']
+        embedding_model = build_embedding_model(
+            profile=embedding_profile
         )
 
         # 核对模型的真实维度、长度与配置一致
@@ -80,6 +77,10 @@ def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_emb
             "query_prefix": embedding_model.query_encode_kwargs["prompt"]
         }
 
+        if getattr(embedding_model, "output_normalization", None):
+            config["dense"]["output_normalization"] = embedding_model.output_normalization
+        else:
+            config["dense"]["output_normalization"] = "model_native"
 
     if method in ("bm25", "rrf"):
         bm25_results = build_bm25(corpus_df, k1=1.5, b=0.75, epsilon=0.25)

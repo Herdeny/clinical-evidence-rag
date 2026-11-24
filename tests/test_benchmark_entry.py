@@ -20,6 +20,8 @@ import unittest
 from unittest.mock import Mock, create_autospec, patch
 # 使用实际安装类的API规格，避免假模型误报合法的新方法名。
 from sentence_transformers import SentenceTransformer
+# 用实际共享辅助的签名检查入口传参，不加载模型。
+from embedding_adapter import build_embedding_model
 # 只构造无权重Pooling模块验证真实维度API，不加载预训练模型。
 from sentence_transformers.models import Pooling
 # 生成384维单位向量，不使用GPU。
@@ -124,15 +126,19 @@ class BenchmarkEntryTests(unittest.TestCase):
         # 保留所有假模型，检查文档编码复用。
         self.models = []
         # 模型工厂只产生本地数组。
-        def factory(**kwargs):
+        def factory(profile):
             # 使用入口实际传入的参数。
-            model = SyntheticEmbeddings(**kwargs)
+            model = SyntheticEmbeddings(**{key: profile[key] for key in ('model_name', 'model_kwargs', 'encode_kwargs', 'query_encode_kwargs')})
+            # 与实际适配器一致，原生模型没有该属性，Qwen显式声明输出策略。
+            if 'output_normalization' in profile:
+                # 不为BGE伪造属性，以便验证缺失时的真实回退路径。
+                model.output_normalization = profile['output_normalization']
             # 保存实例以便核对文档调用次数。
             self.models.append(model)
             # 返回与现有接口一致的假模型。
             return model
         # 只替换真实权重加载，缓存和检索仍使用真实实现。
-        self.model = self.start_patch("HuggingFaceEmbeddings", side_effect=factory)
+        self.model = self.start_patch("build_embedding_model", side_effect=factory)
         # 保留真实分批编码缓存，并观察实际调用路径。
         self.prepare = self.start_patch("prepare_document_embeddings", wraps=entry.prepare_document_embeddings)
         # 保留真实小语料BM25构建。
@@ -309,6 +315,23 @@ class BenchmarkEntryTests(unittest.TestCase):
         # 验证成功路径，避免只测试必填声明而遗漏实现。
         self.assert_summary(summary, 'dense')
 
+    # 独立验证Qwen共享辅助接线，不让BGE回退错误掩盖这条成功路径。
+    def test_qwen_shared_factory_receives_profile_and_records_policy(self):
+        # 只运行微型Qwen输入，不加载真实模型。
+        summary = self.invoke('dense', 'qwen_shared_factory', profile='qwen3_8b')
+        # 读取当前完整配置，而非复制近似参数。
+        expected = json.loads(PROFILE_PATH.read_text(encoding='utf-8'))['qwen3_8b']
+        # 按实际函数签名绑定位置或关键字参数，两种写法都允许。
+        args, kwargs = self.model.call_args
+        # 入口应传入完整profile，使预检与正式运行共享输出策略。
+        self.assertEqual(inspect.signature(build_embedding_model).bind(*args, **kwargs).arguments['profile'], expected)
+        # 整个评测只构造一个模型。
+        self.assertEqual(self.model.call_count, 1)
+        # 保存的元数据应对应实际适配器。
+        self.assertEqual(summary['config']['dense']['output_normalization'], 'float32_l2_v1')
+        # 正式缓存仍贯通完整4096维。
+        self.assertEqual(list(summary['config']['dense']['embeddings_shape']), [4, 4096])
+
     # Qwen必须贯通4096维、真实配置及独立缓存，第二次不重复文档编码。
     def test_qwen_profile_metadata_dimensions_and_reuse(self):
         # 先建立原BGE临时缓存作为身份对照。
@@ -333,6 +356,8 @@ class BenchmarkEntryTests(unittest.TestCase):
             self.assertEqual(dense[key], expected[key])
         # 前缀摘要必须等于真正的查询编码参数。
         self.assertEqual(dense['query_prefix'], expected['query_encode_kwargs']['prompt'])
+        # 正式入口记录实际输出策略，原生BGE应有明确回退值。
+        self.assertEqual((legacy['config']['dense']['output_normalization'], dense['output_normalization']), ('model_native', 'float32_l2_v1'))
         # 原BGE和Qwen不能混用缓存。
         self.assertNotEqual(legacy['config']['dense']['embeddings_cache']['fingerprint'], dense['embeddings_cache']['fingerprint'])
         # 首次Qwen从零开始，重复Qwen则实际命中完整缓存。
@@ -373,9 +398,9 @@ class BenchmarkEntryTests(unittest.TestCase):
             # 每个分支独立显示失败原因。
             with self.subTest(changed=changed):
                 # 这个构造器仍只创建无权重假对象。
-                def mismatch_factory(**kwargs):
+                def mismatch_factory(profile):
                     # 保留入口实际提供的参数。
-                    model = SyntheticEmbeddings(**kwargs)
+                    model = SyntheticEmbeddings(**{key: profile[key] for key in ('model_name', 'model_kwargs', 'encode_kwargs', 'query_encode_kwargs')})
                     # 只改一项返回值以检测对应核对逻辑。
                     if changed == 'dimension':
                         # 4097与配置的4096不同。

@@ -1,5 +1,21 @@
 # Dense模型选型：接入可切换的固定配置
 
+## 当前已验收：共享FP32输出适配及正式入口接线
+
+最新复验：用户已为getattr补默认None，入口15项全部通过，记录results/embedding_output_entry_validation_02.json；此前27项适配／缓存／编排／预检检查也通过。助手仅清理入口无用导入、注释旧参数与尾部空白，未改用户逻辑，最终入口SHA=9ca5bf87531b3adbda70371687bd5ffd442c261d8a972f927d5cb35394e52ce9。原BGE缓存指纹与17历史保护文件保持不变。汇总results/embedding_output_normalization_accepted.json。先同步本单元，再运行末节GPU预检03，无权重验收不代表修复后的GPU输出已经通过。
+
+预检02已成功加载固定Qwen权重并进入正文向量检查，随后因范数超出阈值退出1，未生成通过JSON。实际样本偏差未被旧错误消息保存，不能凭报错填写数值。本地5.7源码与CPU合成复现表明：BF16张量先归一化、最后转NumPy的FP32，可能保留约千分之几的范数误差；encode的precision=float32不强制前面的运算使用FP32。CPU合成范数范围0.9980784463～1.0036273482，不是Qwen实测结果。
+
+助手已新增embedding_adapter.py。build_embedding_model只接收完整profile一个参数，返回兼容原LangChain接口的对象；bge_small保留原类，qwen3_8b通过显式output_normalization=float32_l2_v1选择适配类，文档和查询均在输出端用FP32再次归一化。权重仍为BF16。辅助保留归一化前后范数，拒绝零／非有限向量，不放宽单位范数阈值。缓存记录实际策略与适配类，原BGE身份保持不变。新增6项适配检查与既有缓存8／编排9／预检4项共27项通过，17历史保护文件SHA未变。真实GPU修复验证尚未执行。
+
+**用户已完成run_benchmark_eval.py的三处接线：**
+
+1. 用embedding_adapter中的build_embedding_model替换原HuggingFaceEmbeddings导入。
+2. 原模型构造位置调用build_embedding_model，参数为已选出的embedding_profile；其内部负责提取四项构造参数和输出策略，不再在入口重复展开。
+3. config["dense"]新增output_normalization，记录实际模型的同名属性；原生模型没有此属性时用model_native。可用getattr(对象, 属性名, 默认值)，不将这个输出策略写入model_kwargs或encode_kwargs。
+
+入口接线属于用户实现，适配辅助由助手提供，详见ENG-023。当前代码单元已通过验收，下一步仅做用户终端真实GPU验证，保留01／02失败记录，不运行正文全库缓存或正式dev。后文下载命令保留为历史过程；当前直接运行末节预检03。
+
 2026-11-24，用户在查询模型候选后要求继续。当前工作单元改为先接入Qwen3-Embedding-8B的独立Dense对照，再固定候选测试重排。核心由用户编写；助手提供已核查的静态配置、测试与结果辅助。现有BM25／Dense／RRF成绩和两份BGE文档缓存均保留。本轮尚未加载、下载或运行Qwen模型，也没有新模型成绩。
 
 **代码验收revision5已通过。** 用户已将CLI调用与必填config_dir的六参数接口对齐，缓存编排9项、入口14项全部通过；包括Qwen4096维、两配置缓存隔离、再次零文档编码、实际元数据、参数拒绝和CLI转发。核心由用户完成，助手仅移除未使用的logging.config／matplotlib rainbow导入并清理行尾空白。源码SHA：embedding_index.py为dbdd1baca3a0dc85bd8853c8c6cb8763919af8c59eb4eec2cc075bc559e6fd49，run_benchmark_eval.py为b6d2472690e42519657766e5f8f2c56a1302b7938c38f271d06503ec228f6f3b。两路旧结果10文件及NFCorpus缓存2文件SHA未变。记录results/embedding_model_integration_validation.json及revision5_accepted快照；假模型通过不表示Qwen已下载或实测。
@@ -58,11 +74,11 @@ HuggingFaceEmbeddings.model_kwargs传给SentenceTransformer构造器，所以Qwe
 
 代码通过后先提交同步GitHub，再提供用户可见终端的固定版本下载、小批预检和正式dev命令；预检记录模型设备、dtype、维度、归一化、长度／截断和GPU内存。正式使用新run_name与新文档缓存，先NFCorpus，不直接重编码783847行医学主库。官方test和MIRAGE仍不运行；rerank函数接口继续保留，真实重排等待Dense选型结果。
 
-## 当前下一步：用户终端小批预检02
+## 当前下一步：用户终端小批预检03
 
 **2026-11-24下载验收完成。** 固定版本已下载至项目cache，下载日志17/17完成，索引要求的4个权重分片共15,134,634,568字节，逐个SHA-256匹配内容寻址文件名，未完成分片为0；results/qwen3_8b_download_validation.json保存核验结果。通过项目包装器离线读取AutoConfig成功，配置和全部权重均在项目内。本次只检查文件和配置，没有加载权重，不能作为显存或效果成绩。
 
-预检01实际已运行并以退出码1结束：离线查找模型文件失败，没有生成通过JSON。默认共享Hub下确实找不到该固定版本config／modules，项目包装器下均可解析；先统一入口重试，不重下模型或升级依赖。原01日志和资源保留，新运行使用02编号，results/nfcorpus_qwen3_8b_preflight_02_run_audit.json记录代码、配置及历史保护文件身份。以下下载迁移经过仅作过程记录，不要求再次下载。
+预检01以退出码1结束于离线文件查找；02通过项目缓存加载并编码正文，随后单位范数检查失败。两轮日志与资源均保留。共享FP32输出适配和入口接线通过后使用03编号，results/nfcorpus_qwen3_8b_preflight_03_run_audit.json及对应源码快照记录模型／配置／辅助与入口、输入及历史保护文件身份。以下下载迁移经过仅作过程记录，不要求再次下载。
 
 **缓存位置修正，2026-11-24。** 用户要求模型文件只放clinical-evidence-rag项目内。此前共享Hub目录的这次Qwen下载已精确中断，模型目录及锁文件原子迁至cache/huggingface/hub，本次Xet日志迁至cache/huggingface/xet/logs；完整文件、未完成分片及快照相对链接均保留，旧Qwen目录已移走。原BGE缓存复制到项目内并逐实体文件核对SHA，原共享BGE保留。操作记录results/model_cache_migration_2026-11-24.json，路径验证results/project_model_cache_validation.json；旧文档矩阵指纹和17个历史保护文件均未变。迁移不表示下载完成，未完成分片的复用由下载后端决定。
 
@@ -72,7 +88,7 @@ HuggingFaceEmbeddings.model_kwargs传给SentenceTransformer构造器，所以Qwe
 
 4项无权重检查已通过：换行／prompt／分词批次、向量异常拒绝、替换CUDA和模型后的完整报告／样本范围、无GPU时初始化前失败。--help也已检查。本轮工具没有加载预训练权重或运行真实GPU；显存和性能只在用户执行后报告。huggingface-hub0.36.2的hf入口存在，下载参数已核查，下载现已核验完成。
 
-下面保留已完成的下载命令，后续重新准备环境时可复现；当前直接执行其后的预检02命令。下载量与实际显存分开记录。原download_01日志保留为迁移前记录，完成日志使用02_project_cache；TQDM_POSITION=-1确保经tee时也显示单文件进度。
+下面保留已完成的下载命令，后续重新准备环境时可复现；当前直接执行其后的预检03命令。下载量与实际显存分开记录。原download_01日志保留为迁移前记录，完成日志使用02_project_cache；TQDM_POSITION=-1确保经tee时也显示单文件进度。
 
 ```bash
 # 从项目目录保存本轮下载日志。
@@ -89,9 +105,9 @@ cd /home/wzh/clinical-evidence-rag
 # 保留Python失败时的管道退出状态。
 set -o pipefail
 # 预检使用已下载的固定权重，禁止依赖链再联网探测。
-HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/time -v -o results/nfcorpus_qwen3_8b_preflight_02_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u -m scripts.evaluation.preflight_embeddings --config-dir configs --data-dir data/external/nfcorpus/prepared/nfcorpus --profile qwen3_8b --output results/nfcorpus_qwen3_8b_preflight_02.json 2>&1 | tee results/nfcorpus_qwen3_8b_preflight_02_run.log
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/time -v -o results/nfcorpus_qwen3_8b_preflight_03_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u -m scripts.evaluation.preflight_embeddings --config-dir configs --data-dir data/external/nfcorpus/prepared/nfcorpus --profile qwen3_8b --output results/nfcorpus_qwen3_8b_preflight_03.json 2>&1 | tee results/nfcorpus_qwen3_8b_preflight_03_run.log
 ```
 
-验收观察：status=passed、实际CUDA设备、torch.bfloat16权重、4096维、实际输入上限8192、3633文档／324 dev查询，文档样本形状最多3×4096、query为1×4096，数值有限且L2范数接近1。长度统计中的超限文档／查询数按真实分词器结果核查，不提前填写0；峰值GPU字节不能称为整进程RSS。失败保留终端日志，不改成CPU或缩小模型冒充通过。同名预检报告拒绝覆盖，重跑用新的后缀。
+验收观察：status=passed、实际CUDA设备、torch.bfloat16权重、4096维、实际输入上限8192、3633文档／324 dev查询，文档样本形状最多3×4096、query为1×4096，数值有限且L2范数接近1。document_vectors及query_vectors各有output_normalization，保存before_norm_min／max和after_norm_min／max，只有本轮真实结果才能确认偏差与修复，不能回填CPU模拟值。超限文档／查询数按真实分词结果核查，不提前填写0；峰值GPU字节不能称为进程RSS。失败保留日志，不改CPU或缩模型冒充通过。同名预检报告拒绝覆盖，重跑用新后缀。
 
 用户返回输出或“好了”后，助手先读实际报告、日志和资源，检查配置与输入身份、样本和显存；只有通过并同步后，再给完整3633文档／324题的Qwen Dense dev运行命令。当前不自动执行正式开发集，更不先重编码医学主库。

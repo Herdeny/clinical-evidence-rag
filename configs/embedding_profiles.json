@@ -23,6 +23,7 @@
     "model_name": "Qwen/Qwen3-Embedding-8B",
     "dimension": 4096,
     "max_seq_length": 8192,
+    "output_normalization": "float32_l2_v1",
     "model_kwargs": {
       "device": "cuda",
       "revision": "1d8ad4ca9b3dd8059ad90a75d4983776a23d44af",

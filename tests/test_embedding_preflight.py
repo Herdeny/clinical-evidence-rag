@@ -128,9 +128,9 @@ class EmbeddingPreflightTests(unittest.TestCase):
         # 创建可观察的假模型工厂。
         models = []
         # 保存真实收到的构造参数。
-        def factory(**kwargs):
+        def factory(profile):
             # 不下载或加载权重。
-            model = FakeEmbeddings(**kwargs)
+            model = FakeEmbeddings(**{key: profile[key] for key in ('model_name', 'model_kwargs', 'encode_kwargs', 'query_encode_kwargs')})
             # 供后续检查编码范围。
             models.append(model)
             # 返回合成接口。
@@ -138,7 +138,7 @@ class EmbeddingPreflightTests(unittest.TestCase):
         # CUDA元数据全部由测试提供，不探测真实设备。
         cuda = {'is_available': lambda: True, 'current_device': lambda: 0, 'reset_peak_memory_stats': lambda device: None, 'synchronize': lambda device: None, 'get_device_name': lambda device: 'synthetic GPU', 'get_device_properties': lambda device: SimpleNamespace(total_memory=1000), 'max_memory_allocated': lambda device: 500, 'max_memory_reserved': lambda device: 600}
         # 同时替换模型构造和所有CUDA调用。
-        with patch.object(preflight, 'HuggingFaceEmbeddings', side_effect=factory), patch.multiple(torch.cuda, **cuda), redirect_stdout(StringIO()):
+        with patch.object(preflight, 'build_embedding_model', side_effect=factory), patch.multiple(torch.cuda, **cuda), redirect_stdout(StringIO()):
             # 使用真实读取器、静态配置及数值检查。
             report = preflight.run_preflight(self.config_dir, self.data_dir, 'qwen3_8b')
         # 运行状态和实际报告设备均来自本次测试输入。
@@ -157,7 +157,7 @@ class EmbeddingPreflightTests(unittest.TestCase):
     # 没有CUDA时在模型初始化前明确失败。
     def test_missing_gpu_fails_before_model_initialization(self):
         # GPU不可见由测试模拟，避免读取真实环境状态。
-        with patch.object(torch.cuda, 'is_available', return_value=False), patch.object(preflight, 'HuggingFaceEmbeddings') as factory:
+        with patch.object(torch.cuda, 'is_available', return_value=False), patch.object(preflight, 'build_embedding_model') as factory:
             # 不允许静默回退CPU运行。
             with self.assertRaisesRegex(RuntimeError, 'GPU terminal'):
                 # 只读取当前静态配置。
