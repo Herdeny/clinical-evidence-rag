@@ -46,7 +46,7 @@ configs/reranker_profiles.json保存三种重排候选的固定版本与运行�
 
 ## 评测核验工具
 
-scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度；batch1保留首两对加最长一对，batch>1选出最长batch_size对实际覆盖完整批次，报告实际样本数及是否覆盖整批，记录CUDA／BF16／预算／显存及来源指纹，不运行完整排序评分。Qwen4B batch1与8B batch4真实预检01均已通过；8B预检已分配17.567636GiB、预留18.158203GiB，其完整dev也已实测核验。下一步是4B batch4预检02，保留旧01。tests/test_reranker_preflight.py现5项CPU检查，命令与范围见reranking_runtime_task.md的4B批次控制节。
+scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度；batch1保留首两对加最长一对，batch>1选出最长batch_size对实际覆盖完整批次，报告实际样本数及是否覆盖整批，记录CUDA／BF16／预算／显存及来源指纹，不运行完整排序评分。Qwen4B batch1、8B batch4预检01及4B batch4预检02均已通过；4B batch4预检已分配9.615714GiB、预留10.130859GiB，下一步完整dev02，保留旧01。tests/test_reranker_preflight.py现5项CPU检查，命令与范围见reranking_runtime_task.md的4B batch4完整控制节。
 
 scripts/evaluation/validate_beir_run.py已适配frozen_rerank：固定候选集合／模型实际配置与原最大K召回不变量核对，按重排入口实际--profile检查资源命令，旧方法保留--method。4项新临时检查通过；正式完整运行结束后再核对原始产物，不为适配核验工具修改用户CLI。
 
