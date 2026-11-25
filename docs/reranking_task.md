@@ -1,5 +1,7 @@
 # Cross-Encoder重排任务
 
+**2026-11-25首个完整重排结果已核验：** Qwen4B在同一Qwen8B Dense Top100／324 dev上的nDCG@10=0.409974、Recall@10=0.206984，相对+4.53%／+7.69%，Recall@100保持0.397097。batch1新增重排平均3.258秒/题、整轮17:40.07；逐题存在下降，当前不是最终模型结论。详见[实测归档](nfcorpus_retrieval_baselines.md#qwen3-reranker-4b实测收益与代价)。下一步按原计划[下载8B](reranking_runtime_task.md#qwen8b同候选对照先下载)，独立预检后同候选比较，BGE对照保留。
+
 **2026-11-25真实预检通过，待完整dev运行：** Qwen4B在4090实际CUDA BF16／4096／batch1下完成32400联合长度扫描（最大2414，0超限）及3对真实打分，预检峰值已分配8.063GiB。报告及输入／源码身份核对通过，不能把样本结果当排序效果。下一步在同一Qwen8B Dense Top100上完整重排324道dev，运行名nfcorpus_rerank_qwen3_4b_dev_01，见[完整命令](reranking_runtime_task.md#完整开发集重排)。离线核验工具已适配profile入口，4项新检查通过，用户核心未修改。
 
 **2026-11-25模型已下载，预检待用户运行：** 固定Qwen4B的17文件／2个BF16分片已核对完整，索引、内容哈希和离线分词器通过。助手新增scripts/evaluation/preflight_reranker.py，4项工具＋支持6项＋入口4项共14项辅助检查通过；实际模型、联合输入长度与显存仍需用户终端预检。工具先扫描32400联合长度，再对最多3对样本真实打分，命令见[真实预检](reranking_runtime_task.md#真实预检)。当前没有真实重排效果。

@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25Qwen4B完整dev已验收。** 同候选324题四指标0.4099740875251688／0.2069843548748328／0.37949912510243394／0.39709670188154617，原Recall@100保持；nDCG@10相对+4.53%、Recall@10+7.69%。新增重排均值3.258秒/题，整轮17:40.07，nDCG@10有124升／106降／94同，独立核验通过。详见nfcorpus_retrieval_baselines.md，原结果保留。下一步按既定候选对照先下载8B，见文末；不因批次咨询擅自改配置。
+
 **2026-11-25真实预检01通过。** 4090／cuda:0、BF16／4096／batch1及原始logit配置与实际模型一致；32400联合输入最小93、最大2414、P95=654、超限0。3对实际分数5.0625／3.75／-4.375，显存峰值已分配8.063002GiB、预留8.265625GiB。报告与源码／输入／命令／资源身份核对通过，进程15.04秒、退出0。记录results/nfcorpus_rerank_qwen3_4b_preflight_01_validation.json。下一步运行文末“完整开发集重排”；小批显存和耗时不代表完整运行成本。
 
 **2026-11-25预检工具已实现。** 助手新增scripts/evaluation/preflight_reranker.py，4项新辅助检查与支持6项／入口4项共14项通过，CLI帮助可运行，尚未执行真实GPU预检。工具沿用同一配置、加载及候选来源；统计全部联合长度后，只打分最多3对样本。完整用户命令见文末“真实预检”。根目录核心保持原样。
@@ -160,3 +162,28 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/tim
 逐题latency_ms覆盖候选副本读取＋重排，原Dense召回均值53.69274598138244ms单独报告；这不是完整两阶段端到端实测。GNU time提供整进程时间和主机RSS，本次正式入口没有采集全程GPU峰值，不拿预检显存或主机RSS代替。模型4B／8B／BGE后续同候选对照可沿用该入口，每套配置先独立预检。
 
 结果返回后，由助手使用已适配新入口的scripts/evaluation/validate_beir_run.py独立重新评分、核对候选集合与预检固定配置、输入／源码／旧产物身份及实际资源命令。核验工具按--profile识别重排入口，旧BM25／Dense／RRF仍按--method，不让用户为旧脚本新增无意义参数。新增4项临时核验检查通过，结果results/rerank_validator_support_validation.json；不是完整真实运行的提前验收。
+
+## batch_size影响与后续性能对照
+
+2026-11-25用户询问提高batch_size对速度与结果的影响，属于概念与实验设计咨询，未授权修改当前固定运行配置。当前nfcorpus_rerank_qwen3_4b_dev_01仍使用已通过预检的batch1；配置和已准备回执保持原样。
+
+当前ST5.7.0的predict先按输入长度估计排序，再每batch_size个句对执行一次前向，最后恢复原输入顺序；每题业务层predict仍调用一次。100候选时batch1／4／8／16分别需要100／25／13／7个前向批次。较大批次通常有利于吞吐与摊薄调度开销，但不会按倍数线性提速；批内按最长输入填充，长短混合可能增加无效计算。模型权重不会随批次复制，额外显存主要受激活、注意力与临时计算空间及长度影响，不能把8.06GiB峰值直接乘以batch倍数。
+
+理论上推理批次不改变单个句对的任务或模型权重；实际BF16批处理的算子、填充及浮点归约可能产生分数差异，接近分数可能交换名次。因此不能承诺结果逐位相同，批次增大也不是排序质量提升方法。依据[PyTorch2.6批量数值精度说明](https://docs.pytorch.org/docs/2.6/notes/numerical_accuracy.html#batched-computations-or-slice-computations)及[HF填充说明](https://huggingface.co/docs/transformers/main/pad_truncation)。
+
+后续若做批次性能对照，固定模型版本、指令、正文、长度和候选，仅调整batch，记录暖机后耗时／吞吐／显存以及分数差、排名和指标变化，独立命名并保留原batch1结果。当前预检最多3个打分样本，即使把profile批次改成8也只实际跑3个样本，不能由此声称验证过完整batch8；测试更大批次必须扩大样本，覆盖足够数量的较长输入，并在同一批句对上比较。相关加速与数值差异尚未在本项目实测。
+
+## Qwen8B同候选对照：先下载
+
+按已经确定的Qwen4B／8B／BGE对照继续。4B当前取得的是公开dev平均收益，尚不足以选定最终重排模型；8B需要在相同候选、正文与评分协议下实测。8B配置已经存在，用户核心入口共用，不改4B配置或旧结果。当前固定8B快照尚未下载，先由用户终端执行：
+
+```bash
+# 进入项目目录，保持缓存和结果位置一致。
+cd /home/wzh/clinical-evidence-rag
+# 保留下载失败时的管道退出状态。
+set -o pipefail
+# 下载既定8B重排候选，显示单文件进度并保留日志和资源。
+HF_HUB_DISABLE_PROGRESS_BARS=0 TQDM_POSITION=-1 bash scripts/project_env.sh /usr/bin/time -v -o results/qwen3_reranker_8b_download_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/hf download Qwen/Qwen3-Reranker-8B --revision 77d193c791ed757ca307ee72715aa132723da912 2>&1 | tee results/qwen3_reranker_8b_download_01_run.log
+```
+
+快照会进入项目cache/huggingface/hub/models--Qwen--Qwen3-Reranker-8B/snapshots/77d193c791ed757ca307ee72715aa132723da912。下载后先检查分片和固定版本，再以profile=qwen3_8b独立做真实预检；不能把4B的长度／显存值写成8B实测。随后用同一份冻结候选完整重排，比较收益与成本，原4B数据和batch1基线始终保留。
