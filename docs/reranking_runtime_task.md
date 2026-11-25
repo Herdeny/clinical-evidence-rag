@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25当前节点：8B batch4真实预检01已通过并离线核对，下一步完整324题重排。** RTX4090／cuda:0、BF16／SDPA／4096，全部32400联合输入无超限；4个最长样本2414／2412／2411／2410 tokens，实际一个完整batch4，float32有限分数-3.75／-6.9375／-7.8125／-6.40625。峰值已分配17.567636GiB、预留18.158203GiB，整进程16.81秒、退出0；4个样本已用固定分词器独立重算长度，源码／输入／候选／配置／日志身份一致。记录results/nfcorpus_rerank_qwen3_8b_preflight_01_validation.json，尚无8B完整排序成绩。下一命令见“Qwen8B完整开发集重排”，不重新跑Dense，旧4B batch1结果保留；预检峰值不是全程峰值。
+
 **2026-11-25当前节点：8B下载核对通过，等待用户运行batch4预检。** 19个文件／5权重分片16377142272字节，固定版本、内容哈希、索引与BF16头部和离线分词器均一致，无未完成分片；下载23:50.88、退出0，记录results/qwen3_reranker_8b_download_validation.json。助手只做文件和CPU检查，没有加载8B权重。读取到用户把三个profile的batch_size改为4，已保留；预检辅助现在可实际覆盖完整配置批次，命令和验收范围见“Qwen8B下载验收与完整批次预检”。原4B batch1成绩保持，当前batch4尚无真实预检或完整结果。以下较早的节点记录保留其当时状态。
 
 **2026-11-25Qwen4B完整dev已验收。** 同候选324题四指标0.4099740875251688／0.2069843548748328／0.37949912510243394／0.39709670188154617，原Recall@100保持；nDCG@10相对+4.53%、Recall@10+7.69%。新增重排均值3.258秒/题，整轮17:40.07，nDCG@10有124升／106降／94同，独立核验通过。详见nfcorpus_retrieval_baselines.md，原结果保留。下一步按既定候选对照先下载8B，见文末；不因批次咨询擅自改配置。
@@ -222,6 +224,35 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh \
 验收看status=passed、actual_device=cuda:0、实际BF16、4096联合预算、32400对无超限，以及batch_check里configured_batch_size=4、scored_pair_count=4、full_batch_exercised=true和4个有限原始logit。真实GPU峰值以这次报告为准，不能复制4B值。若显存不足，保留本轮失败日志后判断实际原因和批次；不静默回退CPU或改配置续跑。
 
 通过后才准备完整8B重排。由于旧4B结果是batch1，后续作模型本身效果／成本对照时应同batch补齐4B；当前不同模型且不同批次的运行可分别展示，但不能把差异全归因于参数规模或模型。原batch1产物和当时的执行快照继续保留，不覆盖旧结果或改写旧指标。
+
+## Qwen8B完整开发集重排
+
+2026-11-25真实预检01已通过。独立核对当前profile、固定源码／输入指纹、原候选归属、实际设备／精度／激活／指令，以及终端JSON和资源中的全部显式参数。四个样本均为原候选中的MED-957，查询ID分别PLAIN-2639／3371／3381／770；用已下载固定快照AutoTokenizer的模型模板对原query和完整正文重算长度，得到2414／2412／2411／2410，与报告一致。核验没有加载神经网络／执行GPU，也没有重新扫描全部32400对长度。
+
+预检已分配18863105024字节（17.567635536193848GiB）、预留19497222144（18.158203125GiB）；整进程16.81秒、主机RSS5454612KiB、退出0。加载1.335685963秒、四对样本1.431585001秒只属于本次预检，不推断全量速度、模型收益或全程显存。负分是合法raw_yes_minus_no_logit，不要求概率范围、非负或L2。
+
+本轮正式名称nfcorpus_rerank_qwen3_8b_dev_01，模型／版本／batch4／指令／4096预算保持刚通过的配置。继续读取同一份Qwen Dense原Top100，324题／32400对，只运行一个8B重排模型；不重新构造embedding／Dense。交命令前，助手先提交同步节点，再在已忽略的results中保存实际十文件源码快照、三输入身份及旧结果／缓存内容指纹的_run_audit.json，供运行后核对，不要求用户新增核心代码。
+
+```bash
+# 进入项目目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 复用原候选与当前8B batch4配置，记录完整结果、资源和实时日志。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh \
+  /usr/bin/time -v \
+  -o results/nfcorpus_rerank_qwen3_8b_dev_01_resources.txt \
+  /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_reranking_eval.py \
+  --config-dir configs \
+  --data-dir data/external/nfcorpus/prepared/nfcorpus \
+  --receipt results/nfcorpus_qwen3_8b_frozen_candidates.json \
+  --profile qwen3_8b \
+  --run-name nfcorpus_rerank_qwen3_8b_dev_01 \
+  --result-dir results \
+  2>&1 | tee results/nfcorpus_rerank_qwen3_8b_dev_01_run.log
+```
+
+验收要求进程正常完成、324题各返回原100候选、summary／results.jsonl／run.json／resources.txt／run.log五产物齐全且有限，独立用原dev qrels重算四项指标并与逐题及均值对应。返回全部原100候选时Recall@100应保持0.39709670188154617；nDCG@10／Recall@10是否提升看实际输出，不预设8B胜出。记录逐题升降、均值／中位数／P95重排延迟和整进程成本。候选读取＋重排计时排除原Dense检索、模型／文件加载及评分；正式入口未采集全程GPU峰值，不拿预检值或主机RSS代替。8B batch4与旧4B batch1先分别报告，最终模型对照需同batch补齐4B，不能把两种变化合称模型规模带来的提升。
 
 ## Jina候选调研：尚未接入或实测
 
