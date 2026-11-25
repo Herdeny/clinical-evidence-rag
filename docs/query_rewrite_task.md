@@ -10,6 +10,32 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
+## 当前进度：核心已通过本地检查，下一步独立入口
+
+2026-11-25，用户完成query_rewrite.py，本轮审阅源码SHA-256为eaba30a9f7efa31a0850e72a6f475eb0869fcff3c7b1a3d465889ca5fd20daed。以真实ChatPromptTemplate、RewriteResult及AIMessage搭配最小FakeLLM检查六类响应：有效改写、仅首尾空白差异、空白查询、空白原因、解析异常、parsed缺失，均符合本文返回协议；另检查四个非法输入零模型调用、网络异常原样传播及未知用量保留None。成功／失败返回均可JSON序列化，已有响应保留原问题及两类元数据，每次模型invoke一次。假响应中的token值只是检查数据，不是实际用量，助手未调用API或GPU；这不证明真实服务兼容性、医学语义保真或检索收益。原用户核心未修改，未新增隐藏测试脚本。离线观察归档results/query_rewrite_core_validation_01.json。
+
+助手补充configs/llm_profiles.json作为公开配置；用户下一步新建run_query_rewrite.py，不从Notebook导入对象。核心rewrite_query的接口和8字段返回不变。当前尚无此入口或真实单题输出，不提前执行批量改写。
+
+### 独立入口的完整任务
+
+实现main(config_dir, *, profile_name, query)，其中config_dir使用Path，profile_name指定配置名，query是单条原问题。按以下顺序完成：
+
+1. 使用json.loads和Path.read_text(encoding="utf-8")读取config_dir / "llm_profiles.json"，按profile_name选择配置。
+2. 用Path(__file__).resolve().parent定位项目根目录；在main内调用load_dotenv(root / ".env", override=False)，供SDK读取DEEPSEEK_API_KEY。不要打印密钥、环境内容或完整客户端对象，配置文件也不存密钥。助手未读取.env。
+3. 从langchain_deepseek导入ChatDeepSeek，以ChatDeepSeek(**profile)构造客户端。**把字典键值展开为关键字参数；本地0.1.4已核实接受这些参数，api_base是本安装类实际使用的地址字段。不要再套一层with_structured_output，核心已经负责包装。
+4. 从query_rewrite导入rewrite_query，只调用一次rewrite_query(query, llm=llm)，main返回其字典，不增加重试、检索、循环或回退。
+5. 在if __name__ == "__main__"里用argparse接收--config-dir（type=Path）、--profile（默认deepseek_flash）、--query（required=True），传给main，使用json.dumps(result, ensure_ascii=False, indent=2)输出。允许配置目录默认项目configs，但实际运行命令必须显式传--config-dir。不在导入模块时构造客户端或调用API。
+
+所需库：标准库argparse／json／pathlib.Path，已安装的dotenv.load_dotenv及langchain_deepseek.ChatDeepSeek，加上自己的query_rewrite.rewrite_query。不需要SentenceTransformer、LangGraph或新依赖。
+
+### 参数理由与真实调用验收
+
+公开配置沿用早先B1的deepseek-flash、temperature=0、max_tokens=2048、非思考模式，并使用官方api_base。2026-11-25再次核对[模型说明](https://api-docs.deepseek.com/quick_start/pricing/)及[工具调用说明](https://api-docs.deepseek.com/guides/tool_calls/)，当前接口支持该模型及非思考工具格式。temperature=0用于减少采样变化，不承诺完全确定；2048是输出上限而非每次实际消耗；extra_body显式禁用思考。入口操作参数timeout=60限制等待，max_retries=0禁用SDK自动重试，以免一次函数invoke背后出现额外自动请求。服务端模型名称是API别名，不等同固定开源模型revision，保留真实响应metadata，不虚构锁定版本。配置不含密钥。
+
+用户先写入口并保存，助手审核且同步后再给终端执行命令；助手不发起真实请求。首个输入固定为：Which reporting framework applies to a chest CT report with a pulmonary nodule when the examination purpose is not stated? 它只用于验证缺失条件是否保留，不是新增人工标注或检索成绩。
+
+真实单题验收看status=ok、两个非空字段、Python计算的changed、真实usage_metadata及response_metadata，确认检查目的缺失仍然缺失，没有被改成筛查或偶发发现，也没有生成医学回答。changed=False合法，具体措辞不设标准答案；finish_reason若为tool_calls可能是结构化工具格式的正常结束，不强求stop。若失败，保留本次真实错误和用量再排查。成功后才做保存辅助和少量开发题，后续批量编排仍由用户完成。当前不加载向量或运行324次API，执行命令继续通过bash scripts/project_env.sh。
+
 ## 文件和库
 
 用户写query_rewrite.py；本轮不读取数据文件、不保存JSONL，也不从Notebook导入。现有检索／重排模块不改。后续运行入口负责构造ChatDeepSeek客户端并作为llm参数传入，与已有reranker参数的依赖注入方式相同；本函数不读取密钥、不在导入时创建客户端。

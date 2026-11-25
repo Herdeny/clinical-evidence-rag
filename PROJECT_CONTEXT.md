@@ -6,6 +6,10 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新：用户query_rewrite.py已通过本地验收，下一步用户写独立单题入口。** 第48行最终为not schema_response or responses["parsing_error"] is not None，错误转字符串／缺失回退、空白内容说明均已完成。已实际检查12个输入情形：六类结构化响应、四个非法输入、原网络异常传播、未知用量保留None；语法／真实提示对象／8字段返回／JSON序列化／单次invoke／原问题和raw元数据保留均通过。源码SHA=eaba30a9f7efa31a0850e72a6f475eb0869fcff3c7b1a3d465889ca5fd20daed，记录results/query_rewrite_core_validation_01.json。只用CPU假响应，虚拟token不作成本，无API／GPU、医学语义或召回收益结果；助手未改用户核心、未增加永久隐藏测试。普通拼写／未用导入不阻断验收，不再让用户返工。
+
+助手补充configs/llm_profiles.json和docs/query_rewrite_task.md完整入口任务：沿用B1 deepseek-flash／temperature0／max_tokens2048／非思考，api_base=https://api.deepseek.com；操作参数timeout60、max_retries0避免隐藏重试。已复核官方模型／工具说明及本地ChatDeepSeek字段，无密钥写入配置、未读取.env或构造客户端。真实API别名不等于锁定模型revision。用户下一步新建run_query_rewrite.py，实现main(config_dir,*,profile_name,query)：读取配置→显式加载项目.env（override=False，SDK取DEEPSEEK_API_KEY）→ChatDeepSeek(**profile)→调用rewrite_query一次→返回字典；CLI显式--config-dir，含--profile／--query，打印JSON。入口导入时不调用API，不从Notebook导入，不再重复套结构化包装；保存后先审代码、同步，再交用户终端单题命令。首个问题为Which reporting framework applies to a chest CT report with a pulmonary nodule when the examination purpose is not stated?，检查目的缺失必须保留，changed=False合法，tool_calls可为正常结构化结束原因。目前入口尚未实现；真实单题成功后再补保存辅助／少量dev题／用户批量编排，不直接跑324次。原向量缓存与冻结候选未改。本工作单元将先归档提交同步再交付下一项，状态以git实际结果为准；以下旧节点为历史记录。
+
 **2026-11-25最新：BGE完整dev已核验，重排候选对照完成；下一阶段查询改写。** nfcorpus_rerank_bge_v2_m3_dev_01执行提交4823b0e7f43449eebf0e14e539150088fd47024f，同一原Qwen Dense Top100／324题／32400对，实际BF16／SDPA／4096／batch4、无指令／Identity。四指标0.3294191948049945／0.14729743122167865／0.3376506725571584／0.39709670188154617；对原Dense分别-16.006481%／-23.363434%／-8.773941%／0。nDCG@10逐题71升／164降／89同，Recall@10为49／124／151；Top10正命中252→239、补回9丢22，Top100始终292命中／32零命中。新增阶段均值267.75750053387543ms、中位264.22249699680833、最近秩P95=314.3434670055285；进程91.03秒（1:31.03）、RSS4105064KiB、退出0且无中断。比同阶段4B batch4／8B batch4分别快12.0863／20.2796倍，但当前设置降低前三项指标并新增成本，保留负向对照、不进入默认主线。
 
 _validation.json严格核对当前五原件／原qrels逐题四指标／原候选集合／实际命令与固定配置、三输入／十文件快照及当前代码、86份新周期保护文件通过，原始产物未改。该passed仅属于BGE当前保护周期；报告显式继承旧4B资源异常一项，unbroken_history_claimed=false，旧回执原预期与异常原件均未改，不能宣称历史已恢复。_comparison.json含对Dense和三套Qwen的完整逐题差值。助手未运行模型或GPU、未改核心或核验器。全程GPU峰值未测，不用预检值替代。网络已恢复：用户提示重试后已成功推送4823b0e，用户正式运行也显示Everything up-to-date；之前TLS失败只属历史事件。
@@ -829,6 +833,8 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 教学任务要形成可复用的产物，例如带来源和位置的章节记录，而不是停留在打印结果。提前设计范围以支撑已确定的后续步骤为限，不为假想需求扩建大框架，也不跳过必要的学习和验收。
 
 ### 13.8 全部任务按成品方向增量开发，保持标准连续
+
+用户于2026-11-25补充要求：任务的逻辑顺序、参数选择理由和验收标准必须直接写在聊天里，不能只给文档链接让用户自行寻找。文档用于持久记录；核心指导本身在聊天中自洽完整。此后检查代码时也直接说明实际问题和修订要求，不只把结论写进文件。
 
 用户于 2026-11-17 明确强调：“其他任务也是一样，我们现在就在做项目，不要总是改标准。” 这是全项目约束，覆盖模型接口之外的全部任务，不能只记录成一次库选择偏好。
 
