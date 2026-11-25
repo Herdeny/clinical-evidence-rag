@@ -6,6 +6,12 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26最新：用户同题两组评测函数已验收，下一项写独立运行入口。** 已重读benchmark_eval.py，evaluate_query_rewrite_retrieval正确选取同8题原文／保存表达，使用同一qrels子集、retrieve_fn及ks调用公共评分两次，返回两组eval_df／run及query_inputs。ids用Series可迭代，isin也支持，不要求改成列表；局部seleted_qrels拼写不影响一致使用，不为测试改核心。A/B/C假检索及真实dev324＋保存8条的假检索均通过，后者16次调用、每次k100；原输入不变、旧公共评分及冻结重排函数AST未变。记录results/query_rewrite_paired_eval_validation_01.json，源码SHA=74f0a6e93044fa59a27a1b14b1c940069f988e4ad53f01c3b542e3e0f7b72720。仅CPU假检索，不是Dense实测收益。
+
+助手扩展原retrieval_results_io.save_beir_results：调用方可明确提供config.query_subset_ids，结果／run仍须完整覆盖这组题，摘要query_scope记录原划分数量和实际评测数量；未声明时保留整划分严格检查及旧摘要布局。临时3题fixture验证整集、显式2题子集及4种错误声明的写前拒绝；不为8题放宽成任意少题可保存，不改原评分逻辑或旧全量原问题核验脚本。新问题记ENG-027。
+
+下一用户任务新建run_query_rewrite_retrieval_eval.py，main(config_dir,data_dir,split,cache_dir,rewrite_path,run_name,result_dir,*,config_embedding_model="qwen3_8b")。读固定embedding配置／原BEIR数据／保存改写JSONL，一次构造模型并复用原corpus.jsonl的文档缓存，partial包装Dense，调用已验收两组函数，再用同一save_beir_results分别保存original／rewritten各三份。config明确8个query_subset_ids、完整dense元数据、改写来源路径及同一读取字节的SHA、query_inputs.to_dict(records)；改写只作检索表达，原题及qrels不变。CLI仅--config，--run-name仍可选且默认数据集_dense_配置_划分，两组前缀分别加_original／_rewritten；另--rewrite-results指向已有8条，当前不加limit。模型加载前保护六份JSON，后续用户运行命令再保护外层log／resources。先由用户写并保存，助手审核／CPU假依赖检查、提交同步后才给真实运行命令。完整逻辑、参数理由和验收必须直接在聊天说明；不代写入口、不重发DeepSeek、不重建文档向量或接重排。以下旧任务段落属于修订历史，不再作为当前待办。
+
 **2026-11-26当前：用户apply_query_rewrites已验收，下一项写同题两组评测编排。** 已重读125行，失败回退不再strip。实际A/B/C例子验证原文件顺序、非默认索引、原题含空白精确保留、成功表达清理、状态／来源、额外列及输入不变；重复record ID、未知ID、原文不匹配、空成功表达、未知status均拒绝，异常类型按现实现观察不强制另改。真实8条适配ID及文本完全对应原保存输出，原文件未改。用户标签llm_rewrite_query保留，任务文档同步使用，不为旧示例强制改名。benchmark_data.py SHA=482dea9c0f4c07e4eabb7551fd26b9af7892d4552273bc676b882ffcb698c03c，原loader AST对上一提交不变；记录query_rewrite_input_adapter_validation_01.json，派生nfcorpus_query_rewrite_dev_8_01_retrieval_inputs.jsonl。未调用API／GPU／embedding或做检索，不宣称收益；归档提交同步后再交下一函数。后面旧问题均属已解决修订记录。
 
 下一用户任务在benchmark_eval.py增加evaluate_query_rewrite_retrieval(queries_df,qrels,retrieve_fn,*,rewrite_records,ks=(10,100))，新增导入apply_query_rewrites。前三参数复用现有公共评测接口；原表及qrels现324、records现8，retrieve_fn是已构造的同一个检索函数对象。先适配得rewritten_queries_df8行，再ids=其id列表，原表用isin(ids).copy得original_queries_df8行，selected_qrels用{qid:qrels[qid] for qid in ids}保留同8题原文档等级。用同一retrieve_fn／selected_qrels／ks，分别调用既有evaluate_beir_retrieval两次，得到各8行eval_df和各8题run字典。返回{"original":{"eval_df":original_eval_df,"run":original_run},"rewritten":{"eval_df":rewritten_eval_df,"run":rewritten_run},"query_inputs":rewritten_queries_df}，其中DataFrame不能直接json.dumps，后续入口用既有保存辅助分别落盘。函数不读写文件、不构造模型、不调DeepSeek、不重复写评分公式或包装异常。保留失败回退题和原文来源；新query必须用真正Dense重检索，不沿用原冻结候选。当前只写函数保存，语义审查／最小CPU假检索后再接用户GPU入口；此新函数与入口尚未实现。聊天要按324→8→两组8的中间变量、对象类型、调用参数与返回逐步讲清，不重复抽象目标。
@@ -889,7 +895,7 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 - 当前仓库为https://github.com/Herdeny/clinical-evidence-rag，分支main，远端origin。用户已授权日常阶段提交和正常推送，不再每次重复询问。遇到远端更新先检查并正常整合，不擅自强制推送、覆盖他人提交或改写历史。
 - 提交范围是本阶段已验收的代码、相关测试和必要文档。尚未验收的新模块及无关改动保留本地。沿用.gitignore，原始语料、模型／向量缓存、环境凭证和本地生成结果不强制加入Git；验收规模与可复现步骤留在受版本管理的文档中。
 - 同步失败时如实说明已经完成本地提交还是尚未提交，以及失败原因；不能把仅本地commit称为已同步，也不能默认越过用户要求继续下一步。正常纠错与重试沿用本次授权。
-- 本次读取适配已在此前通过9项检查，现补做该验收节点的提交与同步；benchmark_eval.py仍是下一项待验收任务。
+- 当前读取适配和benchmark_eval.py两组编排均已验收；下一项为尚未实现的run_query_rewrite_retrieval_eval.py，仍须完成后先提交同步再真实运行。
 
 ### 13.10 模型按正式项目的任务效果选择，不默认偏向轻量
 

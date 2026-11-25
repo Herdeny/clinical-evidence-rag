@@ -5,8 +5,7 @@ from tqdm import tqdm
 from time import perf_counter
 from math import isfinite
 from rerank_core import rerank
-
-import retrieval_results_io
+from benchmark_data import apply_query_rewrites
 
 def evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10, 100), pass_query_id=False):
     if not ks or any(type(k) is not int or k <= 0 for k in ks) or len(ks) != len(set(ks)):
@@ -92,5 +91,18 @@ def evaluate_frozen_reranking(frozen, reranker, ks=(10, 100), *, batch_size=16):
     
     eval_df, run = evaluate_beir_retrieval(frozen.queries_df, frozen.qrels, retrieve_fn=retrieve_fn, ks=ks, pass_query_id=True)
     return eval_df, run
+
+def evaluate_query_rewrite_retrieval(queries_df, qrels, retrieve_fn, *, rewrite_records, ks=(10, 100)):
+    rewritten_queries_df = apply_query_rewrites(queries_df, rewrite_records) # 改写问题 DataFrame
+    ids = rewritten_queries_df["id"]
+    mask = queries_df["id"].isin(ids)
+    original_queries_df = queries_df[mask].copy() # 原始问题 DataFrame
+    seleted_qrels = {query_id: qrels[query_id] for query_id in ids}
+    original_eval_df, original_run = evaluate_beir_retrieval(original_queries_df, seleted_qrels, retrieve_fn, ks=ks)
+    rewritten_eval_df, rewritten_run = evaluate_beir_retrieval(rewritten_queries_df, seleted_qrels, retrieve_fn, ks=ks)
     
-    
+    return {  # 将两组评价结果交给后续运行入口。
+    "original": {"eval_df": original_eval_df, "run": original_run},  # 原问题组的指标表和排名。
+    "rewritten": {"eval_df": rewritten_eval_df, "run": rewritten_run},  # 新表达组的指标表和排名。
+    "query_inputs": rewritten_queries_df,  # 保留原问题、检索表达、来源与状态。
+}  # 其中包含DataFrame，后续由保存辅助分别落盘。

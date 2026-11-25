@@ -14,7 +14,11 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
-## 当前进度：检索输入适配已通过，下一步同题两组评测编排
+## 当前进度：同题两组评测编排已通过，下一步独立运行入口
+
+2026-11-26，用户evaluate_query_rewrite_retrieval已通过语义审查和CPU假检索核对，benchmark_eval.py SHA-256为74f0a6e93044fa59a27a1b14b1c940069f988e4ad53f01c3b542e3e0f7b72720。A/B/C例子验证同一子集／标签／函数／ks、成功表达与失败回退、两次公共评分及输入不变；真实dev324＋保存8条通过16次假检索接线，各次k100。ids为Series可正常迭代及供isin使用，局部变量拼写不影响结果，不修改正确核心迎合示例。旧公共评分和冻结重排AST未变。记录results/query_rewrite_paired_eval_validation_01.json；未加载Dense模型／GPU或调用API，不是检索效果结果。
+
+助手将save_beir_results扩展为支持明确的config.query_subset_ids。声明必须是非空、唯一且属于当前划分的题号列表；逐题表及run必须恰好覆盖该集合。摘要query_scope注明原划分数量与本次数量，原三份输入SHA仍保留；未声明仍要求整划分，不将漏题视为合法子集。临时fixture核对旧整集行为、显式子集及错误声明写前拒绝。该辅助改动不改变用户评分、错误类型或旧完整划分核验脚本；后者不应用于此次改写文本／子集实验。
 
 用户apply_query_rewrites已通过CPU数据检查，benchmark_data.py当前SHA-256为482dea9c0f4c07e4eabb7551fd26b9af7892d4552273bc676b882ffcb698c03c，原load_beir_dataset的AST对上一提交不变。A/B/C例子验证原表顺序和非默认索引、成功表达清理、失败原题精确保留（含首尾空白）、来源及状态、额外列和输入对象不变；重复记录ID、未知ID、原文不匹配、空成功表达和未知状态均拒绝。来源标签保留用户实现llm_rewrite_query（成功）／original_fallback（失败），不因此前示例叫llm_output要求返工。真实8条ID／原文／保存表达适配一致，原JSONL未改；记录results/query_rewrite_input_adapter_validation_01.json，派生输入nfcorpus_query_rewrite_dev_8_01_retrieval_inputs.jsonl。未调用API、模型或检索，没有新的Recall／nDCG结果。
 
@@ -125,13 +129,13 @@ fi
 
 接线时还要按返回ID筛选同一份qrels，满足现有evaluate_beir_retrieval对查询与qrels键集合一致的要求；原题组与改写组用相同8题、相同qrels和Qwen Dense配置，复用原文档向量，重新生成检索候选。已有原冻结Top100只作基线记录，不能当新表达已完成检索。apply_query_rewrites已实现并核对，仍无新Dense结果；324题完整比较待后续，8题只用于流程和逐题观察。
 
-## 下一项用户任务：evaluate_query_rewrite_retrieval
+## 已完成：evaluate_query_rewrite_retrieval
 
 在现有benchmark_eval.py增加evaluate_query_rewrite_retrieval(queries_df, qrels, retrieve_fn, *, rewrite_records, ks=(10,100))，前三参数沿用evaluate_beir_retrieval；新增导入benchmark_data.apply_query_rewrites。它编排同题原问题与保存表达两组评价，不构造模型、不读取或保存文件、不调用DeepSeek，实际检索由传入的retrieve_fn完成。先写函数保存、CPU假检索核对，之后才由用户入口加载同一Qwen模型／文档缓存真实运行。
 
 输入queries_df为原始324条表、qrels为324个题号映射到文档等级字典、rewrite_records为当前保存8条，retrieve_fn是已有可调用对象（接收query字符串与k，返回含id／score的候选列表），ks默认(10,100)。流程只有数据对齐与两次复用现有评分：
 
-1. rewritten_queries_df=apply_query_rewrites(queries_df,rewrite_records)，当前得到8行带original_query／query_source／rewrite_status的表。ids=rewritten_queries_df["id"].tolist()是8个字符串题号；并非按range(8)取qrels，也不更改问题ID。
+1. rewritten_queries_df=apply_query_rewrites(queries_df,rewrite_records)，当前得到8行带original_query／query_source／rewrite_status的表。用户ids=rewritten_queries_df["id"]为包含8个字符串题号的Series，供isin和后续迭代正常使用，无须改成tolist；并非按range(8)取qrels，也不更改问题ID。
 2. original_queries_df用queries_df["id"].isin(ids)筛选并.copy()，仍保留原query；与rewritten_queries_df对应同一8题和顺序。不能把整张324题原表同8题改写表比较均值。
 3. selected_qrels用{query_id:qrels[query_id] for query_id in ids}得到8个外层键；每题内层文档ID和相关等级原样保留。例如原qrels有A/B/C，ids为A/B，就只取qrels[A]和qrels[B]，不重新标注。现有公共评分函数要求这8键与查询ID集相同。
 4. 用同一个retrieve_fn和同一个selected_qrels／ks，分别调用evaluate_beir_retrieval(original_queries_df,...)与evaluate_beir_retrieval(rewritten_queries_df,...)。每次返回(eval_df,run)：eval_df为逐题指标／耗时表，run为题号→文档ID→检索分数字典。这里不另写检索循环或评分公式，不额外过滤失败回退题。
@@ -139,9 +143,43 @@ fi
 
 完整中间规模为原表324／原qrels324→适配表8／ids8→原题子表8／qrels子集8→两份各8行eval_df及两份各8个题号的run。相同检索器使两组使用同一模型／正文缓存／候选预算；8条未证明统计收益，仅用于接线和逐题差异。ks原样传给两组。原题数据／qrels／改写记录不修改，结果来源标签沿用用户已有llm_rewrite_query，不追溯改前一步实现；不新增异常包装或用旧测试限定风格。
 
-验收按实际语义看：同一批题、相同标签和检索函数、各调用公共评测一次；原题组收到原query，新表达组收到保存query；query_inputs保留原文及失败回退状态，完整返回两组表与run。保存后先读源码再做最小CPU假检索，不提前加载模型或运行GPU。当前此新函数及配套运行入口均未实现。
+验收按实际语义看：同一批题、相同标签和检索函数、各调用公共评测一次；原题组收到原query，新表达组收到保存query；query_inputs保留原文及失败回退状态，完整返回两组表与run。此函数已通过上文本地检查；配套运行入口仍待用户实现，没有真实改写召回结果。
 
-### 独立入口的完整任务
+## 下一项用户任务：run_query_rewrite_retrieval_eval.py
+
+用户新建项目根目录run_query_rewrite_retrieval_eval.py，职责是将已有模型／文档缓存、保存的改写、已完成的两组评测及保存辅助接起来。当前处理保存8条，后续换成324条文件仍走同一入口，不另写一套。main接口为main(config_dir, data_dir, split, cache_dir, rewrite_path, run_name, result_dir, *, config_embedding_model="qwen3_8b")，Path参数沿用现有入口。run_name传入main前按既有CLI规则确定，不加时间戳或改成必填。
+
+需要标准库argparse、json、hashlib、pathlib.Path、functools.partial；复用benchmark_data.load_beir_dataset、benchmark_eval.evaluate_query_rewrite_retrieval、embedding_adapter.build_embedding_model、embedding_index.prepare_document_embeddings、retrieve_core.retrieve、retrieval_results_io.save_beir_results。无新依赖；不需要ChatDeepSeek、dotenv或重新导入Notebook。
+
+完整控制流及中间对象：
+
+1. 从run_name生成两个前缀，分别为run_name加_original和_rewritten；检查两组_results.jsonl／_run.json／_summary.json共六个Path，任何已存在就先停止，放在模型构造之前。只检查实际六个输出，不为不存在的额外文件创建规则。外层日志／资源保护留在之后给用户的运行命令中。
+2. 读取config_dir/embedding_profiles.json，profiles是dict，embedding_profile是profiles[config_embedding_model]这一个配置dict，沿用原未知profile检查。load_beir_dataset(data_dir,split=split)返回corpus_df（3633行）、queries_df（324行）、qrels（324个外层键）。
+3. rewrite_bytes=rewrite_path.read_bytes()是bytes；decode("utf-8").splitlines()后每行是str，逐非空行json.loads得到dict，整批rewrite_records是list[dict]，当前8条。hashlib.sha256(rewrite_bytes).hexdigest()使用这次实际读取的同一份字节，记录来源文件身份；不在检索后再读另一版文件算指纹。后续子集由这些记录的题号确定，不再head(8)或加limit。
+4. build_embedding_model(profile=embedding_profile)只调用一次；模型真实维度和max_seq_length沿用run_benchmark_eval.py已有核对。prepare_document_embeddings只调用一次，传corpus_df、同一embedding_model、evidence_path=data_dir/"corpus.jsonl"、cache_dir、chunk_size=512、dimension=embedding_profile["dimension"]。返回embeddings（正常缓存命中为3633×4096的只读映射）和cache_info（dict）。正文文件及编码设置未变时复用Qwen缓存，query变化不应改变文档缓存身份；不得将evidence_path换成改写JSONL。
+5. 使用partial(retrieve, embedding_model=embedding_model, evidences=corpus_df, embeddings=embeddings)取得dense_retrieve_fn；它是一个可调用对象，尚未运行retrieve，调用时只需query和k。evaluate_query_rewrite_retrieval(queries_df,qrels,dense_retrieve_fn,rewrite_records=rewrite_records,ks=(10,100))返回paired字典；函数内部完成同8题筛选和16次检索，每次仍查全3633篇，不是重排旧候选。
+6. config保留run_benchmark_eval.py既有公共字段：dataset_name、data_dir（绝对路径字符串）、split、retrieval_method="dense"、ks=[10,100]、cache_path、corpus_text、query_template。dense子字典照原入口保留model_name／device／embedding_profile／embedding_dimension／model_kwargs／encode_kwargs／query_encode_kwargs／query_prefix／max_seq_length／embeddings_shape／embeddings_cache／output_normalization，不改变层级或命名。所有对象必须可JSON保存，不放模型、partial或DataFrame本身。
+7. 在config加query_subset_ids=paired["query_inputs"]["id"].tolist()，明确这次两组均评测哪8题。加rewrite_source字典，含path（rewrite_path.resolve字符串）、sha256（步骤3）、query_inputs（paired["query_inputs"].to_dict(orient="records")）。query_inputs此时是DataFrame，转换后是8个普通字典的列表，记录id／query／original_query／query_source／rewrite_status及已有额外列，不改原JSONL。
+8. 用for variant in ("original","rewritten")循环两次。group=paired[variant]是含eval_df和run的字典；group["eval_df"]是8行DataFrame，group["run"]是8题排名字典。每轮创建group_config={**config,"query_variant":variant}，用save_beir_results(group["eval_df"],group["run"],config=group_config,run_name=f"{run_name}_{variant}",result_dir=result_dir)保存三份。其返回是summary字典，存入summaries[variant]，循环后return summaries。不要直接json.dumps(paired)，不要再写一遍评分或改写逻辑。
+
+命令行参数保持现有拼法及可选方式：
+
+| 参数 | 类型／默认值 | 解析后用途 |
+| --- | --- | --- |
+| --config | Path，root/configs | args.config传config_dir；没有--config-dir别名 |
+| --data-dir | Path，root/data/external/nfcorpus/prepared/nfcorpus | 原始BEIR数据 |
+| --split | dev，可选train/dev/test | 原划分，子集另由改写记录决定 |
+| --cache | Path，root/cache/embeddings | 原文档向量缓存 |
+| --config-embedding-model | qwen3_8b，可选bge_small/qwen3_8b | 当前对照Qwen Dense；沿用现有参数名 |
+| --rewrite-results | Path，root/results/nfcorpus_query_rewrite_dev_8_01_results.jsonl | 已有保存记录，传rewrite_path |
+| --run-name | 可省略 | 显式值优先，否则f"{data_dir.name}_dense_{config_embedding_model}_{split}"；子输出再加_original／_rewritten |
+| --result-dir | Path，root/results | 保存位置 |
+
+CLI将上述值传给main，取得summaries后打印两组metrics即可；没有新的method选项或limit。以后传完整324条改写JSONL，其他逻辑不变。默认前缀如nfcorpus_dense_qwen3_8b_dev_original／nfcorpus_dense_qwen3_8b_dev_rewritten，不覆盖旧无后缀Dense结果；显式运行编号仍由真实命令给出。
+
+本轮验收：用户先写入口并保存；助手重新读取后用CPU假模型／缓存验证模型及文档缓存各构造一次、两组收到相同依赖、保存各8题、文件及配置可序列化、来源指纹来自实际读取内容、防覆盖在加载模型前生效。原始改写及数据不变，CLI用--config／可选run-name，无真实API或GPU。通过并提交同步后，才准备用户终端运行命令和独立逐题核验。真实8题仅是流程与个案对照，均值只能同8题比较，不能直接同旧324题均值比；检索计时不含此前改写API时间，不宣称端到端成本或全库临床有效性。
+
+## 已完成的单题入口任务（历史定义）
 
 实现main(config_dir, *, profile_name, query)，其中config_dir使用Path，profile_name指定配置名，query是单条原问题。按以下顺序完成：
 

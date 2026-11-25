@@ -292,6 +292,22 @@ def save_beir_results(result_df, run, *, config, run_name, result_dir):
     with inputs["qrels"].open(encoding="utf-8", newline="") as stream:
         # 只收集query-id，不向任何检索器传入标签。
         query_ids = {row["query-id"] for row in csv.DictReader(stream, delimiter="\t")}
+    # 保留原划分大小，显式子集不能冒写为完整划分。
+    split_query_ids = query_ids
+    # 只有调用方明确声明子集时才改变本次应覆盖的题号集合。
+    if "query_subset_ids" in config:
+        # 子集来自事先确定的问题身份，不从命中情况或指标反推。
+        subset_ids = config["query_subset_ids"]
+        # 要求可JSON记录的非空、唯一字符串列表，避免集合转换掩盖重复。
+        if not isinstance(subset_ids, list) or not subset_ids or any(not isinstance(identifier, str) or not identifier for identifier in subset_ids) or len(subset_ids) != len(set(subset_ids)):
+            # 错误属于子集声明的值，不修改或丢弃结果来补救。
+            raise ValueError("query_subset_ids必须为非空且唯一的字符串列表")
+        # 子集中的题必须属于所声明的原始划分。
+        if not set(subset_ids) <= split_query_ids:
+            # 拒绝跨划分或未知题号。
+            raise ValueError("query_subset_ids包含不属于当前划分的题号")
+        # 结果及run仍须完整覆盖明确声明的这一组题。
+        query_ids = set(subset_ids)
     # 文件、逐题结果与评分输入必须覆盖同一组题。
     if not isinstance(run, dict) or set(result_df["query_id"]) != query_ids or set(run) != query_ids:
         # 避免删除空命中或只保存容易题而改变分母。
@@ -370,6 +386,10 @@ def save_beir_results(result_df, run, *, config, run_name, result_dir):
     paths = {"results": output / f"{run_name}_results.jsonl", "run": output / f"{run_name}_run.json", "summary": output / f"{run_name}_summary.json"}
     # 汇总使用全部查询行，包括空命中题。
     summary = {"dataset_name": config["dataset_name"], "split": config["split"], "retrieval_method": config["retrieval_method"], "config": config, "document_count": len(document_ids), "query_count": len(records), "metrics": {name: sum(row[name] for row in records) / len(records) for name in metrics}, "latency_ms": {"mean": sum(row["latency_ms"] for row in records) / len(records), "median": float(pd.Series([row["latency_ms"] for row in records]).median()), "scope": latency_scope}, "scorer": {"package": "pytrec-eval-terrier", "version": version("pytrec-eval-terrier")}, "input_sha256": {name: {"path": str(path), "sha256": _sha256_file(path)} for name, path in inputs.items()}, "files": {name: str(path) for name, path in paths.items()}, "provenance": "learner-computed per-query metrics; helper validates, aggregates and saves"}
+    # 旧的整划分输出保持原布局，子集摘要额外明确原划分和本次分母。
+    if "query_subset_ids" in config:
+        # 具体题号已原样保留在config.query_subset_ids中。
+        summary["query_scope"] = {"mode": "explicit_subset", "split_query_count": len(split_query_ids), "evaluated_query_count": len(query_ids)}
     # 所有内容先完成严格序列化，再创建文件。
     texts = {"results": "".join(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n" for row in records), "run": json.dumps(normalized_run, ensure_ascii=False, indent=2, allow_nan=False) + "\n", "summary": json.dumps(summary, ensure_ascii=False, indent=2, allow_nan=False) + "\n"}
     # 已有结果不覆盖，保留原实验身份。
