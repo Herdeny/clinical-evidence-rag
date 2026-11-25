@@ -14,7 +14,9 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
-## 当前进度：真实8题链路核验通过，下一步接入检索
+## 当前进度：检索输入适配已通过，下一步同题两组评测编排
+
+用户apply_query_rewrites已通过CPU数据检查，benchmark_data.py当前SHA-256为482dea9c0f4c07e4eabb7551fd26b9af7892d4552273bc676b882ffcb698c03c，原load_beir_dataset的AST对上一提交不变。A/B/C例子验证原表顺序和非默认索引、成功表达清理、失败原题精确保留（含首尾空白）、来源及状态、额外列和输入对象不变；重复记录ID、未知ID、原文不匹配、空成功表达和未知状态均拒绝。来源标签保留用户实现llm_rewrite_query（成功）／original_fallback（失败），不因此前示例叫llm_output要求返工。真实8条ID／原文／保存表达适配一致，原JSONL未改；记录results/query_rewrite_input_adapter_validation_01.json，派生输入nfcorpus_query_rewrite_dev_8_01_retrieval_inputs.jsonl。未调用API、模型或检索，没有新的Recall／nDCG结果。
 
 2026-11-26用户完成nfcorpus_query_rewrite_dev_8_01，8题均status=ok，1改写／7原样，0失败，已知用量8条。逐题独立汇总3260输入／706输出／3966总tokens；输入中cache_read=2048已包含在3260内，不能再加到总量。单题改写流程耗时合计7388.057ms、平均923.507ms；整个本地进程8.31秒、主机RSS峰值211596KiB、退出0且无中断，不称远程模型推理耗时。6份准备源码与快照／3份输入身份／8条题号和原文／公开配置／5份原始输出一致，原件及准备audit未改。结果_validation.json状态passed_with_semantic_observation，协议与产物核验passed；_semantic_review.json单独保存语言层面的观察，不作临床事实或总体保真率验证。
 
@@ -107,7 +109,7 @@ fi
 
 运行后先贴终端摘要或错误。助手再读取逐题JSONL，检查8条题号和原文、改写是否篡改语义、失败处理、实际用量及耗时。单题与整个进程计时按各自范围报告；changed多或少都不直接说明质量。此轮不运行Dense或重排、不改文档缓存，也不将它当作324题检索评测；通过后再推进已保存改写与同一Dense配置的对照。
 
-## 下一项用户任务：apply_query_rewrites
+## 已完成：apply_query_rewrites任务及接口
 
 用户在现有benchmark_data.py中新增apply_query_rewrites(queries_df, rewrite_records)，它只把已保存改写适配成检索输入，不读文件、不请求模型、不检索或保存。原有load_beir_dataset及查询改写核心不改，无新依赖；输入queries_df是加载器返回的完整原问题表（当前324条，id／query），rewrite_records是本批JSONL读取的字典列表（当前8条）。函数仅返回这批记录覆盖的题目，按原问题表顺序排列；不把其余316题混入8题对照。后续完整324条复用同一接口。
 
@@ -115,13 +117,29 @@ fi
 
 1. 用record["query_id"]建立映射，重复ID先报错，避免字典静默覆盖。同原问题id列比较，改写记录中的未知ID拒绝，不能悄悄丢弃。原问题ID唯一性已由现有加载器检查，无需再重复整套数据校验。缺失字段等保留自然异常，不强制包装统一类型。
 2. 使用queries_df["id"].isin(...)选出映射覆盖的行，并.copy()取得副本，保持原文件顺序。将副本的原query保存在original_query列。对每题检查record["original_query"]与当前原问题一致，避免把另一版问题的改写挂到同ID。
-3. status=ok时，使用保存的retrieval_query作为新query；清理后须非空。不重新让模型改写，不依据人工语义观察手工更正PLAIN-77。记录query_source="llm_output"，rewrite_status="ok"；即使changed=false，也表示采用了这次LLM输出，不等于文字发生变化。
+3. status=ok时，使用保存的retrieval_query作为新query；清理后须非空。不重新让模型改写，不依据人工语义观察手工更正PLAIN-77。用户实现采用query_source="llm_rewrite_query"，rewrite_status="ok"；即使changed=false，也表示采用了这次LLM输出，不等于文字发生变化。保留此有效命名，后续记录一致。
 4. status=error时，检索输入显式使用该题原问题，记录query_source="original_fallback"、rewrite_status="error"。这是本阶段公开定义的检索层失败回退，为全题对照保留失败题；原始改写记录的error、未知或已有token均不修改，原单题函数仍返回error而不回退。未知status拒绝。不能把失败题从评测中剔除后只报成功题收益。
 5. 返回DataFrame，保留id以及供检索的query，新增original_query／query_source／rewrite_status；输入表和rewrite_records都不修改。常见当前输入2列时输出为5列，其他已有列不需要丢掉。函数不接收qrels，标注留在评测层。
 
 本轮只写函数保存，助手审核后用最小CPU例子核对。验收例：原问题A／B／C，改写记录顺序B成功／A失败，返回顺序A／B，C不进入此次比较；A保留原题且明确error／fallback，B使用保存表达，两个原问题仍可回查，输入不变；重复ID、未知ID、原题不匹配不能静默通过。不要为样例增加无业务用途的兼容或异常分支。
 
-接线时还要按返回ID筛选同一份qrels，满足现有evaluate_beir_retrieval对查询与qrels键集合一致的要求；原题组与改写组用相同8题、相同qrels和Qwen Dense配置，复用原文档向量，重新生成检索候选。已有原冻结Top100只作基线记录，不能当新表达已完成检索。324题完整比较仍待后续，8题只用于流程和逐题观察。现在没有apply_query_rewrites实现或新的Dense结果。
+接线时还要按返回ID筛选同一份qrels，满足现有evaluate_beir_retrieval对查询与qrels键集合一致的要求；原题组与改写组用相同8题、相同qrels和Qwen Dense配置，复用原文档向量，重新生成检索候选。已有原冻结Top100只作基线记录，不能当新表达已完成检索。apply_query_rewrites已实现并核对，仍无新Dense结果；324题完整比较待后续，8题只用于流程和逐题观察。
+
+## 下一项用户任务：evaluate_query_rewrite_retrieval
+
+在现有benchmark_eval.py增加evaluate_query_rewrite_retrieval(queries_df, qrels, retrieve_fn, *, rewrite_records, ks=(10,100))，前三参数沿用evaluate_beir_retrieval；新增导入benchmark_data.apply_query_rewrites。它编排同题原问题与保存表达两组评价，不构造模型、不读取或保存文件、不调用DeepSeek，实际检索由传入的retrieve_fn完成。先写函数保存、CPU假检索核对，之后才由用户入口加载同一Qwen模型／文档缓存真实运行。
+
+输入queries_df为原始324条表、qrels为324个题号映射到文档等级字典、rewrite_records为当前保存8条，retrieve_fn是已有可调用对象（接收query字符串与k，返回含id／score的候选列表），ks默认(10,100)。流程只有数据对齐与两次复用现有评分：
+
+1. rewritten_queries_df=apply_query_rewrites(queries_df,rewrite_records)，当前得到8行带original_query／query_source／rewrite_status的表。ids=rewritten_queries_df["id"].tolist()是8个字符串题号；并非按range(8)取qrels，也不更改问题ID。
+2. original_queries_df用queries_df["id"].isin(ids)筛选并.copy()，仍保留原query；与rewritten_queries_df对应同一8题和顺序。不能把整张324题原表同8题改写表比较均值。
+3. selected_qrels用{query_id:qrels[query_id] for query_id in ids}得到8个外层键；每题内层文档ID和相关等级原样保留。例如原qrels有A/B/C，ids为A/B，就只取qrels[A]和qrels[B]，不重新标注。现有公共评分函数要求这8键与查询ID集相同。
+4. 用同一个retrieve_fn和同一个selected_qrels／ks，分别调用evaluate_beir_retrieval(original_queries_df,...)与evaluate_beir_retrieval(rewritten_queries_df,...)。每次返回(eval_df,run)：eval_df为逐题指标／耗时表，run为题号→文档ID→检索分数字典。这里不另写检索循环或评分公式，不额外过滤失败回退题。
+5. 返回普通字典，键original对应{"eval_df":original_eval_df,"run":original_run}，键rewritten对应相同结构的新表达结果，键query_inputs对应rewritten_queries_df，留存原问题与来源以便后续保存和逐题分析。这是内存中的对象集合，其中有DataFrame，不能直接json.dumps整个字典；后续入口分别交已有保存辅助，不在本函数里写文件或打印。
+
+完整中间规模为原表324／原qrels324→适配表8／ids8→原题子表8／qrels子集8→两份各8行eval_df及两份各8个题号的run。相同检索器使两组使用同一模型／正文缓存／候选预算；8条未证明统计收益，仅用于接线和逐题差异。ks原样传给两组。原题数据／qrels／改写记录不修改，结果来源标签沿用用户已有llm_rewrite_query，不追溯改前一步实现；不新增异常包装或用旧测试限定风格。
+
+验收按实际语义看：同一批题、相同标签和检索函数、各调用公共评测一次；原题组收到原query，新表达组收到保存query；query_inputs保留原文及失败回退状态，完整返回两组表与run。保存后先读源码再做最小CPU假检索，不提前加载模型或运行GPU。当前此新函数及配套运行入口均未实现。
 
 ### 独立入口的完整任务
 

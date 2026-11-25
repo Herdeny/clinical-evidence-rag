@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-26。根目录现有20个Python模块，14个数据维护工具集中到scripts/data；用户完成真实8题批量改写，8成功／1变化／3966tokens，链路与产物核对通过，唯一变化有地域范围可能收窄的观察。下一项用户在benchmark_data.py写apply_query_rewrites，将保存结果接到检索；尚无改写检索收益。Qwen Dense与四套重排dev均已实测；BGE负结果和历史资源异常继续披露。助手未执行GPU或真实LLM调用。
+整理日期：2026-11-19，进度更新2026-11-26。根目录现有20个Python模块，14个数据维护工具集中到scripts/data；真实8题改写及用户apply_query_rewrites已核对，仍保留唯一变化的地域范围疑点。下一项在benchmark_eval.py写同题两组评测编排，尚无改写检索收益。Qwen Dense与四套重排dev均已实测；BGE负结果和历史资源异常继续披露。助手未执行GPU或真实LLM调用。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -20,14 +20,14 @@
 | reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B及BGE真实完整运行均已核对 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；save_beir_results支持原方法及frozen_rerank，保留候选来源和正确计时范围 | 助手辅助，逐行中文注释 |
-| benchmark_data.py | 已完成BEIR读取适配；下一项新增apply_query_rewrites连接原问题与保存改写，当前尚未实现 | 用户 |
-| benchmark_eval.py | 公共查询循环与逐题评分；新增可选query_id回调和冻结候选重排包装，10项小样本检查通过，真实324题假打分衔接核对通过 | 用户 |
+| benchmark_data.py | BEIR读取及apply_query_rewrites已完成；原题／状态／来源保留，失败原样回退，实际8条适配通过，原loader AST未改 | 用户；助手未改核心 |
+| benchmark_eval.py | 公共评分和冻结重排包装已实现；下一项增加evaluate_query_rewrite_retrieval复用同题两组评分，尚未实现 | 用户 |
 | run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
 | run_reranking_eval.py | 固定候选重排入口；四套重排dev已核对，旧历史资源异常继续披露；CLI统一--config且原业务函数不变 | 用户；助手只纠正CLI参数 |
 
 ## 数据维护模块
 
-configs/llm_profiles.json由助手补充，保存公开参数，不含密钥；单题、假响应与真实8题记录分别说明范围。真实8题核验results/nfcorpus_query_rewrite_dev_8_01_validation.json及_semantic_review.json，准备源码／输入与原件均未改，状态passed_with_semantic_observation。下一项apply_query_rewrites的完整输入输出、显式检索回退及验收见query_rewrite_task.md；复用原结果，不重发API。CLI只用--config／args.config，run-name可选默认命名，旧测试跟随接口，历史记录不改。
+configs/llm_profiles.json由助手补充，保存公开参数，不含密钥；真实8题生成核验及语义观察原件保留。新适配函数记录results/query_rewrite_input_adapter_validation_01.json，派生检索输入为nfcorpus_query_rewrite_dev_8_01_retrieval_inputs.jsonl；成功来源标签沿用用户的llm_rewrite_query。下一项两组评价的变量、qrels子集、返回对象及验收见query_rewrite_task.md，继续复用原改写和文档缓存，不重发API。CLI只用--config／args.config，run-name可选默认命名，旧测试跟随接口，历史记录不改。
 
 configs/reranker_profiles.json保存三种重排候选的固定版本与运行参数。tests现有21个模块；原模型支持／入口相关50项与预检辅助相关14项均通过，真实GPU预检另有已保存报告。新增test_beir_run_validation.py的4项验证新重排／原BM25的完整临时产物协议、候选集合、固定配置与资源CLI身份；未加载模型。当前用户下一项见reranking_runtime_task.md完整开发集节；文末“17个模块”属于此前整理记录。
 

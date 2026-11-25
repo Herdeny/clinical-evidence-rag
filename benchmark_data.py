@@ -80,4 +80,46 @@ def load_beir_dataset(data_dir, *, split="dev"):
     
     return corpus_df, queries_df, qrels
     
+def apply_query_rewrites(queries_df, rewrite_records):
+    if queries_df["id"].duplicated().any(): raise ValueError("Duplicated id in queries_df")
     
+    record_map = dict()
+    
+    for record in rewrite_records:
+        query_id = record["query_id"]
+        if query_id in record_map:
+            raise ValueError(f"{query_id} duplicated in record_map")
+        record_map[query_id] = record
+    
+    unknown_ids = set(record_map) - set(queries_df["id"])
+    if unknown_ids: raise ValueError(f"Unknown ids in queries_df: {unknown_ids}")
+    
+    mask = queries_df["id"].isin(record_map)
+    result_df = queries_df[mask].copy()
+    
+    result_df["original_query"] = result_df["query"]
+    result_df["query_source"] = ""
+    result_df["rewrite_status"] = ""
+    
+    for index, row in result_df.iterrows():
+        record = record_map[row["id"]]
+        if not record["original_query"] == row["original_query"]: raise ValueError("Inconsistent between record and result")
+        if record["status"] == "ok": 
+            query = record["retrieval_query"].strip()
+            if not query: raise ValueError("Query is blank")
+            query_source = "llm_rewrite_query"
+            rewrite_status = "ok"
+        elif record["status"] == "error":
+            query = record["original_query"]
+            if not query: raise ValueError("Query is blank")
+            query_source = "original_fallback"
+            rewrite_status = "error"
+        else:
+            raise ValueError(f"Incorrect status: {record["status"]}")
+        
+        result_df.at[index, "query"] = query
+        result_df.at[index, "query_source"] = query_source
+        result_df.at[index, "rewrite_status"] = rewrite_status
+    
+    return result_df
+        

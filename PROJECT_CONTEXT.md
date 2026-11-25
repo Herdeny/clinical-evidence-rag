@@ -6,11 +6,17 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26当前：用户apply_query_rewrites已验收，下一项写同题两组评测编排。** 已重读125行，失败回退不再strip。实际A/B/C例子验证原文件顺序、非默认索引、原题含空白精确保留、成功表达清理、状态／来源、额外列及输入不变；重复record ID、未知ID、原文不匹配、空成功表达、未知status均拒绝，异常类型按现实现观察不强制另改。真实8条适配ID及文本完全对应原保存输出，原文件未改。用户标签llm_rewrite_query保留，任务文档同步使用，不为旧示例强制改名。benchmark_data.py SHA=482dea9c0f4c07e4eabb7551fd26b9af7892d4552273bc676b882ffcb698c03c，原loader AST对上一提交不变；记录query_rewrite_input_adapter_validation_01.json，派生nfcorpus_query_rewrite_dev_8_01_retrieval_inputs.jsonl。未调用API／GPU／embedding或做检索，不宣称收益；归档提交同步后再交下一函数。后面旧问题均属已解决修订记录。
+
+下一用户任务在benchmark_eval.py增加evaluate_query_rewrite_retrieval(queries_df,qrels,retrieve_fn,*,rewrite_records,ks=(10,100))，新增导入apply_query_rewrites。前三参数复用现有公共评测接口；原表及qrels现324、records现8，retrieve_fn是已构造的同一个检索函数对象。先适配得rewritten_queries_df8行，再ids=其id列表，原表用isin(ids).copy得original_queries_df8行，selected_qrels用{qid:qrels[qid] for qid in ids}保留同8题原文档等级。用同一retrieve_fn／selected_qrels／ks，分别调用既有evaluate_beir_retrieval两次，得到各8行eval_df和各8题run字典。返回{"original":{"eval_df":original_eval_df,"run":original_run},"rewritten":{"eval_df":rewritten_eval_df,"run":rewritten_run},"query_inputs":rewritten_queries_df}，其中DataFrame不能直接json.dumps，后续入口用既有保存辅助分别落盘。函数不读写文件、不构造模型、不调DeepSeek、不重复写评分公式或包装异常。保留失败回退题和原文来源；新query必须用真正Dense重检索，不沿用原冻结候选。当前只写函数保存，语义审查／最小CPU假检索后再接用户GPU入口；此新函数与入口尚未实现。聊天要按324→8→两组8的中间变量、对象类型、调用参数与返回逐步讲清，不重复抽象目标。
+
+**2026-11-26当前教学澄清：用户第三次指出任务逻辑太抽象，需按实际草稿和具体数据逐步展开。** 已读benchmark_data.py：用户开始apply_quert_rewrites草稿（约定接口为apply_query_rewrites），将rewrite_records列表当DataFrame调用iterrows、把query_id写为id、对标量调用isin、将单行DataFrame列比较直接用于if，并从原题表读取实际上属于record的status；末尾if尚未写完且缺冒号。本轮不运行导入／测试或修改核心，先在聊天用原题A/B/C与记录B成功/A失败演示list→按ID字典→布尔mask→DataFrame副本→第二个逐行循环→at写回→返回，明确两个循环各遍历什么、每个变量类型与中间值、set差集／isin／copy／at的语法和原因。给必要语法小片段及分支字段表，不代写完整函数；保持上次输入输出及显式回退规则，不额外新增要求。保存后再读代码，纠错阶段不提交。
+
 **2026-11-26当前：真实dev前8题改写已核验，下一项用户写检索输入适配。** 用户终端完成nfcorpus_query_rewrite_dev_8_01，8成功、1变化、7原样、0失败；输入3260／输出706／总3966tokens，8条用量已知，输入含缓存读取2048不可再加。逐题流程合计7388.057ms／平均923.507ms，进程8.31秒、RSS211596KiB、退出0无中断；不是远程模型纯推理耗时。6份准备源码和快照、3份输入、8题ID与原文、配置及独立重算摘要／日志匹配，5份输出和准备audit未改。_validation.json为passed_with_semantic_observation，协议及产物passed，_semantic_review.json独立保存语言观察。旧历史资源异常继续披露，无全历史审计或恢复宣称；助手未调用API／GPU或读.env。
 
 唯一变化PLAIN-77把elsewhere变为in other countries，可能将未明确地点收窄为国家层级；reason声称改善检索但尚无检索对照，不能据此认证同义或收益。7条字面原样只说明输入保留，不说明原题医学陈述已核实或表达最优。原模型结果不改、不为增加改写率重调prompt，不因语义观察先手改数据后再报分；当前没有改写nDCG／Recall结果。此次只给逐题观察，不估计总体保真率或临床有效性；ENG-026已追加此例。运行源码在5e15904已推送，入口及API生成阶段完整；接下来复用原8题，不再调用DeepSeek。
 
-下一用户任务在benchmark_data.py新增apply_query_rewrites(queries_df,rewrite_records)，不改load_beir_dataset。输入完整原题DF（id／query，现324）和本批保存记录list（现8），只返回records覆盖题目，按原题文件顺序.copy，输入及records不变。建query_id映射前拒绝重复，拒绝不在原表中的ID，并逐题检查record.original_query与原问题一致。status=ok时使用非空retrieval_query，query_source=llm_output、rewrite_status=ok；status=error时检索层明确使用原题，query_source=original_fallback、rewrite_status=error，原始error／token及单题函数error协议不改；未知status拒绝。此为本阶段明确的检索失败回退，为全题对照保留失败题，不是悄悄把改写失败改成成功。返回保留id／query并新增original_query／query_source／rewrite_status（原2列时5列）；不读文件、不调API、不检索／保存、不接qrels。例：原A/B/C、记录B成功/A失败，输出A/B，A原题fallback，B保存表达，C不混入。保留PLAIN-77原输出供后续分析。先写函数保存后语义审查／最小CPU检查，再接Dense；该函数目前未实现，完整参数与验收在聊天给出，docs仅存档。
+适配任务定义现已实现：完整原题DF与本批记录按ID对应，返回仅覆盖题目、原文件顺序、输入副本；原文匹配检查，成功用非空保存表达并标llm_rewrite_query，失败精确原题回退并保留error／original_fallback。返回id／query／original_query／query_source／rewrite_status及已有额外列，原始错误和token记录不改；PLAIN-77原输出保留。数据适配不读文件／调用模型／评分，后续评价按返回ID筛选同一qrels。当前实现已核对，尚无新的Dense检索结果。
 
 下一检索接线须将同一qrels按返回ID筛选，满足现有evaluate_beir_retrieval查询与qrels键集一致；原题和改写组都8题同标注、同Qwen Dense配置和文档缓存，重新生成候选。不可拿原冻结Top100冒称新召回。8题是流程与逐题观察，完整324dev检索对照仍待后续；不引入RRF／重排或同时改模型。本单元先归档提交同步8题结论再交用户下一函数。以下命名和初稿缺陷段落为已解决的修订记录，不再作为当前阻断。
 
@@ -861,6 +867,8 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 教学任务要形成可复用的产物，例如带来源和位置的章节记录，而不是停留在打印结果。提前设计范围以支撑已确定的后续步骤为限，不为假想需求扩建大框架，也不跳过必要的学习和验收。
 
 ### 13.8 全部任务按成品方向增量开发，保持标准连续
+
+用户于2026-11-26第三次强调：仅列“建立映射、筛选、核对、返回”仍太抽象，无法独立落笔。讲解必须结合实际草稿和一组具体输入／输出，明确每个中间变量的类型和值、循环遍历哪个对象、键来自哪一列、在哪一步赋值、pandas整列与单个字符串的区别，并给具体函数用法、参数及理由。要一次讲清完整工作单元，不能只换一种说法重复目标，也不能因此代写完整核心或拆成逐行多轮。核心仍用户写，文档不能代替聊天讲解。
 
 用户于2026-11-25补充要求：任务的逻辑顺序、参数选择理由和验收标准必须直接写在聊天里，不能只给文档链接让用户自行寻找。文档用于持久记录；核心指导本身在聊天中自洽完整。此后检查代码时也直接说明实际问题和修订要求，不只把结论写进文件。
 
