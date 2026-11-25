@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-26。根目录现有20个Python模块，14个数据维护工具集中到scripts/data；真实8题改写、用户输入适配及同题两组评测编排已核对，仍保留唯一变化的地域范围疑点。下一项用户新建run_query_rewrite_retrieval_eval.py接模型／缓存和保存，入口尚未实现，尚无改写检索收益。Qwen Dense与四套重排dev均已实测；BGE负结果和历史资源异常继续披露。助手未执行GPU或真实LLM调用。
+整理日期：2026-11-19，进度更新2026-11-26。根目录已有20个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待用户迁移；14个数据维护工具集中到scripts/data。真实8题改写、输入适配及两组编排已核对，仍保留唯一变化的地域范围疑点。独立Dense入口方案已撤回；下一项扩展原run_benchmark_eval.py的可选改写模式，同时复用BM25／Dense／RRF，尚未实现或取得改写检索收益。Qwen Dense与四套重排dev已实测，负结果和历史资源异常继续披露。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -22,12 +22,12 @@
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；支持原方法／frozen_rerank及显式query_subset_ids，未声明仍严格检查整划分 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR读取及apply_query_rewrites已完成；原题／状态／来源保留，失败原样回退，实际8条适配通过，原loader AST未改 | 用户；助手未改核心 |
 | benchmark_eval.py | 公共评分、冻结重排及evaluate_query_rewrite_retrieval已实现；同题两组共享标签／检索器，CPU假检索核对通过，非真实改写收益 | 用户；助手未改核心 |
-| run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
+| run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，旧dev已实测；下一项增加可选--rewrite-results，复用已验收通用两组函数，仍待用户实现 | 用户；助手不代写核心 |
 | run_reranking_eval.py | 固定候选重排入口；四套重排dev已核对，旧历史资源异常继续披露；CLI统一--config且原业务函数不变 | 用户；助手只纠正CLI参数 |
 
 ## 数据维护模块
 
-configs/llm_profiles.json由助手补充，保存公开参数，不含密钥；真实8题生成核验及语义观察原件保留。适配及两组评测记录分别为results/query_rewrite_input_adapter_validation_01.json、query_rewrite_paired_eval_validation_01.json；成功来源标签沿用用户的llm_rewrite_query。下一项独立运行入口的逐阶段输入输出、配置、六份保存文件和验收见query_rewrite_task.md，继续复用原改写和文档缓存，不重发API。CLI只用--config／args.config，run-name可选默认命名，旧测试跟随接口，历史记录不改。
+configs/llm_profiles.json由助手补充，保存公开参数，不含密钥；真实8题生成核验及语义观察原件保留。适配及两组评测记录分别为results/query_rewrite_input_adapter_validation_01.json、query_rewrite_paired_eval_validation_01.json；成功来源标签沿用用户的llm_rewrite_query。下一项在原入口增量接入三方法可选改写，具体任务见query_rewrite_task.md，不继续独立入口。复用保存的改写和原文档缓存，不重发API；CLI只用--config／args.config，保留原默认参数和run-name可选公式。未跟踪草稿不由助手删除。
 
 configs/reranker_profiles.json保存三种重排候选的固定版本与运行参数。tests现有21个模块；原模型支持／入口相关50项与预检辅助相关14项均通过，真实GPU预检另有已保存报告。新增test_beir_run_validation.py的4项验证新重排／原BM25的完整临时产物协议、候选集合、固定配置与资源CLI身份；未加载模型。当前用户下一项见reranking_runtime_task.md完整开发集节；文末“17个模块”属于此前整理记录。
 

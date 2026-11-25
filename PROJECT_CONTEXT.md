@@ -6,11 +6,13 @@
 
 ## 1. 当前应从哪里继续
 
-**2026-11-26最新：用户同题两组评测函数已验收，下一项写独立运行入口。** 已重读benchmark_eval.py，evaluate_query_rewrite_retrieval正确选取同8题原文／保存表达，使用同一qrels子集、retrieve_fn及ks调用公共评分两次，返回两组eval_df／run及query_inputs。ids用Series可迭代，isin也支持，不要求改成列表；局部seleted_qrels拼写不影响一致使用，不为测试改核心。A/B/C假检索及真实dev324＋保存8条的假检索均通过，后者16次调用、每次k100；原输入不变、旧公共评分及冻结重排函数AST未变。记录results/query_rewrite_paired_eval_validation_01.json，源码SHA=74f0a6e93044fa59a27a1b14b1c940069f988e4ad53f01c3b542e3e0f7b72720。仅CPU假检索，不是Dense实测收益。
+**2026-11-26最新方案纠正：复用原run_benchmark_eval.py增加可选改写输入，不继续独立Dense入口。** 用户指出独立入口重复已有模型／缓存／保存，并限制BM25和RRF复用，这一设计判断成立。助手撤回此前新建完整run_query_rewrite_retrieval_eval.py的任务，不把“先跑Dense”作为架构限制。用户已写该未跟踪草稿（导入、六输出保护、配置／数据／改写读取及未完成缓存调用），保留原件不擅自改写或删除；可用片段由用户迁回原入口。现在只修订任务和文档，尚未代写核心、运行模型／API或取得改写检索分数。
+
+已验收evaluate_query_rewrite_retrieval本身无需修改：它只接收通用retrieve_fn，对Dense／BM25／RRF均适用；A/B/C假检索及真实dev324＋保存8条的假检索通过，后者16次调用、各次k100。ids使用Series、局部seleted_qrels拼写均不阻断。旧公共评分及冻结重排AST不变；记录results/query_rewrite_paired_eval_validation_01.json，源码SHA=74f0a6e93044fa59a27a1b14b1c940069f988e4ad53f01c3b542e3e0f7b72720。上个完成节点72e3d6f已推送；本轮属于方案纠正，不把文档变更称为入口已实现。
 
 助手扩展原retrieval_results_io.save_beir_results：调用方可明确提供config.query_subset_ids，结果／run仍须完整覆盖这组题，摘要query_scope记录原划分数量和实际评测数量；未声明时保留整划分严格检查及旧摘要布局。临时3题fixture验证整集、显式2题子集及4种错误声明的写前拒绝；不为8题放宽成任意少题可保存，不改原评分逻辑或旧全量原问题核验脚本。新问题记ENG-027。
 
-下一用户任务新建run_query_rewrite_retrieval_eval.py，main(config_dir,data_dir,split,cache_dir,rewrite_path,run_name,result_dir,*,config_embedding_model="qwen3_8b")。读固定embedding配置／原BEIR数据／保存改写JSONL，一次构造模型并复用原corpus.jsonl的文档缓存，partial包装Dense，调用已验收两组函数，再用同一save_beir_results分别保存original／rewritten各三份。config明确8个query_subset_ids、完整dense元数据、改写来源路径及同一读取字节的SHA、query_inputs.to_dict(records)；改写只作检索表达，原题及qrels不变。CLI仅--config，--run-name仍可选且默认数据集_dense_配置_划分，两组前缀分别加_original／_rewritten；另--rewrite-results指向已有8条，当前不加limit。模型加载前保护六份JSON，后续用户运行命令再保护外层log／resources。先由用户写并保存，助手审核／CPU假依赖检查、提交同步后才给真实运行命令。完整逻辑、参数理由和验收必须直接在聊天说明；不代写入口、不重发DeepSeek、不重建文档向量或接重排。以下旧任务段落属于修订历史，不再作为当前待办。
+下一用户任务修改原run_benchmark_eval.py：main保持原位置参数／config_embedding_model默认bge_small，只追加关键字rewrite_path=None；CLI只新增--rewrite-results（type=Path，默认None），沿用--method／--config及可选run-name默认公式。未传文件时原全划分单组评测、原文件前缀及summary返回均保持；传文件时读取已保存记录，用当前method的同一retrieve_fn调用两组函数，按_original／_rewritten分别保存三份，返回两组摘要，CLI按模式打印对应metrics。不新增--rewrite布尔开关或直接请求LLM，参数同时提供开关与必要输入。将embedding profile读取／核对移到dense／rrf条件内，移除BM25+Qwen无关拒绝；BM25不读模型配置或加载embedding，RRF仍两路各构建一次。运行前根据模式保护三份或六份输出；保持原results目录，不顺带新增result-dir或改变其余默认。显式子集／改写来源SHA／query_inputs配置沿用上一方案。三种方法分别运行，形成各自同题原文对照；当前先用同一保存8条接线，再扩完整324，不能把8题改写均值与旧324题均值比较。用户先迁移并保存，助手语义审核及CPU假依赖检查，通过后提交同步，再由用户真实运行。以下独立入口描述属于撤回的旧方案；其他旧待办均按最新段落判断。
 
 **2026-11-26当前：用户apply_query_rewrites已验收，下一项写同题两组评测编排。** 已重读125行，失败回退不再strip。实际A/B/C例子验证原文件顺序、非默认索引、原题含空白精确保留、成功表达清理、状态／来源、额外列及输入不变；重复record ID、未知ID、原文不匹配、空成功表达、未知status均拒绝，异常类型按现实现观察不强制另改。真实8条适配ID及文本完全对应原保存输出，原文件未改。用户标签llm_rewrite_query保留，任务文档同步使用，不为旧示例强制改名。benchmark_data.py SHA=482dea9c0f4c07e4eabb7551fd26b9af7892d4552273bc676b882ffcb698c03c，原loader AST对上一提交不变；记录query_rewrite_input_adapter_validation_01.json，派生nfcorpus_query_rewrite_dev_8_01_retrieval_inputs.jsonl。未调用API／GPU／embedding或做检索，不宣称收益；归档提交同步后再交下一函数。后面旧问题均属已解决修订记录。
 
@@ -438,9 +440,19 @@ CPython 文档版本回归属于另一个项目，不并入本项目主线。
 
 原始参考为 [JEen-wang/Adaptive-rag](https://github.com/JEen-wang/Adaptive-rag)，此前参考的 [固定提交](https://github.com/JEen-wang/Adaptive-rag/tree/2a12a62382a8c3ec033fa9a5b19b9b23b8780ab8) 为 `2a12a62382a8c3ec033fa9a5b19b9b23b8780ab8`。
 
-此前交流中介绍的参考仓库能力包括 Python、FastAPI、LangGraph、BM25、稠密检索、RRF、Cross-Encoder、改写、多轮检索、引用、评测与日志；也包括电商交易工具、权限审批、React＋TypeScript 工作台、SSE 及多种 Docker 部署。本交接记录保留该参考关系，没有重新审计该提交中的每项实现。
+2026-11-26按用户指定提交实际取得公开源码快照，静态核对services/container.py与chat_service.py、agents/graph.py与state.py、retrieval的hybrid／query_rewrite／self_rag／vector／ingest／unstructured_parser、providers/base.py、schemas/retrieval.py、生成和忠实度节点、eval/runner.py与MEASURED.md、配置／权限／可观测性及MIT LICENSE。没有启动对方应用、运行其测试或复现实测，仓库代码、作者报告和本机已验证结果分别表述。源码仅暂存/tmp审阅，不引入本项目实现。
 
-本项目当前在独立练习目录实现，借鉴检索分层、状态流、评测与交付方式。以后复用源码时记录来源、版本、许可证和自己的改造。客服交易、权限审批、完整聊天工作台、多实例运维不自动成为本项目必做项。
+参考项目的分层已有代码依据：FastAPI路由调用ChatService；CLI可经HTTP或本进程共享同一服务；build_container／build_retrieval负责模型、检索、数据库和工具装配；ChatService构造时编译图并复用。Graph以AgentState组织护栏、意图、五策略路由、检索或规划执行、生成、忠实度与记忆。SelfRAGLoop的有限补查是检索内部循环，不能只凭graph.py节点名宣称图有自动回边；五策略DIRECT／SINGLE／MULTI／AGENT／REFUSE也不等于BM25／Dense／RRF方法选择。
+
+对照当前项目：已具备手写Dense／BM25／RRF、rerank、LangChain模型适配、文档断点缓存、基准评分／保存及单条和小批量真实改写；公共NFCorpus324dev已有方法实测，真实8条改写尚无检索收益。run_benchmark_eval.py目前仍承担配置、资源装配与评测，用户正在增加rewrite_path参数；三方法可选改写接线未验收。尚缺统一临床应用服务、结构化临床状态流、自动适用性核验和定向补查，FastAPI／SQLite／Qdrant元数据过滤／Docker成品交付仍在既定规划；已有医学来源解析不等于报告OCR／多模态验证完成。
+
+架构沿用决定：保留现有函数及参数注入，优先扩展原多方法评测入口；检索方法选择、查询表达处理和Agent业务路由分别处理。资源装配逐步集中供CLI／未来API复用，评测层可调用相同检索与业务模块，产品处理不能调用会读取qrels并评分的评测main。原始问题／报告与检索表达分别保留；BM25不加载embedding，Dense／RRF按需构造，文档缓存继续绑定原始corpus而非改写文件。逻辑分层在当前代码上增量形成，当前不以换目录或复制一整套实现代替职责划分。
+
+医疗专用目标继续是报告事实→原句／页码／区域，结论→来源证据→适用条件两条可回查链；区分病例缺事实（追问）与检索缺证据（定向补查），分别保留指南、产品说明书和论文的身份／证据类型。对方Citation模型是document_id／title／chunk_id／section，解析器虽有页码metadata，也不能据此称具备本项目的医疗字段核验、逐条结论适用性或区域追溯。其SelfRAGLoop._grade在模型／解析失败时用bool(chunks)作sufficient，医疗流程不应直接沿用此兜底；应明确核验未完成，不能把非空结果当证据充分。上述是本项目设计目标与复用约束，尚无自动核验或临床有效性成绩。
+
+参考评测边界：eval_retrieval在同一入口共享索引、通过不同检索可调用对象比较BM25／向量／Hybrid／重排，印证当前原入口增量方案；MEASURED.md作者报告为65政策题／39文档等自建任务，并注明同模型裁判偏乐观及原JSON报告未随仓库分发。不得拿该Precision／Recall／Faithfulness与本地NFCorpus nDCG／Recall直接排名，不将README简历示例（如Cohere）视为实际后端。其Qdrant／内存及Redis降级、工具确认与幂等、SSE／前端及多档部署是代码或配置已有能力，不宣称真实业务上线和生产规模验证。
+
+本项目继续独立实现，借鉴检索分层、状态流、评测与交付方式。以后复用源码时记录来源、固定版本、MIT版权／许可及自己的改造；医学资料的使用条件另核验。客服交易、完整聊天工作台、多实例运维不自动成为本项目必做项；LangChain／DeepSeek、LangGraph、Qdrant、FastAPI、SQLite及单实例Docker方向保持。
 
 任何介绍或简历描述都分别说明：
 
@@ -874,6 +886,8 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 
 ### 13.8 全部任务按成品方向增量开发，保持标准连续
 
+用户于2026-11-26进一步指出：查询改写应复用原多方法入口，通过可选参数改变检索表达，不能因为当前先做Dense就复制一个仅Dense的完整入口，导致BM25／RRF以后重复接入。新增功能先检查已有函数参数和扩展位置；已接受的通用评测函数保留，方法构建与查询表达选择分别处理。实验先后顺序不等于代码能力限制；撤回方案及时替换当前任务记录，用户已写草稿保留供迁移，不擅自删除。
+
 用户于2026-11-26第三次强调：仅列“建立映射、筛选、核对、返回”仍太抽象，无法独立落笔。讲解必须结合实际草稿和一组具体输入／输出，明确每个中间变量的类型和值、循环遍历哪个对象、键来自哪一列、在哪一步赋值、pandas整列与单个字符串的区别，并给具体函数用法、参数及理由。要一次讲清完整工作单元，不能只换一种说法重复目标，也不能因此代写完整核心或拆成逐行多轮。核心仍用户写，文档不能代替聊天讲解。
 
 用户于2026-11-25补充要求：任务的逻辑顺序、参数选择理由和验收标准必须直接写在聊天里，不能只给文档链接让用户自行寻找。文档用于持久记录；核心指导本身在聊天中自洽完整。此后检查代码时也直接说明实际问题和修订要求，不只把结论写进文件。
@@ -895,7 +909,7 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 - 当前仓库为https://github.com/Herdeny/clinical-evidence-rag，分支main，远端origin。用户已授权日常阶段提交和正常推送，不再每次重复询问。遇到远端更新先检查并正常整合，不擅自强制推送、覆盖他人提交或改写历史。
 - 提交范围是本阶段已验收的代码、相关测试和必要文档。尚未验收的新模块及无关改动保留本地。沿用.gitignore，原始语料、模型／向量缓存、环境凭证和本地生成结果不强制加入Git；验收规模与可复现步骤留在受版本管理的文档中。
 - 同步失败时如实说明已经完成本地提交还是尚未提交，以及失败原因；不能把仅本地commit称为已同步，也不能默认越过用户要求继续下一步。正常纠错与重试沿用本次授权。
-- 当前读取适配和benchmark_eval.py两组编排均已验收；下一项为尚未实现的run_query_rewrite_retrieval_eval.py，仍须完成后先提交同步再真实运行。
+- 当前读取适配和benchmark_eval.py两组编排均已验收；下一项为原run_benchmark_eval.py的可选改写模式，独立入口方案已撤回，仍须完成后先提交同步再真实运行。
 
 ### 13.10 模型按正式项目的任务效果选择，不默认偏向轻量
 
