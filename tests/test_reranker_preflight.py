@@ -70,6 +70,33 @@ class RerankerPreflightTests(unittest.TestCase):
         # 指令单独交给预处理器，关闭截断而非先切短正文。
         self.assertTrue(all(prompt == 'instruction' and not kwargs['processing_kwargs']['text']['truncation'] and not kwargs['processing_kwargs']['chat_template']['truncation'] for _, prompt, kwargs in calls))
 
+    # batch4必须取足四个最长句对，不能沿用最多三对的旧样本上限。
+    def test_scan_selects_a_full_batch_of_longest_pairs(self):
+        # 五个文档按非长度顺序出现，避免用原位置假冒最长样本。
+        sizes = {'A': 10, 'B': 40, 'C': 20, 'D': 50, 'E': 30}
+        # 候选保持原始文档正文和分数顺序。
+        documents = {name: {'id': name, 'text': name} for name in sizes}
+        # 这一合成查询只用于检查选样本逻辑，不代表真实医学题。
+        frozen = FrozenCandidates(pd.DataFrame([{'id': '01', 'query': 'original query'}]), {'01': {'A': 1}}, documents, {'01': {'retrieved_ids': list(sizes), 'scores': [0.9, 0.8, 0.7, 0.6, 0.5]}}, {})
+        # 使用真实CPU掩码模拟已核对的预处理输出，不加载模型。
+        def preprocess(pairs, **kwargs):
+            # 从原始句对计算独立的合成长度。
+            counts = [sizes[text] for _, text in pairs]
+            # 填充位不计入联合输入长度。
+            return {'attention_mask': torch.tensor([[1] * count + [0] * (max(counts) - count) for count in counts])}
+        # 模拟属性与实际预处理接口一致。
+        model = SimpleNamespace(prompts={}, default_prompt_name=None, max_seq_length=60, preprocess=preprocess)
+        # 只关闭终端进度，保持真实扫描逻辑。
+        with patch.object(preflight, 'tqdm', side_effect=lambda iterable, **kwargs: iterable):
+            # 需要确实选出一个完整的四对批次。
+            report, samples = preflight.scan_candidate_lengths(model, frozen, batch_size=4)
+        # 统计仍包含全部候选，不因选样本丢失最短文档。
+        self.assertEqual((report['pair_count'], report['joint_token_min']), (5, 10))
+        # 仅最长四对进入实际小批打分，顺序可复现。
+        self.assertEqual([(sample['document_id'], sample['joint_tokens']) for sample in samples], [('D', 50), ('B', 40), ('E', 30), ('C', 20)])
+        # 选样本不能改变正式候选顺序。
+        self.assertEqual([hit['id'] for hit in frozen.get_hits('01')], list(sizes))
+
     # 原始logit允许负数和大于1，结构或有限性错误必须被发现。
     def test_score_check_accepts_raw_logits_and_rejects_bad_arrays(self):
         # 这是可解释假分数，不是模型推理结果。

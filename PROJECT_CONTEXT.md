@@ -6,6 +6,14 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新：Qwen3-Reranker-8B下载核对通过，下一步由用户运行batch4真实预检。** 固定revision=77d193c791ed757ca307ee72715aa132723da912，项目内快照共19文件／5权重分片，权重文件16377142272字节、张量16377096192字节，均BF16；逐文件内容地址、分片索引／头部／形状字节和离线配置／分词器一致，yes9693／no2152，无.incomplete。下载23:50.88、主机RSS4293064KiB、退出0，记录results/qwen3_reranker_8b_download_validation.json；助手没有加载权重或使用GPU。
+
+本轮读取到用户将三个reranker profile的batch_size从1改为4，助手保留该修改。原预检最多3对不能覆盖完整batch4，因此只扩展助手的scripts/evaluation/preflight_reranker.py：batch1仍用原首两对＋最长一对策略，batch>1则取全体固定候选中联合token长度最大的batch_size对，一次predict覆盖一个完整批次；记录batch_check的实际数量、策略、是否覆盖完整批次及长度。跨题聚合最长输入是保守显存压力检查，不当作正式逐题批次或全量显存保证；样本不足时full_batch_exercised=false，不假称整批通过。输入仍全量扫描，不参考qrels等级选样本。保留原4B batch1预检和完整结果，当前所有batch4配置均尚未实测；8B预检前缀nfcorpus_rerank_qwen3_8b_preflight_01，完整显式命令见docs/reranking_runtime_task.md。
+
+本轮先审语义，再用CPU辅助检查核对：重排核心12＋预检5＋入口4＋支持6共27项通过，CLI帮助成功，没有真实模型／GPU运行；新增预检用例核对5个候选中确实选择最长4对且原候选不变。入口辅助检查原把batch1写死，已改为核对临时配置实际值，未因测试要求改用户核心。rerank_core.py／benchmark_eval.py／run_reranking_eval.py／reranker_adapter.py指纹保持原样。后续模型选型需同batch补齐4B对照；当前8B batch4与旧4B batch1之间不能把速度或细小分数变化全部归因于模型。先归档同步本节点，再交用户执行8B预检，返回真实结果后才准备完整重排。
+
+**2026-11-25最新咨询：Jina重排模型已做官方调研，未接入／下载／实测。** 当前更值得研究的是jina-reranker-v3.5（0.6B、多语言列表式、131K整组上下文），不是简单将当前CrossEncoder的model_name换掉；官方接口AutoModel＋model.rerank(query,documents)，返回index／relevance_score，需要独立适配候选映射、整体预算／截断及分组策略。官方论文同jina-embeddings-v5-text-small Top100协议中BEIR均值Jina3.5=63.20对Qwen4B62.28，但NFCorpus38.45对42.48、ChatDoctor70.63对73.38、CURE平均62.20对63.68；不能把外部汇总或分项直接与本地dev0.409974比较，也不能推断Jina本机更快或医学更强。v2提供CrossEncoder示例但原生1024预算及分块需核对。当前Jina权重CC-BY-NC-4.0，官方商业部署需商业许可。详情与primary来源见docs/reranking_runtime_task.md的Jina调研节。此为选型咨询，不自动改既有Qwen8B／BGE实验计划、不新增profile或调用API；Jina3.5作为待验证不同架构候选，后续纳入需明确理由及实际验证。
+
 **2026-11-25最新实测与验收：Qwen4B完整dev重排完成，独立核验通过。** run_name=nfcorpus_rerank_qwen3_4b_dev_01，执行提交c036e6b128b1dac66ea379e573d2fc233c761f68，同一Qwen8B Dense原Top100、324题／32400对、BF16／SDPA／4096／batch1。四指标为0.4099740875251688／0.2069843548748328／0.37949912510243394／0.39709670188154617；相对原Qwen Dense依次+4.532968%／+7.690745%／+2.532625%／0。nDCG@10逐题124升／106降／94同；Recall@10为87／65／172；Top10正命中252→257，补回17、丢12；所有题Top100集合不变，292题正命中、32题为0。不能说每题提升或新增召回，当前仅公开dev排序对照，无显著性推断或临床有效性结论。
 
 候选读取＋新增重排平均3258.2880731880987ms，中位3245.5629495016183ms，最近秩P95=3512.4218779965304ms；整进程1060.07秒（17:40.07）、主机RSS5345564KiB、退出0。原Dense检索53.69274598138244ms单独报告，不能把分阶段测量称端到端总延迟；没有完整GPU峰值，不用预检值替代。results/nfcorpus_rerank_qwen3_4b_dev_01_validation.json通过，三输入、10份执行前源码快照／当前源码、40受保护产物／缓存身份、候选集合与原qrels重评分、实际资源CLI及固定模型配置均一致，audit已complete_integrity_validated。比较含逐题变化见同前缀_comparison.json，汇总docs/nfcorpus_retrieval_baselines.md，新增工程取舍ENG-024。

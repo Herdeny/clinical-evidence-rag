@@ -4,6 +4,8 @@ import argparse
 import json
 # 记录实际文件内容身份。
 import hashlib
+# 只保留一个推理批次的最长输入，不复制全部候选正文。
+import heapq
 # 组合显式传入的项目路径。
 from pathlib import Path
 # 分别测量加载与小批打分，不冒充稳定查询延迟。
@@ -37,15 +39,15 @@ def file_sha256(path):
 
 
 # 用模型真实预处理器统计问题、正文、指令和模板合计长度。
-def scan_candidate_lengths(reranker, frozen):
+def scan_candidate_lengths(reranker, frozen, *, batch_size=1):
     # 使用和predict默认解析一致的指令。
     prompt = reranker.prompts.get(reranker.default_prompt_name)
     # 保存每个句对的真实长度，不保留全部副本文档。
     lengths = []
     # 前两个实际句对用于小批检查。
     samples = []
-    # 另取最长联合输入，覆盖本批材料的实际长度边界。
-    longest = None
+    # 最小堆只保留batch_size个最长联合输入，供完整批次压力检查。
+    longest_samples = []
     # 遍历原问题表，保留相同文字但不同ID的题目。
     for row in tqdm(frozen.queries_df.to_dict(orient='records'), desc='统计联合输入长度', unit='query'):
         # 只按ID取得原候选，不调用检索或读取相关性等级。
@@ -76,19 +78,31 @@ def scan_candidate_lengths(reranker, frozen):
                 if len(samples) < 2:
                     # 只保存少量候选引用。
                     samples.append(sample)
-                # 最长输入作为额外显存样本。
-                if longest is None or count > longest['joint_tokens']:
-                    # 每次只替换单个最长样本。
-                    longest = sample
+                # 次序编号用于长度相同时优先保留先出现的句对。
+                entry = (count, -len(lengths), sample)
+                # 尚未凑够一个配置批次时直接保留。
+                if len(longest_samples) < batch_size:
+                    # 堆中始终只有少量句对及其原文引用。
+                    heapq.heappush(longest_samples, entry)
+                # 新句对更长时替换已保留的最短句对。
+                elif entry[:2] > longest_samples[0][:2]:
+                    # 不存储其余候选正文副本。
+                    heapq.heapreplace(longest_samples, entry)
     # 没有句对时无法声称完成模型打分预检。
     if not lengths:
         # 合法空候选评测由核心支持，当前工具需要真实打分样本。
         raise ValueError('No candidate pairs are available for model preflight')
     # 超限统计依据模型实际生效的联合输入上限。
     limit = reranker.max_seq_length
-    # 去重避免最长样本与开头样本重复。
-    samples = list({(item['query_id'], item['document_id']): item for item in [*samples, longest]}.values())
-    # 返回汇总与最多三个待打分样本。
+    # batch1沿用已经实测的首两对加最长一对样本策略。
+    if batch_size == 1:
+        # 去重避免最长样本与开头样本重复。
+        samples = list({(item['query_id'], item['document_id']): item for item in [*samples, longest_samples[0][2]]}.values())
+    # 更大批次用最长的batch_size对共同打分，实际覆盖完整配置批次。
+    else:
+        # 长度相同时按原出现次序选择，保证样本选择可复现。
+        samples = [item[2] for item in sorted(longest_samples, reverse=True)]
+    # 返回全量长度统计与少量真实句对，不按相关性等级选样本。
     return {'pair_count': len(lengths), 'joint_token_min': min(lengths), 'joint_token_max': max(lengths), 'joint_token_p95': float(np.percentile(lengths, 95)), 'pairs_over_limit': sum(count > limit for count in lengths), 'max_length': limit}, samples
 
 
@@ -149,14 +163,14 @@ def run_preflight(config_dir, data_dir, receipt_path, profile_name):
     # 使用实际预处理器统计全部固定候选的联合长度。
     print(f"统计{source_info['query_count']}题的原始候选联合输入长度", flush=True)
     # 不执行完整32400句对的模型打分。
-    length_report, samples = scan_candidate_lengths(reranker, frozen)
+    length_report, samples = scan_candidate_lengths(reranker, frozen, batch_size=profile['batch_size'])
     # 先展示长度结果，即使需要调整预算也能定位原因。
     print(json.dumps(length_report, ensure_ascii=False), flush=True)
     # 本轮要求完整保留这些输入，不能默默截断后继续声称相同材料。
     if length_report['pairs_over_limit']:
         # 显示超限规模与实际最大值。
         raise ValueError(f'Joint input exceeds configured budget: {length_report}')
-    # 样本由首两对和最长联合输入组成。
+    # batch1用原样本策略，更大批次使用一批最长联合输入。
     pairs = [(sample['query'], sample['text']) for sample in samples]
     # 显示真正要送GPU的少量输入规模。
     print(f"小批真实打分：{len(pairs)}个句对，batch_size={profile['batch_size']}", flush=True)
@@ -172,6 +186,8 @@ def run_preflight(config_dir, data_dir, receipt_path, profile_name):
     sample_seconds = perf_counter() - started
     # 检查一维有限的原始打分。
     score_report = check_scores(values, len(pairs))
+    # 单独记录实际覆盖范围，不能把不足一个批次的少量样本说成完整批次。
+    batch_report = {'configured_batch_size': profile['batch_size'], 'scored_pair_count': len(pairs), 'full_batch_exercised': len(pairs) >= profile['batch_size'], 'sample_policy': 'first_two_and_longest' if profile['batch_size'] == 1 else 'longest_joint_inputs', 'sample_joint_token_min': min(sample['joint_tokens'] for sample in samples), 'sample_joint_token_max': max(sample['joint_tokens'] for sample in samples)}
     # 预检过程不应同时混入新配置或新输入。
     if input_sha256 != {name: file_sha256(path) for name, path in paths.items()}:
         # 文件发生变化时不写成通过结果。
@@ -179,7 +195,7 @@ def run_preflight(config_dir, data_dir, receipt_path, profile_name):
     # 保存样本身份、长度与分数，不重复写入长篇正文。
     sample_report = [{key: value for key, value in sample.items() if key != 'text'} | {'score': score} for sample, score in zip(samples, score_report['scores'])]
     # 生成可回查的预检报告，不计算排序效果指标。
-    return {'status': 'passed', 'scope': 'real runtime metadata, joint length scan and at most three real scores; no full ranking benchmark', 'profile_name': profile_name, 'reranker': runtime, 'candidate_source': source_info, 'input_sha256': input_sha256, 'query_count': source_info['query_count'], 'length_check': length_report, 'score_check': score_report, 'samples': sample_report, 'model_load_seconds': load_seconds, 'sample_predict_seconds': sample_seconds, 'gpu_name': torch.cuda.get_device_name(device), 'gpu_total_bytes': torch.cuda.get_device_properties(device).total_memory, 'gpu_peak_allocated_bytes': torch.cuda.max_memory_allocated(device), 'gpu_peak_reserved_bytes': torch.cuda.max_memory_reserved(device), 'cache_locations': {'hf_hub_cache': hub_constants.HF_HUB_CACHE, 'hf_xet_cache': hub_constants.HF_XET_CACHE}}
+    return {'status': 'passed', 'scope': 'real runtime metadata, joint length scan and small-sample or full-batch scoring; no full ranking benchmark', 'profile_name': profile_name, 'reranker': runtime, 'candidate_source': source_info, 'input_sha256': input_sha256, 'query_count': source_info['query_count'], 'length_check': length_report, 'score_check': score_report, 'batch_check': batch_report, 'samples': sample_report, 'model_load_seconds': load_seconds, 'sample_predict_seconds': sample_seconds, 'gpu_name': torch.cuda.get_device_name(device), 'gpu_total_bytes': torch.cuda.get_device_properties(device).total_memory, 'gpu_peak_allocated_bytes': torch.cuda.max_memory_allocated(device), 'gpu_peak_reserved_bytes': torch.cuda.max_memory_reserved(device), 'cache_locations': {'hf_hub_cache': hub_constants.HF_HUB_CACHE, 'hf_xet_cache': hub_constants.HF_XET_CACHE}}
 
 
 # 导入模块不会启动模型或解析命令行。
@@ -211,7 +227,7 @@ if __name__ == '__main__':
         # 标准JSON拒绝非法数值。
         stream.write(json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + '\n')
     # 终端只展示主要结果，完整来源保留在报告。
-    display = {name: report[name] for name in ('status', 'profile_name', 'gpu_name', 'query_count', 'length_check', 'score_check', 'gpu_peak_allocated_bytes', 'gpu_peak_reserved_bytes')}
+    display = {name: report[name] for name in ('status', 'profile_name', 'gpu_name', 'query_count', 'length_check', 'score_check', 'batch_check', 'gpu_peak_allocated_bytes', 'gpu_peak_reserved_bytes')}
     # 展示实际生效的模型运行属性。
     display['actual_runtime'] = {name: report['reranker'][name] for name in ('actual_device', 'actual_weight_dtype', 'actual_max_length')}
     # 报告位置便于后续核对。

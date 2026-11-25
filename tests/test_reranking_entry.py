@@ -105,8 +105,10 @@ class RerankingEntryTests(unittest.TestCase):
                 self.assertEqual(build.call_count, 1)
                 # 当前两道题各调用一次predict。
                 self.assertEqual(self.scorers[-1].predict.call_count, 2)
-                # batch确实取自配置里的1，而非函数默认16。
-                self.assertTrue(all(call.kwargs['batch_size'] == 1 for call in self.scorers[-1].predict.call_args_list))
+                # 直接读取用例配置，核对批次透传，不把过去的batch1写死。
+                expected_batch_size = json.loads((self.config_dir / 'reranker_profiles.json').read_text())[profile_name]['batch_size']
+                # 实际predict参数应来自配置，而非函数默认16或测试偏好的常量。
+                self.assertTrue(all(call.kwargs['batch_size'] == expected_batch_size for call in self.scorers[-1].predict.call_args_list))
                 # 查询和候选预算保持当前样本的真实规模。
                 self.assertEqual(summary['query_count'], 2)
                 # 模型profile被完整带入记录。

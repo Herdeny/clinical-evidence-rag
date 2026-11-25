@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25当前节点：8B下载核对通过，等待用户运行batch4预检。** 19个文件／5权重分片16377142272字节，固定版本、内容哈希、索引与BF16头部和离线分词器均一致，无未完成分片；下载23:50.88、退出0，记录results/qwen3_reranker_8b_download_validation.json。助手只做文件和CPU检查，没有加载8B权重。读取到用户把三个profile的batch_size改为4，已保留；预检辅助现在可实际覆盖完整配置批次，命令和验收范围见“Qwen8B下载验收与完整批次预检”。原4B batch1成绩保持，当前batch4尚无真实预检或完整结果。以下较早的节点记录保留其当时状态。
+
 **2026-11-25Qwen4B完整dev已验收。** 同候选324题四指标0.4099740875251688／0.2069843548748328／0.37949912510243394／0.39709670188154617，原Recall@100保持；nDCG@10相对+4.53%、Recall@10+7.69%。新增重排均值3.258秒/题，整轮17:40.07，nDCG@10有124升／106降／94同，独立核验通过。详见nfcorpus_retrieval_baselines.md，原结果保留。下一步按既定候选对照先下载8B，见文末；不因批次咨询擅自改配置。
 
 **2026-11-25真实预检01通过。** 4090／cuda:0、BF16／4096／batch1及原始logit配置与实际模型一致；32400联合输入最小93、最大2414、P95=654、超限0。3对实际分数5.0625／3.75／-4.375，显存峰值已分配8.063002GiB、预留8.265625GiB。报告与源码／输入／命令／资源身份核对通过，进程15.04秒、退出0。记录results/nfcorpus_rerank_qwen3_4b_preflight_01_validation.json。下一步运行文末“完整开发集重排”；小批显存和耗时不代表完整运行成本。
@@ -187,3 +189,48 @@ HF_HUB_DISABLE_PROGRESS_BARS=0 TQDM_POSITION=-1 bash scripts/project_env.sh /usr
 ```
 
 快照会进入项目cache/huggingface/hub/models--Qwen--Qwen3-Reranker-8B/snapshots/77d193c791ed757ca307ee72715aa132723da912。下载后先检查分片和固定版本，再以profile=qwen3_8b独立做真实预检；不能把4B的长度／显存值写成8B实测。随后用同一份冻结候选完整重排，比较收益与成本，原4B数据和batch1基线始终保留。
+
+## Qwen8B下载验收与完整批次预检
+
+2026-11-25用户报告下载完成。已流式重算19个文件的SHA256，普通Git对象使用带blob头部的SHA1核对缓存地址；快照链接均指向该模型的项目内blobs。索引要求5个分片，逐张量核对分片归属、BF16、形状字节、数据偏移连续性和文件总长，张量总字节16377096192与索引一致。离线AutoConfig／AutoTokenizer与LogitScore的yes9693／no2152一致，未构造神经网络。资源记录23:50.88、主机RSS4293064KiB、退出0。明细在results/qwen3_reranker_8b_download_validation.json，下载成功还不代表显存或排序效果通过。
+
+本轮实际配置已由用户改为三个profile均batch4，助手未回改成1。原辅助最多3对的策略不能验证完整batch4，因此扩展scan_candidate_lengths(...,batch_size=...)：batch1保持原首两对＋最长一对；batch>1保留联合token长度最大的batch_size对，凑成一个完整批次再predict。用有界最小堆保留少量样本，不复制全体正文；长度相同时按原出现次序选择，不参考相关性标签。完整长度统计仍覆盖32400对。报告新增batch_check，明确实际打分数量、配置批次、样本策略和full_batch_exercised；如果候选不足则不宣称覆盖整批。
+
+跨题选出的最长4对构成保守的显存压力样本；它不代表正式每题的批次，也不能保证所有其他输入形态都不溢出。此次只改助手的预检及辅助检查，用户核心不变。tests/test_reranking_entry.py原硬编码batch=1的断言已改为读取临时配置核对透传，避免测试反过来强迫修改有效实现。相关27项CPU检查通过（核心12、预检5、入口4、支持6），CLI帮助通过，未执行真实GPU；记录results/qwen3_reranker_8b_preflight_helper_validation.json。
+
+用户终端下一步执行以下命令；config-dir／data-dir／receipt／profile／output均显式传入，仍复用原候选，不重新运行Dense或生成向量：
+
+```bash
+# 进入项目目录，统一缓存和结果路径。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 离线预检8B，读取当前batch4配置并保存报告、资源与实时日志。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh \
+  /usr/bin/time -v \
+  -o results/nfcorpus_rerank_qwen3_8b_preflight_01_resources.txt \
+  /home/wzh/miniforge3/envs/all-in-rag/bin/python -u \
+  -m scripts.evaluation.preflight_reranker \
+  --config-dir configs \
+  --data-dir data/external/nfcorpus/prepared/nfcorpus \
+  --receipt results/nfcorpus_qwen3_8b_frozen_candidates.json \
+  --profile qwen3_8b \
+  --output results/nfcorpus_rerank_qwen3_8b_preflight_01.json \
+  2>&1 | tee results/nfcorpus_rerank_qwen3_8b_preflight_01_run.log
+```
+
+验收看status=passed、actual_device=cuda:0、实际BF16、4096联合预算、32400对无超限，以及batch_check里configured_batch_size=4、scored_pair_count=4、full_batch_exercised=true和4个有限原始logit。真实GPU峰值以这次报告为准，不能复制4B值。若显存不足，保留本轮失败日志后判断实际原因和批次；不静默回退CPU或改配置续跑。
+
+通过后才准备完整8B重排。由于旧4B结果是batch1，后续作模型本身效果／成本对照时应同batch补齐4B；当前不同模型且不同批次的运行可分别展示，但不能把差异全归因于参数规模或模型。原batch1产物和当时的执行快照继续保留，不覆盖旧结果或改写旧指标。
+
+## Jina候选调研：尚未接入或实测
+
+2026-11-25用户询问Jina重排模型。已查官方模型卡、服务说明和技术报告，属于选型咨询，不自动替换当前Qwen／BGE对照，也未添加profile、下载权重或调用API。
+
+[jina-reranker-v3.5模型卡](https://huggingface.co/jinaai/jina-reranker-v3.5)描述0.6B多语言列表式重排，以Qwen3-0.6B为基座，混合滑动窗口与全局注意力，131K是问题与整组文档共享的上下文预算。接口为AutoModel加model.rerank(query,documents)，返回index与relevance_score；当前项目是CrossEncoder.predict独立句对打分，不能只换model_name就假装完成接入。若后续适配，应固定版本与其自定义实现、核对候选index映射、整组长度和截断、候选顺序／分组策略及显存。列表式的候选间交互不同于当前batch_size作为独立句对的并行批次；拆组可能改变上下文，不能仅按硬件参数处理。
+
+[v3.5论文](https://arxiv.org/html/2607.18152v1)在相同jina-embeddings-v5-text-small Top100协议下报告nDCG@10百分数：BEIR平均Jina3.5=63.20、Qwen4B=62.28；NFCorpus分项Jina3.5=38.45、Qwen4B=42.48，医疗ChatDoctor为70.63与73.38、CURE平均62.20与63.68。外部结果只说明该评测中Jina有竞争力且并非每类任务领先，不能与我们不同召回来源／本地dev的0.409974直接比较，也不构成本项目Jina实测。官方效率数据使用A100和FlashAttention-2，不能用来声称本机4090快于当前4B。
+
+[v2-base-multilingual模型卡](https://huggingface.co/jinaai/jina-reranker-v2-base-multilingual)提供CrossEncoder.predict示例，属于更接近当前调用形式的逐对打分，但原生1024上下文及长文分块策略与当前4096预算不同，接入前仍需核对。v3.5是当前更值得研究的不同架构候选，模型小不等于所有任务效果弱，也不保证整组长输入显存低。
+
+[官方许可说明](https://jina.ai/reranker/)列当前v2／v3／v3.5等权重为CC-BY-NC-4.0，商业生产部署需要商业许可；应与项目中Apache-2.0候选区分。API服务另按服务条件评估。本次建议将v3.5保留为待验证候选，后续如纳入应做同一原Top100的独立架构对照，既有数据、原始结果和当前实验顺序保持，不能因一次咨询直接更改标准。
