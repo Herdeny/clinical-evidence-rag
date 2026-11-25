@@ -14,7 +14,13 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
-## 当前进度：同题两组评测已通过，下一步扩展原多方法入口
+## 当前进度：原多方法入口已验收，待用户运行同8题三方法对照
+
+2026-11-26最终验收：用户已补main前置输出检查，现198行run_benchmark_eval.py SHA=bcda8cb4750fd93705f054620b19c3617f315812b7257d8cedd236ee1147c026。唯一新增8行移除后精确匹配前次审查源码，继承六方法／模式及两CLI接线结果；本轮逐一验证原模式3处和两组模式6处文件冲突，均在数据／模型／索引／缓存／保存前拒绝，旧文件不变。新临时目录实际BM25单组／两组保存3／6文件且零embedding构造。记录results/query_rewrite_shared_entry_validation_01.json；旧审查报告保留缺陷观察。无模型／GPU／API调用，核心未由助手改写。下面两段“唯一待补”属于已解决的历史记录。
+
+2026-11-26，重读用户190行run_benchmark_eval.py，SHA=ef831e039e3f2b29019ac6c236de72441decd23f911792a331303271d4eda3ff。临时3文档／3原题／2保存记录搭配CPU假embedding及文档缓存，通过三方法×两模式6路径和真实CLI的可选默认名／显式配对名2路径：同题子集、表达／失败回退、独立组配置、来源身份及打印均正确，BM25不依赖模型配置，资源按方法构造一次。使用实际检索计算／公共评分／保存辅助，所有输出重定向临时目录，输入不变；未加载真实模型、GPU或请求API，不是检索成绩。报告results/query_rewrite_shared_entry_review_01.json。
+
+唯一待补为原任务已约定的启动前防覆盖。临时目录仅预放改写组摘要，入口仍构造假模型／缓存、完成两组4次查询并写出原问题组三文件，直到保存改写组才被FileExistsError拒绝；原哨兵未变。当前保存器已能保护自己的既有文件，但入口须提前检查本轮所有输出，避免浪费计算和留下半套新产物。main方法检查后按模式确定一个或两个前缀，遍历三个既有后缀，任一存在先停止；不改变主业务、参数默认值或评分。用户补好保存后复核，通过再提交同步并准备真实8题运行。以下旧段落按各自日期理解，不能把当前入口仍称未接入，也不提前称最终验收通过。
 
 2026-11-26，用户evaluate_query_rewrite_retrieval已通过语义审查和CPU假检索核对，benchmark_eval.py SHA-256为74f0a6e93044fa59a27a1b14b1c940069f988e4ad53f01c3b542e3e0f7b72720。A/B/C例子验证同一子集／标签／函数／ks、成功表达与失败回退、两次公共评分及输入不变；真实dev324＋保存8条通过16次假检索接线，各次k100。ids为Series可正常迭代及供isin使用，局部变量拼写不影响结果，不修改正确核心迎合示例。旧公共评分和冻结重排AST未变。记录results/query_rewrite_paired_eval_validation_01.json；未加载Dense模型／GPU或调用API，不是检索效果结果。
 
@@ -145,9 +151,9 @@ fi
 
 验收按实际语义看：同一批题、相同标签和检索函数、各调用公共评测一次；原题组收到原query，新表达组收到保存query；query_inputs保留原文及失败回退状态，完整返回两组表与run。此函数已通过上文本地检查；原运行入口的可选改写模式仍待用户实现，没有真实改写召回结果。
 
-## 下一项用户任务：扩展原run_benchmark_eval.py，支持三方法可选改写
+## 已完成：原run_benchmark_eval.py支持三方法可选改写
 
-2026-11-26方案纠正：用户指出独立Dense入口重复原有模型／缓存／保存，且后续BM25／RRF仍需接入。助手核对后撤回独立入口任务，改为原入口增量扩展；“先做Dense实验”不应变成架构限制。已验收evaluate_query_rewrite_retrieval接收通用retrieve_fn，无须改动，三方法均可复用。用户已开始未跟踪run_query_rewrite_retrieval_eval.py草稿，助手不修改或删除，其中读取字节／指纹和输出保护片段可由用户迁回原入口。当前原入口尚未扩展，没有新实测分数。
+2026-11-26方案纠正：用户指出独立Dense入口重复原有模型／缓存／保存，且后续BM25／RRF仍需接入。助手核对后撤回独立入口任务，改为原入口增量扩展；“先做Dense实验”不应变成架构限制。已验收evaluate_query_rewrite_retrieval接收通用retrieve_fn，无须改动，三方法均可复用。用户已开始未跟踪run_query_rewrite_retrieval_eval.py草稿，助手不修改或删除，可用片段由用户迁回原入口。原入口现已完成并通过上文本地验收；以下保留任务定义，真实分数待下方用户执行。
 
 本轮只修改run_benchmark_eval.py，沿用原method、位置参数和默认值。main接口变为main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_embedding_model="bge_small", rewrite_path=None)，CLI新增--rewrite-results（type=Path，默认None），将args.rewrite_results传给rewrite_path。保留--config／args.config、--method及现有可选run-name默认公式f"{data_dir.name}_{method}_{config_embedding_model}_{split}"，不加时间戳或兼容别名，不顺带新增result-dir等参数。
 
@@ -175,6 +181,70 @@ fi
 本轮先由用户修改保存，助手重读实际代码，再用CPU假模型／缓存检查原无改写路径及三方法改写接线、资源构造次数、两组标签／题号／表达、原配置保持、JSON可保存和模型前防覆盖。语义正确性优先，不为测试改变异常类型或变量名，不加载GPU／模型或请求API。草稿暂不自动删除；完成迁移后再按用户授权整理。
 
 实验先复用同一8条验证流程，三方法分别运行；每次在方法内只改变检索表达。完整324条改写准备后使用同一入口，无需新函数。比较BM25原文vs BM25改写、Dense原文vs Dense改写、RRF原文vs RRF改写，之后可横向比较共同题集上的方法差异；不能直接拿8题改写均值与旧324题均值相比。此时不接重排、不改变RRF预算或提示词，保存表达中的PLAIN-77语义观察仍保留。运行前先提交同步，再给用户终端命令；检索计时不含此前改写API耗时，不宣称端到端成本或临床效果。
+
+## 待用户执行：同8题三方法检索对照
+
+本地验收后先提交同步，再准备results/nfcorpus_query_rewrite_retrieval_dev_8_01_audit.json及_source_snapshot。回执绑定执行提交、已验收源码／embedding配置、三原数据、已保存改写及原Qwen文档缓存身份；其核验范围仅为列明材料，旧历史资源异常继续披露，不声称全历史未变。助手只做准备，不运行下列真实实验。
+
+输入已核对：NFCorpus3633文档／324dev，保存改写8条与原dev前8题相同，其中1条文字变化；原JSONL SHA仍为af5e6ad0ffdf16851f0caa92be9bed683726417a10cb78fb2b912b5e3fa6c1fb。Qwen文档缓存f57e042cca31d1d4e4fcc61d84d576d2b6ad4b247c7490d03188c16144fd54c1已完整，3633×4096 FP32、原corpus身份一致；准备时三方法各8份原始输出均不存在。不会重新请求DeepSeek，Dense／RRF复用文档缓存。BM25不传embedding模型选项；两方法明确指定qwen3_8b，原batch／prompt／RRF预算不变。
+
+以下终端循环依次运行BM25、Dense、RRF；每种方法两组各8题。各运行前缀分别为nfcorpus_bm25_query_rewrite_dev_8_01、nfcorpus_dense_qwen3_8b_query_rewrite_dev_8_01、nfcorpus_rrf_qwen3_8b_query_rewrite_dev_8_01。每方法检查8个原始输出，外层time／tee也受保护；遇冲突或运行失败即停止，不自动覆盖或生成时间戳。已完成方法的记录保留，重试手动换编号并按实际尚未运行的方法执行。
+
+```bash
+# 进入项目目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 三种方法依次运行，各自比较同8题的原问题与保存表达。
+for clinical_method in bm25 dense rrf; do
+  # BM25使用自己的名称，不传不需要的embedding配置。
+  if [[ "$clinical_method" == bm25 ]]; then
+    clinical_run_name="nfcorpus_bm25_query_rewrite_dev_8_01"
+    clinical_embedding_args=()
+  else
+    # Dense和RRF固定使用原Qwen8B配置及文档缓存。
+    clinical_run_name="nfcorpus_${clinical_method}_qwen3_8b_query_rewrite_dev_8_01"
+    clinical_embedding_args=(--config-embedding-model qwen3_8b)
+  fi
+  # 启动time和tee前，检查两份外层记录及两组三份JSON。
+  clinical_conflict=""
+  for clinical_suffix in run.log resources.txt original_results.jsonl original_run.json original_summary.json rewritten_results.jsonl rewritten_run.json rewritten_summary.json; do
+    if [[ -e "results/${clinical_run_name}_${clinical_suffix}" ]]; then
+      clinical_conflict="results/${clinical_run_name}_${clinical_suffix}"
+      break
+    fi
+  done
+  # 发现旧文件时停止，保留原件，重试时手动更换本轮编号。
+  if [[ -n "$clinical_conflict" ]]; then
+    printf '已有记录，停止运行：%s\n' "$clinical_conflict"
+    break
+  fi
+  # 说明当前运行的方法；Python中会显示两组评测进度。
+  printf '开始运行：%s\n' "$clinical_run_name"
+  # 离线复用本地模型及已保存改写，保留资源统计和实时日志。
+  if ! HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh \
+    /usr/bin/time -v \
+    -o "results/${clinical_run_name}_resources.txt" \
+    /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_benchmark_eval.py \
+    --method "$clinical_method" \
+    --config configs \
+    --data-dir data/external/nfcorpus/prepared/nfcorpus \
+    --split dev \
+    --cache cache/embeddings \
+    "${clinical_embedding_args[@]}" \
+    --rewrite-results results/nfcorpus_query_rewrite_dev_8_01_results.jsonl \
+    --run-name "$clinical_run_name" \
+    2>&1 | tee "results/${clinical_run_name}_run.log"; then
+    # 任意方法失败后停止，不继续启动后续方法。
+    printf '运行失败，已停止：%s\n' "$clinical_run_name"
+    break
+  fi
+done
+```
+
+验收看三种方法各有original／rewritten摘要、两组各8条记录、相同题号／原qrels、缓存身份与预期配置；两组进度各到8/8，原问题与保存表达逐题对应。7条字面原样用于一致性观察，不预先保证浮点数逐位相同；唯一变化PLAIN-77的地域范围疑点仍保留，不能只看收益判同义。原问题／改写均值只在同8题内比较，不同旧324题均值直接相减。检索阶段耗时不包括先前DeepSeek改写，整进程资源另列，不拼成未经测量的端到端延迟。该8题是流程及个案验证，后续完整324题三方法对照仍须完成；当前未产生真实改写检索成绩。
+
+用户运行后贴终端三组指标或错误；助手再只读独立复算两组原qrels指标、核验文件／配置／来源与缓存，保存逐题差异及限制，通过后先归档同步再进入下一单元。
 
 ## 已完成的单题入口任务（历史定义）
 

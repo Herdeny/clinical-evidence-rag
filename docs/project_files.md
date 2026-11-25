@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-26。根目录已有20个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待用户迁移；14个数据维护工具集中到scripts/data。真实8题改写、输入适配及两组编排已核对，仍保留唯一变化的地域范围疑点。独立Dense入口方案已撤回；下一项扩展原run_benchmark_eval.py的可选改写模式，同时复用BM25／Dense／RRF，尚未实现或取得改写检索收益。Qwen Dense与四套重排dev已实测，负结果和历史资源异常继续披露。
+整理日期：2026-11-19，进度更新2026-11-26。根目录已有20个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。真实8题改写、输入适配及两组编排已核对，唯一变化的地域范围疑点保留。独立Dense入口方案已撤回；原run_benchmark_eval.py的三方法可选改写及启动前保护均已本地验收，下一项由用户运行同8题三方法对照，尚无真实改写检索收益。既有实测、负结果及历史资源异常保留。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -22,7 +22,7 @@
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；支持原方法／frozen_rerank及显式query_subset_ids，未声明仍严格检查整划分 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR读取及apply_query_rewrites已完成；原题／状态／来源保留，失败原样回退，实际8条适配通过，原loader AST未改 | 用户；助手未改核心 |
 | benchmark_eval.py | 公共评分、冻结重排及evaluate_query_rewrite_retrieval已实现；同题两组共享标签／检索器，CPU假检索核对通过，非真实改写收益 | 用户；助手未改核心 |
-| run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，旧dev已实测；下一项增加可选--rewrite-results，复用已验收通用两组函数，仍待用户实现 | 用户；助手不代写核心 |
+| run_benchmark_eval.py | 原三方法dev已有实测；可选改写六路径／两CLI及启动前九处冲突检查均通过，用户待运行真实8题三方法；无改写成绩 | 用户；助手未改核心 |
 | run_reranking_eval.py | 固定候选重排入口；四套重排dev已核对，旧历史资源异常继续披露；CLI统一--config且原业务函数不变 | 用户；助手只纠正CLI参数 |
 
 ## 数据维护模块
