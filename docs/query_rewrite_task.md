@@ -10,11 +10,38 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
-## 当前进度：核心及独立入口已通过本地检查，下一步真实单题
+## 当前进度：真实单题通过，下一步小批量核心
+
+2026-11-25，用户终端完成ct_query_rewrite_single_01：status=ok，检索表达与原问题完全相同，changed=false，保留检查目的未说明；模型deepseek-flash，finish_reason=tool_calls，422输入／96输出／518总tokens，缓存读取0。本地整个进程1.47秒、主机RSS峰值96700KiB、退出0且无中断标记，不称远程模型推理延迟。日志及资源原件未改；8字段无损归档results/ct_query_rewrite_single_01_results.jsonl、_summary.json、_run.json，核验_validation.json。原始日志与用户提交内容一致，当前三份源码／配置SHA匹配入口本地验收；本次未在请求前创建代码回执或抓取原始HTTP消息，不能冒称已严格绑定请求时源码。
+
+该次reason声称没有否定表达，原问题却有not stated；实际检索表达完整保留该条件，单题流程通过，解释文本的这个概括不准确另记ENG-026。不因此重复调用或修改提示词追单题措辞。真实单题只证明这个输入的服务链路和保留情况，没有测NFCorpus召回、指南选择或更广泛的语义忠实性。
 
 2026-11-25，用户完成query_rewrite.py，本轮审阅源码SHA-256为eaba30a9f7efa31a0850e72a6f475eb0869fcff3c7b1a3d465889ca5fd20daed。以真实ChatPromptTemplate、RewriteResult及AIMessage搭配最小FakeLLM检查六类响应：有效改写、仅首尾空白差异、空白查询、空白原因、解析异常、parsed缺失，均符合本文返回协议；另检查四个非法输入零模型调用、网络异常原样传播及未知用量保留None。成功／失败返回均可JSON序列化，已有响应保留原问题及两类元数据，每次模型invoke一次。假响应中的token值只是检查数据，不是实际用量，助手未调用API或GPU；这不证明真实服务兼容性、医学语义保真或检索收益。原用户核心未修改，未新增隐藏测试脚本。离线观察归档results/query_rewrite_core_validation_01.json。
 
-助手补充configs/llm_profiles.json作为公开配置；用户已实现run_query_rewrite.py，不从Notebook导入对象，核心rewrite_query的接口和8字段返回不变。入口38行源码SHA-256为8f9783b2730a8b7cb82de9f1351c1bfce708132217c768e5f6a95327c2aa2773，记录results/query_rewrite_entry_validation_01.json。修正--query后，真实argparse到实际核心的CPU假响应链路通过，配置／项目dotenv路径／单次invoke／原问题／JSON输出正确；导入及help无客户端构造，缺query在调用前拒绝。dotenv及真实客户端被mock，未读密钥或发起API；假token不是成本。没有修改用户实现，也未把局部变量名作为阻断。当前等待用户首次真实单题输出，不提前执行批量改写。
+助手补充configs/llm_profiles.json作为公开配置；用户已实现run_query_rewrite.py，不从Notebook导入对象，核心rewrite_query的接口和8字段返回不变。入口38行源码SHA-256为8f9783b2730a8b7cb82de9f1351c1bfce708132217c768e5f6a95327c2aa2773，记录results/query_rewrite_entry_validation_01.json。修正--query后，真实argparse到实际核心的CPU假响应链路通过，配置／项目dotenv路径／单次invoke／原问题／JSON输出正确；导入及help无客户端构造，缺query在调用前拒绝。该轮dotenv及真实客户端被mock，未读密钥或发起API，假token不是成本；随后用户真实单题结果已单独记录于上文。没有修改用户实现，也未把局部变量名作为阻断。
+
+## 已补的保存辅助：query_rewrite_io.py
+
+助手提供save_rewrite_results(records, *, config, run_name, result_dir)。records为按输入顺序排列的字典列表，每条有query_id及核心返回的8字段，允许附加rewrite_elapsed_ms等字段，原样写入；config只传公开运行配置，不传密钥或环境内容。函数不调用模型、不改写查询、不读取环境。输出为手动run_name前缀的_results.jsonl（逐题）、_summary.json（数量和已知token）、_run.json（公开配置），返回summary字典。
+
+逐题保留原始metadata，解析失败但有用量时仍计入已知token；缺失或不完整用量单独计数，全部未知时三项总量为None，不能假设为0。query_id要求非空字符串且同一批不重复；status沿用ok/error。写前检查字段及JSON可序列化，任意一份输出已存在即拒绝覆盖，并使用x模式创建；普通写入失败只清理本次已创建文件，原异常继续抛出。这是批次结束后的保存，不宣称具备逐请求断点恢复、跨进程锁或断电事务保证。临时目录检查已覆盖无损往返、输入不变、已知错误用量、未知用量、覆盖保护、重复ID及不可序列化配置；未为此改用户核心。
+
+## 下一项用户任务：rewrite_queries
+
+在现有query_rewrite.py中增加rewrite_queries(queries_df, *, llm)，复用已完成的rewrite_query，不改它的8字段协议。当前只写该函数，保存后由助手审阅；不直接调用8次API或修改入口。下一次接线后用现有load_beir_dataset(...,split="dev")得到的queries_df.head(8)作流程检查，完整评测仍用同一324道dev题。已核对前8题为PLAIN-1、PLAIN-11、PLAIN-22、PLAIN-32、PLAIN-43、PLAIN-55、PLAIN-67、PLAIN-77；按原文件顺序选取，不依检索分数或标签挑题。
+
+输入queries_df是上游加载器已经检查的DataFrame，列为id和query；不在该函数里重新读取数据或重复整套标注验证。llm是入口创建的一份共享客户端。需要time.perf_counter计时、tqdm显示进度，以及openai.APIError处理请求本身失败；本地openai1.109.1已核实连接／超时／限流／HTTP错误类都继承APIError，无需新安装。
+
+完整逻辑顺序：
+
+1. 建立结果列表，用tqdm包住queries_df.iterrows()，total=len(queries_df)，desc="改写查询"，保证输入顺序。row["id"]只用于记录query_id，模型只接收row["query"]，不传qrels或标注答案。
+2. 对每题在调用前取perf_counter，执行一次rewrite_query(row["query"],llm=llm)，不在循环中创建客户端或再次结构化包装。
+3. 核心正常返回时，不论status为ok还是error，都原样保留8字段；已有响应的解析失败不是抛出的API异常，用量仍保留。
+4. 仅捕获APIError，为这一题构造相同8字段的失败结果：original_query原样、status=error，retrieval_query／changed／reason／usage_metadata／response_metadata均None，error为含异常类型及具体消息的字符串。此时没有有效原始响应，用量未知；不自动重试、回退或丢弃该题。数据／编程异常自然抛出，不用except Exception把它们伪装成API失败。
+5. 单题处理后停止计时，将差值乘1000作为rewrite_elapsed_ms。它包含单题提示构造、请求、解析及失败处理，不含客户端创建、进度输出或文件保存；不直接称远程推理时间。
+6. 每条结果加query_id=row["id"]及rewrite_elapsed_ms，追加到列表，结束后返回列表。它共10字段，不改核心函数返回；函数不调用保存辅助，输出落盘由后续入口统一执行。
+
+验收看正常／原样／解析失败／请求异常均每输入一条就有一条记录，ID顺序一致；有有效输入的请求每题最多调用一次；失败不伪造changed或token，编程错误不吞掉，计时非负。先审实际代码再做最小CPU假调用检查，真实8题仍由用户终端执行。保存辅助已能接收这批记录，接入入口后复用同一模型配置和原文档向量；当前尚无8题API输出、批量缓存、改写检索或收益结果。
 
 ### 独立入口的完整任务
 
@@ -36,7 +63,7 @@
 
 真实单题验收看status=ok、两个非空字段、Python计算的changed、真实usage_metadata及response_metadata，确认检查目的缺失仍然缺失，没有被改成筛查或偶发发现，也没有生成医学回答。changed=False合法，具体措辞不设标准答案；finish_reason若为tool_calls可能是结构化工具格式的正常结束，不强求stop。若失败，保留本次真实错误和用量再排查。成功后才做保存辅助和少量开发题，后续批量编排仍由用户完成。当前不加载向量或运行324次API，执行命令继续通过bash scripts/project_env.sh。
 
-### 首次真实单题命令：由用户在终端执行
+### 首次真实单题命令：已由用户执行，保留供回查
 
 入口本地验收、归档并同步GitHub后执行。准备时确认下列两个01文件尚不存在；每次启动time和tee前仍检查，重复运行手动改02等编号。日志保存终端输出，资源文件记录整个本地进程，不当远程模型推理耗时；结构化JSON保存辅助尚未加入。此次只有一条query、不加载本地模型或文档向量，SDK max_retries=0。
 
