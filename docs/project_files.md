@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；Qwen完整Dense及Qwen4B同候选重排dev均已实测核验，运行辅助与用户重排入口50项相关检查通过。4B提高平均前部排序但新增3.258秒/题成本，下一步8B同候选对照，尚未完成模型选型。
+整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；Qwen完整Dense及Qwen4B／8B同候选重排dev均已实测核验。4B batch1提高平均前部排序但新增3.258秒/题成本，8B batch4当前nDCG@10更高而Recall@10较低、新增5.430秒/题，下一步补4B batch4控制；尚未完成模型选型。本轮只离线核验和记录，没有改核心或重新运行GPU。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -19,7 +19,7 @@
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分；新增可选query_id回调和冻结候选重排包装，10项小样本检查通过，真实324题假打分衔接核对通过 | 用户 |
 | run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
-| run_reranking_eval.py | 固定候选重排运行入口；4项编排检查及Qwen4B真实324题运行核验通过；原候选集合／配置和来源保持，8B及BGE沿用入口待实测 | 用户 |
+| run_reranking_eval.py | 固定候选重排运行入口；4项编排检查及Qwen4B／8B真实324题运行核验通过；原候选集合／配置和来源保持，4B batch4控制及BGE仍待实测 | 用户 |
 
 ## 数据维护模块
 
@@ -46,7 +46,7 @@ configs/reranker_profiles.json保存三种重排候选的固定版本与运行�
 
 ## 评测核验工具
 
-scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度；batch1保留首两对加最长一对，batch>1选出最长batch_size对实际覆盖完整批次，报告实际样本数及是否覆盖整批，记录CUDA／BF16／预算／显存及来源指纹，不运行完整排序评分。Qwen4B batch1与8B batch4真实预检01均已通过；8B预检已分配17.567636GiB、预留18.158203GiB，来源／源码／样本分词长度已离线核对，下一步用户运行完整8B dev。tests/test_reranker_preflight.py现5项CPU检查，命令与结果范围见reranking_runtime_task.md的8B完整开发集节。
+scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度；batch1保留首两对加最长一对，batch>1选出最长batch_size对实际覆盖完整批次，报告实际样本数及是否覆盖整批，记录CUDA／BF16／预算／显存及来源指纹，不运行完整排序评分。Qwen4B batch1与8B batch4真实预检01均已通过；8B预检已分配17.567636GiB、预留18.158203GiB，其完整dev也已实测核验。下一步是4B batch4预检02，保留旧01。tests/test_reranker_preflight.py现5项CPU检查，命令与范围见reranking_runtime_task.md的4B批次控制节。
 
 scripts/evaluation/validate_beir_run.py已适配frozen_rerank：固定候选集合／模型实际配置与原最大K召回不变量核对，按重排入口实际--profile检查资源命令，旧方法保留--method。4项新临时检查通过；正式完整运行结束后再核对原始产物，不为适配核验工具修改用户CLI。
 

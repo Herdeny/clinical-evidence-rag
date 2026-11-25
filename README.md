@@ -4,7 +4,7 @@
 
 代码目录已整理：根目录现有16个开发模块（含已验收benchmark_data.py和benchmark_eval.py，以及已验收run_benchmark_eval.py和run_reranking_eval.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
 
-**当前进展：Qwen4B完整重排已实测核验，8B batch4真实预检已通过。** 在相同324道NFCorpus dev／原Dense Top100上，Qwen4B重排nDCG@10=0.409974、Recall@10=0.206984，相对原Qwen Dense提高4.53%／7.69%；Recall@100保持0.397097。batch1新增重排平均3.258秒/题，整轮17:40.07；逐题有升有降，来源、源码和40份旧产物／缓存身份与独立重评分均通过。见[实测报告](docs/nfcorpus_retrieval_baselines.md#qwen3-reranker-4b实测收益与代价)。8B固定版本已核对，4090／BF16／4096／batch4长输入预检通过，预检已分配17.568GiB、预留18.158GiB，尚无8B完整排序成绩；下一步用户执行[8B完整开发集重排](docs/reranking_runtime_task.md#qwen8b完整开发集重排)，BGE对照也保留。最终模型对照需统一批次，原4B batch1结果保留。尚未完成模型选型、批次调优、医学专项或MIRAGE全量问答验证。
+**当前进展：Qwen4B／8B完整重排均已实测核验，下一步补同批次控制。** 在相同324道NFCorpus dev／原Dense Top100上，4B batch1的nDCG@10=0.409974、Recall@10=0.206984，新增重排均值3.258秒/题；8B batch4分别为0.416582／0.202992，新增5.430秒/题、整轮29:24.12。两轮Recall@100均保持0.397097；8B相对原Dense的nDCG@10+6.22%、Recall@10+5.61%，但对4B两项分别+1.61%／-1.93%。8B原候选集合、独立逐题重评分、三输入／十文件执行快照及56份旧产物和缓存身份均已核验，见[实测报告](docs/nfcorpus_retrieval_baselines.md#qwen3-reranker-8b实测与4b对照边界)。两轮批次不同，下一步按[4B batch4预检](docs/reranking_runtime_task.md#qwen4b批次控制batch4预检02)补齐控制，原batch1结果保留，BGE对照仍待完成。尚未完成最终模型选型、医学专项或MIRAGE全量问答验证。
 
 **2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
 

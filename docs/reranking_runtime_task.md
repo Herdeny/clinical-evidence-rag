@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25当前节点：8B batch4完整dev已核验，下一步4B batch4控制。** 四指标0.4165824815915057／0.20299195976049142／0.38352092086136175／0.39709670188154617；相对Dense nDCG@10+6.22%、Recall@10+5.61%，对旧4B batch1则nDCG@10+1.61%、Recall@10-1.93%。新增重排均值5.430秒/题、整轮29:24.12。三输入／十文件快照和当前源码／56旧产物／固定配置及独立逐题重评分均通过，原Top100不变。完整对照见nfcorpus_retrieval_baselines.md；当前模型与批次同时变化，下一步补已下载4B在batch4下的独立运行，BGE计划保留。命令见“Qwen4B批次控制：batch4预检02”。
+
 **2026-11-25当前节点：8B batch4真实预检01已通过并离线核对，下一步完整324题重排。** RTX4090／cuda:0、BF16／SDPA／4096，全部32400联合输入无超限；4个最长样本2414／2412／2411／2410 tokens，实际一个完整batch4，float32有限分数-3.75／-6.9375／-7.8125／-6.40625。峰值已分配17.567636GiB、预留18.158203GiB，整进程16.81秒、退出0；4个样本已用固定分词器独立重算长度，源码／输入／候选／配置／日志身份一致。记录results/nfcorpus_rerank_qwen3_8b_preflight_01_validation.json，尚无8B完整排序成绩。下一命令见“Qwen8B完整开发集重排”，不重新跑Dense，旧4B batch1结果保留；预检峰值不是全程峰值。
 
 **2026-11-25当前节点：8B下载核对通过，等待用户运行batch4预检。** 19个文件／5权重分片16377142272字节，固定版本、内容哈希、索引与BF16头部和离线分词器均一致，无未完成分片；下载23:50.88、退出0，记录results/qwen3_reranker_8b_download_validation.json。助手只做文件和CPU检查，没有加载8B权重。读取到用户把三个profile的batch_size改为4，已保留；预检辅助现在可实际覆盖完整配置批次，命令和验收范围见“Qwen8B下载验收与完整批次预检”。原4B batch1成绩保持，当前batch4尚无真实预检或完整结果。以下较早的节点记录保留其当时状态。
@@ -253,6 +255,33 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh \
 ```
 
 验收要求进程正常完成、324题各返回原100候选、summary／results.jsonl／run.json／resources.txt／run.log五产物齐全且有限，独立用原dev qrels重算四项指标并与逐题及均值对应。返回全部原100候选时Recall@100应保持0.39709670188154617；nDCG@10／Recall@10是否提升看实际输出，不预设8B胜出。记录逐题升降、均值／中位数／P95重排延迟和整进程成本。候选读取＋重排计时排除原Dense检索、模型／文件加载及评分；正式入口未采集全程GPU峰值，不拿预检值或主机RSS代替。8B batch4与旧4B batch1先分别报告，最终模型对照需同batch补齐4B，不能把两种变化合称模型规模带来的提升。
+
+## Qwen4B批次控制：batch4预检02
+
+8B完整运行已完成并核验，保留原五产物和逐题比较。8B batch4当前nDCG@10高于旧4B batch1而Recall@10更低，新增阶段均值5.430秒/题高于旧3.258秒/题；这些是两套配置的实际观察，不是受控的模型或批次效应。接下来补齐已计划的4B batch4，使用相同候选、正文、指令、4096预算、BF16／SDPA，仅相对4B旧运行改变batch；与8B则形成同batch4对照。
+
+不需要重新下载4B。已核对当前4B profile的batch_size=4和项目内固定快照索引所需2个分片入口；先运行真实预检02，覆盖最长四个句对，保留原batch1的preflight01与dev01。新预检三个输出名称和dev02前缀均未使用。
+
+```bash
+# 进入项目目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 离线预检4B当前batch4配置，保留旧batch1的01记录。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh \
+  /usr/bin/time -v \
+  -o results/nfcorpus_rerank_qwen3_4b_preflight_02_resources.txt \
+  /home/wzh/miniforge3/envs/all-in-rag/bin/python -u \
+  -m scripts.evaluation.preflight_reranker \
+  --config-dir configs \
+  --data-dir data/external/nfcorpus/prepared/nfcorpus \
+  --receipt results/nfcorpus_qwen3_8b_frozen_candidates.json \
+  --profile qwen3_4b \
+  --output results/nfcorpus_rerank_qwen3_4b_preflight_02.json \
+  2>&1 | tee results/nfcorpus_rerank_qwen3_4b_preflight_02_run.log
+```
+
+验收继续看实际CUDA／BF16／4096、全部联合输入无超限、一维4个有限原始logit及完整batch4已覆盖，显存以这次真实报告为准。通过并归档后才准备nfcorpus_rerank_qwen3_4b_dev_02、运行前回执和完整评测命令。助手不后台运行预检或GPU；无需用户重写核心、改配置或重做Dense。
 
 ## Jina候选调研：尚未接入或实测
 
