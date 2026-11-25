@@ -1,6 +1,6 @@
 # Cross-Encoder重排任务
 
-**2026-11-25当前进度：4B batch4控制已完成，BGE真实预检已核验。** 同一原Top100／324题，4B batch4的nDCG@10=0.407701、Recall@10=0.205120，新增3.236秒/题；对batch1仅少0.68%耗时。同batch4的8B nDCG@10高2.18%、Recall@10低1.04%、阶段均值约1.678倍，尚不选最终模型。旧预检资源覆盖的限定状态继续保留，见[当前实测归档](nfcorpus_retrieval_baselines.md#qwen4b-batch4控制与历史记录异常)。BGE实际CUDA BF16／4096／batch4预检通过，最长2624、0超限，预检已分配1.337257GiB；下一步[完整dev](reranking_runtime_task.md#bge-v2-m3完整开发集重排)，新回执显式继承历史异常，代码不改，不重做Dense。以下保留较早节点的任务设计与历史状态。
+**2026-11-25当前进度：既定Qwen4B／8B及BGE完整候选对照已完成。** BGE在原Qwen Dense候选上nDCG@10=0.329419、Recall@10=0.147297，对输入分别下降16.01%／23.36%，新增267.758ms/题；保留负向结果，不以运行快取代效果评价。Qwen8B保留nDCG效果对照、4B保留成本及Recall@10对照，所有原结果继续保留。BGE当前周期独立核验通过、继承旧历史异常，不改用户核心或核验器，详见[本轮实测归档](nfcorpus_retrieval_baselines.md#bge-v2-m3重排负向结果与阶段结论)。下一工作单元按原计划查询改写，首先固定Qwen Dense检验候选召回；当前尚无改写模块或收益。以下保留较早节点的任务设计与历史状态。
 
 **2026-11-25首个完整重排结果已核验：** Qwen4B在同一Qwen8B Dense Top100／324 dev上的nDCG@10=0.409974、Recall@10=0.206984，相对+4.53%／+7.69%，Recall@100保持0.397097。batch1新增重排平均3.258秒/题、整轮17:40.07；逐题存在下降，当前不是最终模型结论。详见[实测归档](nfcorpus_retrieval_baselines.md#qwen3-reranker-4b实测收益与代价)。下一步按原计划[下载8B](reranking_runtime_task.md#qwen8b同候选对照先下载)，独立预检后同候选比较，BGE对照保留。
 

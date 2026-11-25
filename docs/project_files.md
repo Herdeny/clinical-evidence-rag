@@ -1,25 +1,25 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；Qwen完整Dense及4B batch1／batch4、8B batch4同候选dev均已实测。4B历史资源异常单独披露。BGE真实BF16／4096／batch4预检已由用户完成并离线核验，下一步完整dev；助手本轮只核对产物与四对CPU分词，未改核心／核验器或执行GPU。
+整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；Qwen Dense与4B batch1／batch4、8B batch4、BGE batch4同候选dev均已实测。BGE当前周期核验通过但效果低于原Dense，保留负向对照；历史资源异常继续披露，下一阶段查询改写。助手本轮只离线核对产物、重新评分和记录，未改核心／核验器或执行GPU。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
 | retrieve_core.py | 已实现的向量相似度与 Top-K | 用户 |
 | retrieve_bm25.py | 分词、BM25 构建与检索 | 用户 |
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
-| rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
+| rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
 | retrieve_evalution.py | 两类 Recall 与逐题批量评测，沿用实际文件名 | 用户 |
 | run_retrieval_eval.py | CLI、方法选择与评测入口 | 用户 |
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
 | embedding_adapter.py | 共享模型构造与显式FP32输出归一化；6项无权重验证通过，预检和正式入口已共用，真实GPU预检03通过 | 助手辅助，逐行中文注释 |
-| reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B完整运行及BGE真实小批预检已通过，BGE完整dev待实测 | 助手辅助，逐行中文注释 |
+| reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B及BGE真实完整运行均已核对 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；save_beir_results支持原方法及frozen_rerank，保留候选来源和正确计时范围 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分；新增可选query_id回调和冻结候选重排包装，10项小样本检查通过，真实324题假打分衔接核对通过 | 用户 |
 | run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
-| run_reranking_eval.py | 固定候选重排入口；Qwen4B batch1／batch4及8B batch4实际运行、指标已核对；4B batch4历史资源异常另有披露，BGE待实测 | 用户 |
+| run_reranking_eval.py | 固定候选重排入口；Qwen4B batch1／batch4、8B batch4及BGE batch4完整dev、指标已核对；旧历史资源异常另有披露 | 用户 |
 
 ## 数据维护模块
 
