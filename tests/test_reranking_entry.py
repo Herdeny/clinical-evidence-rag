@@ -131,7 +131,7 @@ class RerankingEntryTests(unittest.TestCase):
         # 特意选择非默认模型、名称和带空格的输出路径。
         output = self.directory / 'cli output'
         # 按真实CLI选项准备参数列表。
-        arguments = ['run_reranking_eval.py', '--config-dir', str(self.config_dir), '--data-dir', str(self.data), '--receipt', str(self.receipt), '--profile', 'qwen3_8b', '--run-name', 'cli_experiment_03', '--result-dir', str(output)]
+        arguments = ['run_reranking_eval.py', '--config', str(self.config_dir), '--data-dir', str(self.data), '--receipt', str(self.receipt), '--profile', 'qwen3_8b', '--run-name', 'cli_experiment_03', '--result-dir', str(output)]
         # 捕获最终打印的合成指标。
         printed = io.StringIO()
         # 模型构造替身位于入口真正导入的模块，其他步骤仍实际执行。

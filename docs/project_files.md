@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-25。根目录现有19个Python模块，14个数据维护工具集中到scripts/data；用户完成单题和批量改写核心，真实CT单题通过，批量仅通过本地假响应及保存衔接检查，尚无批量API或改写检索收益。助手提供query_rewrite_io.py保存辅助；下一项用户新建run_query_rewrite_batch.py接NFCorpus dev前8题。Qwen Dense与四套重排dev均已实测；BGE保留负向对照，历史资源异常继续披露。助手未执行GPU或真实LLM调用。
+整理日期：2026-11-19，进度更新2026-11-26。根目录现有20个Python模块，14个数据维护工具集中到scripts/data；用户完成批量改写核心和数据集入口，本地真实dev数据／假客户端／实际保存链路通过，下一步用户终端真实8题。真实CT单题已归档，尚无批量API或改写检索收益。Qwen Dense与四套重排dev均已实测；BGE保留负向对照，历史资源异常继续披露。助手未执行GPU或真实LLM调用。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -9,7 +9,8 @@
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
 | rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | query_rewrite.py | 单题真实CT通过；批量rewrite_queries已通过4题混合假响应及编程异常传播检查，失败记录／用量保留；无批量API或改写检索收益 | 用户；助手未修改核心 |
-| run_query_rewrite.py | 独立读取LLM配置、加载项目环境并单次调用核心；CLI接线及用户真实CT单题通过，422／96／518 tokens | 用户；助手未修改实现 |
+| run_query_rewrite.py | 独立读取LLM配置、加载项目环境并单次调用核心；用户真实CT单题通过，422／96／518 tokens，CLI已统一--config | 用户；助手只纠正CLI参数，业务函数未改 |
+| run_query_rewrite_batch.py | 读取指定划分并选前limit条，共享一次客户端调用批量核心，保存三产物；默认／显式名称及防覆盖本地检查通过，真实8题待用户执行 | 用户；助手未修改实现 |
 | query_rewrite_io.py | save_rewrite_results保存逐题JSONL、状态／已知token摘要及公开运行配置，防覆盖；实际单题已无损归档 | 助手辅助，每行中文注释；不调用模型或读取环境 |
 | frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
 | retrieve_evalution.py | 两类 Recall 与逐题批量评测，沿用实际文件名 | 用户 |
@@ -22,11 +23,11 @@
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分；新增可选query_id回调和冻结候选重排包装，10项小样本检查通过，真实324题假打分衔接核对通过 | 用户 |
 | run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
-| run_reranking_eval.py | 固定候选重排入口；Qwen4B batch1／batch4、8B batch4及BGE batch4完整dev、指标已核对；旧历史资源异常另有披露 | 用户 |
+| run_reranking_eval.py | 固定候选重排入口；四套重排dev已核对，旧历史资源异常继续披露；CLI统一--config且原业务函数不变 | 用户；助手只纠正CLI参数 |
 
 ## 数据维护模块
 
-configs/llm_profiles.json由助手补充，保存DeepSeek公开参数，不含密钥；run_query_rewrite.py已由用户实现并通过真实单题，不从Notebook导入。本地入口／批量核验query_rewrite_entry_validation_01.json及query_rewrite_batch_validation_01.json与真实ct_query_rewrite_single_01_validation.json分别说明范围，单题不作检索收益。完整下一项见query_rewrite_task.md：用户新建run_query_rewrite_batch.py，接已有加载器、核心与保存辅助，先审核再由用户终端执行8题。当前该新入口不存在。
+configs/llm_profiles.json由助手补充，保存公开参数，不含密钥；单题真实结果与本地假响应记录分别说明范围。run_query_rewrite_batch.py已通过真实dev前8题／假客户端接线，记录results/query_rewrite_batch_entry_validation_01.json，下一步用户终端真实运行；命令及5个外层输出保护见query_rewrite_task.md。CLI只用--config／args.config，函数仍config_dir，不保留旧名别名；--run-name可选，未传按既有规则生成默认名，显式名称优先。旧测试跟随接口，历史记录不改。
 
 configs/reranker_profiles.json保存三种重排候选的固定版本与运行参数。tests现有21个模块；原模型支持／入口相关50项与预检辅助相关14项均通过，真实GPU预检另有已保存报告。新增test_beir_run_validation.py的4项验证新重排／原BM25的完整临时产物协议、候选集合、固定配置与资源CLI身份；未加载模型。当前用户下一项见reranking_runtime_task.md完整开发集节；文末“17个模块”属于此前整理记录。
 

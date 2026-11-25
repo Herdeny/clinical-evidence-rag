@@ -202,8 +202,8 @@ def run_preflight(config_dir, data_dir, receipt_path, profile_name):
 if __name__ == '__main__':
     # 所有模型与输入位置都明确出现在命令里。
     parser = argparse.ArgumentParser(description='Check a fixed reranker in your GPU terminal')
-    # 沿用显式配置目录的项目约定。
-    parser.add_argument('--config-dir', type=Path, required=True)
+    # 配置目录沿用既有入口的--config。
+    parser.add_argument('--config', type=Path, required=True)
     # 配套数据必须与冻结描述文件一致。
     parser.add_argument('--data-dir', type=Path, required=True)
     # 指向已经核对的固定候选描述文件。
@@ -219,7 +219,7 @@ if __name__ == '__main__':
         # 重跑时由用户指定新编号。
         raise FileExistsError(args.output)
     # 仅此处执行真实预检。
-    report = run_preflight(args.config_dir, args.data_dir, args.receipt, args.profile)
+    report = run_preflight(args.config, args.data_dir, args.receipt, args.profile)
     # 成功后准备结果目录。
     args.output.parent.mkdir(parents=True, exist_ok=True)
     # 使用排他创建保留已有报告。

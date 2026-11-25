@@ -50,7 +50,7 @@ if __name__ == "__main__":
     root = Path(__file__).resolve().parent
         
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config-dir", type=Path, default=root / "configs")
+    parser.add_argument("--config", type=Path, default=root / "configs")  # 沿用既有入口的配置目录参数。
     parser.add_argument("--data-dir", type=Path, default=root / "data" / "external" / "nfcorpus" / "prepared" / "nfcorpus")
     parser.add_argument("--receipt",  type=Path, default=root / "results" / "nfcorpus_qwen3_8b_frozen_candidates.json")
     parser.add_argument("--profile", choices=["qwen3_4b", "qwen3_8b", "bge_v2_m3"], default="qwen3_4b")
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument("--result-dir", type=Path, default=root / "results")
     args = parser.parse_args()
     
-    config_dir = args.config_dir
+    config_dir = args.config  # 将统一的命令行属性传给既有函数参数。
     data_dir = args.data_dir
     receipt_path = args.receipt
     profile_name = args.profile

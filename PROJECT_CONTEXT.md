@@ -1,14 +1,24 @@
 # 项目背景、进度与后续任务交接
 
-最后核对：2026-11-25。本文用于在后续对话、上下文压缩或换助手时恢复项目。内容依据用户的项目要求、当前代码、保存的输出及结果文件整理。该日期是交接更新日，不覆盖来源此前的核验日期。
+最后核对：2026-11-26。本文用于在后续对话、上下文压缩或换助手时恢复项目。内容依据用户的项目要求、当前代码、保存的输出及结果文件整理。该日期是交接更新日，不覆盖来源此前的核验日期。
 
 **接手时先读本文件，再检查当前代码和用户最新提交的输出。不要把规划当成实现，不要从 B0 重新教起。用户后续明确指令优先于本文，代码与输出的变化需要及时更新到本文。**
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26当前：用户run_query_rewrite_batch.py已通过本地完整接线检查，下一步用户终端真实dev前8题。** 已读77行，路径括号及全部已指出问题已修。真实公共dev数据／实际CLI／单题和批量核心／保存辅助配合假客户端：默认命名8题及显式命名3题都只构造一次客户端、按序调用所选题数、三份结果与打印摘要匹配；题号和原文／公开配置正确，解析失败已有用量保留、连接异常未知用量保留。重复输出在dotenv／客户端前拒绝且原文件不变，非正limit在请求前拒绝。原代码未改，--config／args.config正确、无别名；--run-name可选默认nfcorpus_query_rewrite_deepseek_flash_dev，显式名优先。源码SHA=456a055983d902b2713e7f2de0bb19445bb9731c45edd235009323d2962d79a7，记录results/query_rewrite_batch_entry_validation_01.json。假token不作实际成本；助手未发API、GPU或读.env，没有真实8题及改写召回结果。以下命名和初稿缺陷段落是已解决的修订记录，不要求用户再次返工。
+
+本工作单元会一并提交同步前面CLI一致性纠正（单题／重排／两份预检只用--config、旧CLI测试改参数），业务函数AST不变；单个重排CLI检查已通过。首次包名启动因既有平级fixture导入路径失败，仅调整进程PYTHONPATH后通过，未为测试改核心。归档同步后准备results/nfcorpus_query_rewrite_dev_8_01_audit.json及_source_snapshot，保存本轮输入／运行源码与公开配置身份，不读取凭证；准备材料不属于原始5输出，不阻断外层保护。用户命令见docs/query_rewrite_task.md，通过project_env、--config configs、--split dev、--limit8、显式实验名nfcorpus_query_rewrite_dev_8_01，time／tee启动前保护_results.jsonl／_summary.json／_run.json／_run.log／_resources.txt。准备时这5文件均不存在，用户真实运行后再读取逐题结果核对语义与实际用量，不能强求changed=True。此轮无Dense／重排／向量重建；完整检索对照仍324dev、同Qwen Dense配置和新候选，旧历史资源异常范围继续保留，不称全历史恢复。
+
+**2026-11-26最新命名纠正：--run-name保持可选，撤回助手添加的必填要求。** 已核对run_benchmark_eval.py及run_reranking_eval.py都注册可选--run-name，未传时生成数据集_方法_配置_划分默认名，显式名称优先、不加时间戳。批量改写沿用此规则，默认如nfcorpus_query_rewrite_deepseek_flash_dev，防覆盖检查和请求前确定名称，生成位置沿用有效实现即可，不额外强制CLI或main某一处。parser.add_argument("--run-name")本身正确，空字符串兜底应改成有效默认名，调用main仍需传run_name；函数参数必需传入不等于CLI选项必须用户填写。任务文档及前次审查记录已纠正，不能为旧任务说明／测试强制required=True。用户正在修改的批量文件不由助手代写，不新增测试或提交；其他实际运行问题待保存后统一复查。
+
+**2026-11-26当前：用户提交run_query_rewrite_batch.py初稿，尚未验收，集中修订后再看，不运行API。** 已读74行实际源码，CLI --config／args.config及main函数签名正确；需要集中修六组实际问题：(1)第17行防覆盖名称与保存辅助真实输出不一致：应_results.jsonl／_summary.json／_run.json，当前单数result及错误.jsonl扩展名漏拦；可对目标Path.exists检查避免新目录os.listdir先报错，不规定唯一实现或异常类型。(2)第23行if not queries对DataFrame真值不明确，应查queries.empty；实际直接main加载公开324条dev后在此ValueError，未读dotenv或构造客户端。(3)第25行先用root，第31行才局部赋值，应把root赋值移到读取.env之前；静态问题，未越过DataFrame错误动态运行。(4)第35行批量调用仍传全queries_df，会请求324条而不是limit8；第43行query_ids也应从选中的queries取，与现已正确的query_count对应。(5)第44行profile_name错误写死为config，应记录实际profile_name。(6)保存摘要需接收并return，CLI --run-name保持可选，空字符串兜底应改成既有风格有效默认名（此前必填要求已撤回），第73行main调用缺run_name，接收summary并打印JSON；真实CLI用显式参数实际复现TypeError missing required keyword-only argument run_name，未进入main，客户端／dotenv调用0。局部rerank_profile、to_list别名和无用导入不是阻断。助手只读核心／做本地最小检查和更新记录，模型／API及.env读取被禁止并mock，未替用户修改或提交。先给聊天内完整六组修订及理由，不挤成逐行多轮，不为测试另添兼容或异常协议。
+
+**2026-11-26最新纠正：CLI只用--config，解析为args.config，函数参数仍config_dir，不添加兼容别名。** 用户指出助手引入--config-dir违反已有run_benchmark_eval.py风格，随后又明确否定助手自行添加的历史兼容别名，强调测试不得反过来规范核心代码。单题／重排入口及两份预检工具只注册--config；旧CLI测试改用--config，不要求核心兼容测试的旧参数。用户批量入口已有的--config正确，该文件继续由用户开发，尚未验收。历史日志、源码快照及已执行命令保留原件供回查，不为历史记录增加运行时代码。纠错阶段不提交、不推进新任务。此轮只修参数及相应说明／旧测试，不改业务函数、模型配置或用户批量入口。四入口实际参数声明至parse_args边界的本地检查已通过，--config映射args.config且无别名，业务函数AST对HEAD不变；没有执行模型导入／API／GPU或读取.env。此前要求检查兼容别名属于助手额外条件，已撤回，不作为用户代码缺陷。
+
 **2026-11-25最新：用户rewrite_queries已通过本地验收，下一项写数据集批量入口。** 重读104行源码，失败original_query已取问题字符串、error为具体类型及消息字符串、两路径统一添加ID／计时并append一次。实际4题混合假响应依次为有效改写／解析失败／连接异常／原样返回，4次假invoke，状态ok／error／error／ok，顺序、原文、10字段、JSON、有限非负计时、失败后下一题继续、输入DataFrame不变全部符合约定；解析失败保留用量，连接异常未知，和保存辅助衔接统计3已知／1未知，假token不作真实成本。另验证原TypeError实例自然向外传播。原RewriteResult与rewrite_query的AST对HEAD不变。源码SHA=0767d5da2a8c4ffd25768d1b18d9f75dfe9e3210a53e6cee281886095fabf6f5，记录results/query_rewrite_batch_validation_01.json。助手未改核心或加永久测试脚本，未读.env或运行API／GPU；本次通过只是本地逻辑，不是8题真实API或检索收益。归档提交同步后才交下一工作单元。
 
-下一用户任务新建run_query_rewrite_batch.py，保留已验收单题入口，实现main(config_dir,data_dir,*,profile_name,split,limit,run_name,result_dir)。非正limit及三份已有输出在请求前拒绝；读取同一llm profile，用load_beir_dataset(data_dir,split=split)取queries_df.head(limit)，原文件顺序／空选择提前报错，qrels不传模型。显式项目dotenv后创建一次客户端，调用一次rewrite_queries，将全部记录交给save_rewrite_results，返回summary。公开config含dataset_name／绝对data_dir字符串／split／limit／实际query_count／query_ids列表／profile_name／llm_profile，不放DataFrame、客户端或密钥。CLI七项：config-dir／data-dir／result-dir为Path，profile=deepseek_flash，split=dev（train/dev/test），limit=int默认8，run-name必填手动编号不加时间戳；实际命令显式config-dir。保存后先审核／同步再由用户终端运行dev前8题；当前新入口还不存在，根目录仍19模块。详细步骤、参数理由、输出保护和验收必须写在聊天，docs/query_rewrite_task.md为档案。
+批量入口任务现已完成并本地验收：main读取同一LLM配置，loader以split选题，head(limit)限制请求，qrels不传模型；dotenv及客户端只构造一次，批量核心结果全部交保存辅助。config公开记录dataset_name／绝对data_dir／split／limit／实际题数与ID／profile及公开参数，CLI只用--config且run-name可选，无时间戳。现有20个根目录模块。下一步用户真实前8题，当前尚无批量API实测；后续指导继续在聊天写完整，docs仅作档案。
 
 **2026-11-25当前：用户真实CT查询改写单题通过，已归档；下一项用户写小批量核心。** 用户在终端完成ct_query_rewrite_single_01，原问题及检索表达完全一致、changed=false，检查目的未说明保留，status=ok、error=None、finish_reason=tool_calls。真实输入422／输出96／总518 tokens、cache_read0，响应ID=f2c04abe-bda3-4c7d-a89d-e1b70d1ec294，model_name=deepseek-flash。资源为整个本地进程1.47秒、RSS96700KiB、退出0无中断，不称远程模型推理延迟。原_run.log／_resources.txt与用户提交一致且未改，已无损生成_results.jsonl、_summary.json、_run.json、_validation.json。验证时当前core／entry／配置SHA匹配原入口验收，但没有请求前代码回执或HTTP消息快照，不能冒称严格证明请求时源码身份。入口此前d21bd5d已成功推送。
 
@@ -898,12 +908,15 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 
 ### 13.13 保持既有约定一致，必要变更说明依据和影响
 
+用户于2026-11-26再次明确指出已有CLI是--config，不能由助手随意改成--config-dir。此约定固定为命令行--config、解析args.config、函数参数config_dir；后续新增入口／预检／文档均沿用。用户随后明确否定兼容别名：不为了旧命令或旧测试加入无业务需求的兼容代码，测试应更新以反映实际接口。此前添加--config-dir及兼容别名均属助手额外设计，已经撤回；历史产物不改写。
+
 用户于2026-11-25明确要求：“请你始终保持前后一致性。” 直接背景是助手临时给run_name加入此前没有使用的时间戳，已撤回该建议。本要求覆盖全部后续指导。
 
 - 下达任务或审查实现前，先核对当前代码、已验收接口、项目记录及用户最新选择；沿用已有命名、参数角色、目录、缓存和评测口径，不按当次想到的偏好另定标准。
 - 保留有效的实现选择。可选建议不自动成为验收条件；新阶段要求不得追溯将此前正确、已验收的实现判为错误，不因测试偏好新增限制或让用户反复返工。
 - 需要改变既定方案时，先说明旧方案的具体问题、依据、拟改内容及对现有代码／数据／结果的影响，再更新相关说明，不能直接换一套做法。发现真实错误应如实纠正，不能以一致性为由延续错误。
 - run_name默认沿用dataset_method_profile_split的可读形式，本轮为nfcorpus_rerank_qwen3_4b_dev；用户显式提供的名称优先，_01／_02等实验编号由其显式名称体现，不引入时间戳或擅自重命名旧产物。保存器继续拒绝覆盖。
+- --run-name沿用既有可选选项，不擅自设为required=True。未传时按原命名方式生成默认值；函数仍显式接收最终run_name，保存器要求有效名称不能成为强制CLI必填的理由。
 - main的config_dir仍显式传入；CLI有有效默认值与此并不冲突，不再反复要求所有CLI选项改成必填。每次解释先分清函数参数、命令行默认和实际运行配置各自的职责。
 
 ## 14. 恢复工作与维护本文

@@ -169,8 +169,8 @@ def run_preflight(config_dir, data_dir, profile_name):
 if __name__ == '__main__':
     # 三个路径与配置选项均明确记录在命令中。
     parser = argparse.ArgumentParser(description='Check one frozen embedding profile in your GPU terminal')
-    # 配置目录为必填，遵循当前项目约定。
-    parser.add_argument('--config-dir', type=Path, required=True)
+    # 配置目录沿用既有入口的--config。
+    parser.add_argument('--config', type=Path, required=True)
     # 配套BEIR目录默认当前已准备的NFCorpus。
     parser.add_argument('--data-dir', type=Path, default=ROOT / 'data/external/nfcorpus/prepared/nfcorpus')
     # 本工具可复用于两套固定模型。
@@ -184,7 +184,7 @@ if __name__ == '__main__':
         # 重跑时由用户指定新的文件名。
         raise FileExistsError(args.output)
     # 真实运行失败时自然返回非零状态，终端日志保留完整异常。
-    report = run_preflight(args.config_dir, args.data_dir, args.profile)
+    report = run_preflight(args.config, args.data_dir, args.profile)
     # 成功后才保存通过报告。
     args.output.parent.mkdir(parents=True, exist_ok=True)
     # 保存配置、真实设备、向量及长度检查。

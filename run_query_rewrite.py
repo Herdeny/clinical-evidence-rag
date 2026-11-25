@@ -23,12 +23,12 @@ if __name__ == "__main__":
     root = Path(__file__).resolve().parent
         
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config-dir", type=Path, default=root / "configs")
+    parser.add_argument("--config", type=Path, default=root / "configs")  # 沿用既有入口的配置目录参数。
     parser.add_argument("--profile", default="deepseek_flash")
     parser.add_argument("--query", required=True)
     args = parser.parse_args()
     
-    config_dir = args.config_dir
+    config_dir = args.config
     profile_name = args.profile
     query = args.query
     

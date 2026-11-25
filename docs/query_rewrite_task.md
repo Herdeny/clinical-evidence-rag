@@ -1,5 +1,9 @@
 # 单题查询改写：保留原问题，生成检索表达
 
+2026-11-26接口纠正：命令行只用已有基准入口的--config，解析属性为args.config，Python函数参数仍叫config_dir。助手引入--config-dir及随后添加兼容别名均未遵守用户要求，现已撤回，不为旧测试保留额外接口；测试改用实际的--config。下文首次真实单题原命令仅作已执行历史记录，原日志、源码快照和验证摘要不改，不作为当前运行命令。
+
+同日命名约定纠正：--run-name沿用已有入口的可选方式，不设required=True。传入时使用用户名称，省略时按数据集_方法_配置_划分生成有效默认名，如nfcorpus_query_rewrite_deepseek_flash_dev，不加时间戳。默认名在防覆盖检查及请求之前确定；保存器需要有效名称，不意味着CLI必须强制用户填写。助手此前的必填要求撤回，不能作为验收条件。
+
 2026-11-25。重排候选对照已完成并在ac881d6归档同步。本工作单元由用户新建根目录query_rewrite.py，先完成结构化改写模型和单题函数；助手没有代写该核心文件。模型及API调用仍由用户在自己的终端执行。
 
 ## 为什么现在做
@@ -10,7 +14,11 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
-## 当前进度：批量核心本地验收通过，下一步数据集入口
+## 当前进度：批量入口本地验收通过，下一步真实8题
+
+2026-11-26，用户完成run_query_rewrite_batch.py，源码SHA-256为456a055983d902b2713e7f2de0bb19445bb9731c45edd235009323d2962d79a7。使用真实公共dev文件、真实CLI／单题和批量核心／保存辅助，只有dotenv读取及真实客户端被替换：默认命名8题和显式命名3题均按序处理、客户端只构造一次、记录及config只包含选中题目、三份产物与打印摘要一致；解析失败的已知用量、连接异常的未知用量均保留。重复运行在客户端构造前被已有文件拦住，原文件不变；非正limit在请求前拒绝。记录results/query_rewrite_batch_entry_validation_01.json。假调用及token不是实际成本，未由助手发起API或读取.env；用户原入口代码未被助手修改，尚无真实8题或改写检索成绩。
+
+此前CLI命名纠正也在本轮归档：四入口只用--config／args.config，业务函数AST未变；旧重排CLI检查改用实际接口后通过。第一次用包名启动该检查因既有平级fixture导入路径失败，只调整进程PYTHONPATH后通过，没有为测试修改核心或异常协议。
 
 用户完成rewrite_queries，当前query_rewrite.py的SHA-256为0767d5da2a8c4ffd25768d1b18d9f75dfe9e3210a53e6cee281886095fabf6f5。已通过四行真实DataFrame搭配假LLM的本地检查：有效改写、解析失败、连接异常、原样返回依次得到ok／error／error／ok，四题四次假invoke、顺序及原文保持、每条10字段／非负有限计时／JSON可保存；解析失败保留用量，连接异常用量未知，后续题继续，输入DataFrame不改。和save_rewrite_results实际衔接后3条已知用量／1条未知，失败的已知用量未漏计；另验证原TypeError实例向外传播。原RewriteResult和rewrite_query相对上一提交AST不变，未重新跑单题API。记录results/query_rewrite_batch_validation_01.json；假用量不是实际成本，助手未改核心或运行API，批量入口及真实8题仍未完成。
 
@@ -45,24 +53,55 @@
 
 验收看正常／原样／解析失败／请求异常均每输入一条就有一条记录，ID顺序一致；有有效输入的请求每题最多调用一次；失败不伪造changed或token，编程错误不吞掉，计时非负。先审实际代码再做最小CPU假调用检查，真实8题仍由用户终端执行。保存辅助已能接收这批记录，接入入口后复用同一模型配置和原文档向量；当前尚无8题API输出、批量缓存、改写检索或收益结果。
 
-## 下一项用户任务：run_query_rewrite_batch.py
+## 已完成：run_query_rewrite_batch.py任务及接口
 
-保留已跑通的单题入口run_query_rewrite.py，用户新建独立数据集批量入口run_query_rewrite_batch.py。main(config_dir, data_dir, *, profile_name, split, limit, run_name, result_dir)串起配置、数据读取、一份客户端、批量核心和保存辅助；本轮只写文件，保存后审核和同步，再交真实8题终端命令。新的入口不是新的改写算法，不改核心／模型配置／候选预算或标注。
+用户已完成独立批量入口run_query_rewrite_batch.py，单题入口继续保留。main(config_dir, data_dir, *, profile_name, split, limit, run_name, result_dir)串起配置、数据读取、一份客户端、批量核心和保存辅助；上述本地检查通过，归档同步后由用户执行真实8题。以下保留已完成的任务和接口，未改变核心／模型配置或标注。
 
-除已有argparse／json／Path／load_dotenv／ChatDeepSeek，导入benchmark_data.load_beir_dataset、query_rewrite.rewrite_queries和query_rewrite_io.save_rewrite_results；无需新安装。参数职责：config_dir是公开配置目录，data_dir是准备好的BEIR数据集目录，profile_name选择deepseek_flash，split本轮dev，limit本轮8，run_name由用户手动指定如nfcorpus_query_rewrite_dev_8_01，result_dir保存本次三份JSON产物。
+除已有argparse／json／Path／load_dotenv／ChatDeepSeek，导入benchmark_data.load_beir_dataset、query_rewrite.rewrite_queries和query_rewrite_io.save_rewrite_results；无需新安装。参数职责：config_dir是公开配置目录，data_dir是准备好的BEIR数据集目录，profile_name选择deepseek_flash，split本轮dev，limit本轮8，run_name可由用户指定如nfcorpus_query_rewrite_dev_8_01，省略时沿用既有规则生成默认名，result_dir保存本次三份JSON产物。
 
 main顺序固定为：
 
-1. 拒绝非正limit，按run_name检查result_dir内_results.jsonl、_summary.json、_run.json是否任一已存在；已有时在请求前报错，避免付费后才发现不能保存。不要调用保存辅助生成空文件来做预检查。最终保存辅助仍保留独占创建保护。
+1. 拒绝非正limit；先沿用既有规则确定有效run_name：显式名称优先，省略时按数据集_方法_配置_划分生成默认名，不使用空字符串。按确定的名称检查result_dir内_results.jsonl、_summary.json、_run.json是否任一已存在；已有时在请求前报错，避免付费后才发现不能保存。不要调用保存辅助生成空文件来做预检查。最终保存辅助仍保留独占创建保护。
 2. 按已完成单题入口的方式读取llm_profiles.json并选当前profile；使用load_beir_dataset(data_dir,split=split)，忽略本阶段不用的corpus_df与qrels，只使用返回的queries_df。qrels仅由现有加载器确定split成员，不传给模型。
 3. selected=queries_df.head(limit)，保留原文件顺序，空选择在请求前报错。limit超过总题数时自然选到全部，元数据分别记录请求limit和实际query_count，不伪称选满。模型只会接收选出的query文本。
 4. 在main内按原入口显式加载项目.env，override=False；用同一profile构造一次ChatDeepSeek，调用一次rewrite_queries(selected,llm=llm)，不在外层再逐题调用或添加重试／回退。
 5. 构建公开config字典，至少包含dataset_name=data_dir.resolve().name、data_dir的绝对路径字符串、split、limit、query_count=len(selected)、query_ids=selected["id"].tolist()、profile_name、llm_profile=当前profile。不要把DataFrame、客户端、异常对象或密钥放入config。
 6. 调用save_rewrite_results(records,config=config,run_name=run_name,result_dir=result_dir)，main返回它的summary。保留失败记录，不只保存status=ok。它生成三份原件，外层终端命令后续另保护run.log与resources.txt，二者分层防覆盖。
 
-CLI位于if __name__ == "__main__"，Path默认值沿用项目目录，实际命令显式传入：--config-dir（Path，configs）、--data-dir（Path，data/external/nfcorpus/prepared/nfcorpus）、--profile（deepseek_flash）、--split（dev，choices沿用train/dev/test）、--limit（int，8）、--run-name（required=True，不加时间戳）、--result-dir（Path，results）。解析后按上述main签名传参，打印json.dumps(summary,ensure_ascii=False,indent=2)。导入与--help不读.env、不创建客户端或请求。
+CLI位于if __name__ == "__main__"，Path默认值沿用项目目录：--config（Path，configs）、--data-dir（Path，data/external/nfcorpus/prepared/nfcorpus）、--profile（deepseek_flash）、--split（dev，choices沿用train/dev/test）、--limit（int，8）、--run-name（可选，显式名称优先，省略时生成既有风格默认名，不加时间戳）、--result-dir（Path，results）。正式运行命令仍可显式指定实验编号名称；args.config传给main的config_dir，不改既有函数参数。解析后按上述main签名传参，run_name无论来自显式值或默认生成都要传入，打印json.dumps(summary,ensure_ascii=False,indent=2)。导入与--help不读.env、不创建客户端或请求。
 
 验收先看原数据前8题按序交给批量核心、客户端构造一次、批量调用一次、配置为可JSON保存的公开值、既有输出或无效limit在请求前拒绝、成功／失败记录都交给保存辅助。之后才由用户跑真实8题并复查改写忠实性与成本；完整召回比较仍为同一324条dev和原Qwen Dense文档缓存，产生新候选，当前不执行或声称该结果。
+
+### 当前用户运行：NFCorpus dev前8题
+
+本地检查、归档提交并同步后执行。run-name在本命令中显式指定编号便于保留这次实验，CLI选项仍可省略。运行前检查5份原始输出，避免外层time／tee先覆盖；代码与输入准备记录为results/nfcorpus_query_rewrite_dev_8_01_audit.json及_source_snapshot目录，不列入这5个原始输出保护项。助手只准备材料，真实API仍由用户执行。
+
+```bash
+# 进入项目目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 在启动计时和日志写入前，保护本轮五份原始输出。
+if [[ -e results/nfcorpus_query_rewrite_dev_8_01_results.jsonl || -e results/nfcorpus_query_rewrite_dev_8_01_summary.json || -e results/nfcorpus_query_rewrite_dev_8_01_run.json || -e results/nfcorpus_query_rewrite_dev_8_01_run.log || -e results/nfcorpus_query_rewrite_dev_8_01_resources.txt ]]; then
+  printf '%s\n' '本轮记录已存在，请改用新的运行编号。'
+else
+  # 复用同一配置运行前8道dev题，保存实时输出和资源统计。
+  bash scripts/project_env.sh \
+    /usr/bin/time -v \
+    -o results/nfcorpus_query_rewrite_dev_8_01_resources.txt \
+    /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_query_rewrite_batch.py \
+    --config configs \
+    --data-dir data/external/nfcorpus/prepared/nfcorpus \
+    --profile deepseek_flash \
+    --split dev \
+    --limit 8 \
+    --run-name nfcorpus_query_rewrite_dev_8_01 \
+    --result-dir results \
+    2>&1 | tee results/nfcorpus_query_rewrite_dev_8_01_run.log
+fi
+```
+
+运行后先贴终端摘要或错误。助手再读取逐题JSONL，检查8条题号和原文、改写是否篡改语义、失败处理、实际用量及耗时。单题与整个进程计时按各自范围报告；changed多或少都不直接说明质量。此轮不运行Dense或重排、不改文档缓存，也不将它当作324题检索评测；通过后再推进已保存改写与同一Dense配置的对照。
 
 ### 独立入口的完整任务
 
@@ -72,7 +111,7 @@ CLI位于if __name__ == "__main__"，Path默认值沿用项目目录，实际命
 2. 用Path(__file__).resolve().parent定位项目根目录；在main内调用load_dotenv(root / ".env", override=False)，供SDK读取DEEPSEEK_API_KEY。不要打印密钥、环境内容或完整客户端对象，配置文件也不存密钥。助手未读取.env。
 3. 从langchain_deepseek导入ChatDeepSeek，以ChatDeepSeek(**profile)构造客户端。**把字典键值展开为关键字参数；本地0.1.4已核实接受这些参数，api_base是本安装类实际使用的地址字段。不要再套一层with_structured_output，核心已经负责包装。
 4. 从query_rewrite导入rewrite_query，只调用一次rewrite_query(query, llm=llm)，main返回其字典，不增加重试、检索、循环或回退。
-5. 在if __name__ == "__main__"里用argparse接收--config-dir（type=Path）、--profile（默认deepseek_flash）、--query（required=True），传给main，使用json.dumps(result, ensure_ascii=False, indent=2)输出。允许配置目录默认项目configs，但实际运行命令必须显式传--config-dir。不在导入模块时构造客户端或调用API。
+5. 在if __name__ == "__main__"里用argparse接收--config（type=Path）、--profile（默认deepseek_flash）、--query（required=True），将args.config传给main的config_dir，使用json.dumps(result, ensure_ascii=False, indent=2)输出。允许配置目录默认项目configs，但实际运行命令必须显式传--config。不在导入模块时构造客户端或调用API。
 
 所需库：标准库argparse／json／pathlib.Path，已安装的dotenv.load_dotenv及langchain_deepseek.ChatDeepSeek，加上自己的query_rewrite.rewrite_query。不需要SentenceTransformer、LangGraph或新依赖。
 
