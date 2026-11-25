@@ -6,9 +6,13 @@
 
 ## 1. 当前应从哪里继续
 
-**2026-11-26当前：用户run_query_rewrite_batch.py已通过本地完整接线检查，下一步用户终端真实dev前8题。** 已读77行，路径括号及全部已指出问题已修。真实公共dev数据／实际CLI／单题和批量核心／保存辅助配合假客户端：默认命名8题及显式命名3题都只构造一次客户端、按序调用所选题数、三份结果与打印摘要匹配；题号和原文／公开配置正确，解析失败已有用量保留、连接异常未知用量保留。重复输出在dotenv／客户端前拒绝且原文件不变，非正limit在请求前拒绝。原代码未改，--config／args.config正确、无别名；--run-name可选默认nfcorpus_query_rewrite_deepseek_flash_dev，显式名优先。源码SHA=456a055983d902b2713e7f2de0bb19445bb9731c45edd235009323d2962d79a7，记录results/query_rewrite_batch_entry_validation_01.json。假token不作实际成本；助手未发API、GPU或读.env，没有真实8题及改写召回结果。以下命名和初稿缺陷段落是已解决的修订记录，不要求用户再次返工。
+**2026-11-26当前：真实dev前8题改写已核验，下一项用户写检索输入适配。** 用户终端完成nfcorpus_query_rewrite_dev_8_01，8成功、1变化、7原样、0失败；输入3260／输出706／总3966tokens，8条用量已知，输入含缓存读取2048不可再加。逐题流程合计7388.057ms／平均923.507ms，进程8.31秒、RSS211596KiB、退出0无中断；不是远程模型纯推理耗时。6份准备源码和快照、3份输入、8题ID与原文、配置及独立重算摘要／日志匹配，5份输出和准备audit未改。_validation.json为passed_with_semantic_observation，协议及产物passed，_semantic_review.json独立保存语言观察。旧历史资源异常继续披露，无全历史审计或恢复宣称；助手未调用API／GPU或读.env。
 
-本工作单元会一并提交同步前面CLI一致性纠正（单题／重排／两份预检只用--config、旧CLI测试改参数），业务函数AST不变；单个重排CLI检查已通过。首次包名启动因既有平级fixture导入路径失败，仅调整进程PYTHONPATH后通过，未为测试改核心。归档同步后准备results/nfcorpus_query_rewrite_dev_8_01_audit.json及_source_snapshot，保存本轮输入／运行源码与公开配置身份，不读取凭证；准备材料不属于原始5输出，不阻断外层保护。用户命令见docs/query_rewrite_task.md，通过project_env、--config configs、--split dev、--limit8、显式实验名nfcorpus_query_rewrite_dev_8_01，time／tee启动前保护_results.jsonl／_summary.json／_run.json／_run.log／_resources.txt。准备时这5文件均不存在，用户真实运行后再读取逐题结果核对语义与实际用量，不能强求changed=True。此轮无Dense／重排／向量重建；完整检索对照仍324dev、同Qwen Dense配置和新候选，旧历史资源异常范围继续保留，不称全历史恢复。
+唯一变化PLAIN-77把elsewhere变为in other countries，可能将未明确地点收窄为国家层级；reason声称改善检索但尚无检索对照，不能据此认证同义或收益。7条字面原样只说明输入保留，不说明原题医学陈述已核实或表达最优。原模型结果不改、不为增加改写率重调prompt，不因语义观察先手改数据后再报分；当前没有改写nDCG／Recall结果。此次只给逐题观察，不估计总体保真率或临床有效性；ENG-026已追加此例。运行源码在5e15904已推送，入口及API生成阶段完整；接下来复用原8题，不再调用DeepSeek。
+
+下一用户任务在benchmark_data.py新增apply_query_rewrites(queries_df,rewrite_records)，不改load_beir_dataset。输入完整原题DF（id／query，现324）和本批保存记录list（现8），只返回records覆盖题目，按原题文件顺序.copy，输入及records不变。建query_id映射前拒绝重复，拒绝不在原表中的ID，并逐题检查record.original_query与原问题一致。status=ok时使用非空retrieval_query，query_source=llm_output、rewrite_status=ok；status=error时检索层明确使用原题，query_source=original_fallback、rewrite_status=error，原始error／token及单题函数error协议不改；未知status拒绝。此为本阶段明确的检索失败回退，为全题对照保留失败题，不是悄悄把改写失败改成成功。返回保留id／query并新增original_query／query_source／rewrite_status（原2列时5列）；不读文件、不调API、不检索／保存、不接qrels。例：原A/B/C、记录B成功/A失败，输出A/B，A原题fallback，B保存表达，C不混入。保留PLAIN-77原输出供后续分析。先写函数保存后语义审查／最小CPU检查，再接Dense；该函数目前未实现，完整参数与验收在聊天给出，docs仅存档。
+
+下一检索接线须将同一qrels按返回ID筛选，满足现有evaluate_beir_retrieval查询与qrels键集一致；原题和改写组都8题同标注、同Qwen Dense配置和文档缓存，重新生成候选。不可拿原冻结Top100冒称新召回。8题是流程与逐题观察，完整324dev检索对照仍待后续；不引入RRF／重排或同时改模型。本单元先归档提交同步8题结论再交用户下一函数。以下命名和初稿缺陷段落为已解决的修订记录，不再作为当前阻断。
 
 **2026-11-26最新命名纠正：--run-name保持可选，撤回助手添加的必填要求。** 已核对run_benchmark_eval.py及run_reranking_eval.py都注册可选--run-name，未传时生成数据集_方法_配置_划分默认名，显式名称优先、不加时间戳。批量改写沿用此规则，默认如nfcorpus_query_rewrite_deepseek_flash_dev，防覆盖检查和请求前确定名称，生成位置沿用有效实现即可，不额外强制CLI或main某一处。parser.add_argument("--run-name")本身正确，空字符串兜底应改成有效默认名，调用main仍需传run_name；函数参数必需传入不等于CLI选项必须用户填写。任务文档及前次审查记录已纠正，不能为旧任务说明／测试强制required=True。用户正在修改的批量文件不由助手代写，不新增测试或提交；其他实际运行问题待保存后统一复查。
 
@@ -18,7 +22,7 @@
 
 **2026-11-25最新：用户rewrite_queries已通过本地验收，下一项写数据集批量入口。** 重读104行源码，失败original_query已取问题字符串、error为具体类型及消息字符串、两路径统一添加ID／计时并append一次。实际4题混合假响应依次为有效改写／解析失败／连接异常／原样返回，4次假invoke，状态ok／error／error／ok，顺序、原文、10字段、JSON、有限非负计时、失败后下一题继续、输入DataFrame不变全部符合约定；解析失败保留用量，连接异常未知，和保存辅助衔接统计3已知／1未知，假token不作真实成本。另验证原TypeError实例自然向外传播。原RewriteResult与rewrite_query的AST对HEAD不变。源码SHA=0767d5da2a8c4ffd25768d1b18d9f75dfe9e3210a53e6cee281886095fabf6f5，记录results/query_rewrite_batch_validation_01.json。助手未改核心或加永久测试脚本，未读.env或运行API／GPU；本次通过只是本地逻辑，不是8题真实API或检索收益。归档提交同步后才交下一工作单元。
 
-批量入口任务现已完成并本地验收：main读取同一LLM配置，loader以split选题，head(limit)限制请求，qrels不传模型；dotenv及客户端只构造一次，批量核心结果全部交保存辅助。config公开记录dataset_name／绝对data_dir／split／limit／实际题数与ID／profile及公开参数，CLI只用--config且run-name可选，无时间戳。现有20个根目录模块。下一步用户真实前8题，当前尚无批量API实测；后续指导继续在聊天写完整，docs仅作档案。
+批量入口任务已完成并经真实8题验证：main读取同一LLM配置，loader以split选题，head(limit)限制请求，qrels不传模型；dotenv及客户端只构造一次，批量核心结果全部交保存辅助。config公开记录dataset_name／绝对data_dir／split／limit／实际题数与ID／profile及公开参数，CLI只用--config且run-name可选，无时间戳。现20根目录模块，下一函数加在现benchmark_data.py；尚无改写检索实测，后续指导继续在聊天写完整。
 
 **2026-11-25当前：用户真实CT查询改写单题通过，已归档；下一项用户写小批量核心。** 用户在终端完成ct_query_rewrite_single_01，原问题及检索表达完全一致、changed=false，检查目的未说明保留，status=ok、error=None、finish_reason=tool_calls。真实输入422／输出96／总518 tokens、cache_read0，响应ID=f2c04abe-bda3-4c7d-a89d-e1b70d1ec294，model_name=deepseek-flash。资源为整个本地进程1.47秒、RSS96700KiB、退出0无中断，不称远程模型推理延迟。原_run.log／_resources.txt与用户提交一致且未改，已无损生成_results.jsonl、_summary.json、_run.json、_validation.json。验证时当前core／entry／配置SHA匹配原入口验收，但没有请求前代码回执或HTTP消息快照，不能冒称严格证明请求时源码身份。入口此前d21bd5d已成功推送。
 

@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-26。根目录现有20个Python模块，14个数据维护工具集中到scripts/data；用户完成批量改写核心和数据集入口，本地真实dev数据／假客户端／实际保存链路通过，下一步用户终端真实8题。真实CT单题已归档，尚无批量API或改写检索收益。Qwen Dense与四套重排dev均已实测；BGE保留负向对照，历史资源异常继续披露。助手未执行GPU或真实LLM调用。
+整理日期：2026-11-19，进度更新2026-11-26。根目录现有20个Python模块，14个数据维护工具集中到scripts/data；用户完成真实8题批量改写，8成功／1变化／3966tokens，链路与产物核对通过，唯一变化有地域范围可能收窄的观察。下一项用户在benchmark_data.py写apply_query_rewrites，将保存结果接到检索；尚无改写检索收益。Qwen Dense与四套重排dev均已实测；BGE负结果和历史资源异常继续披露。助手未执行GPU或真实LLM调用。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -10,7 +10,7 @@
 | rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | query_rewrite.py | 单题真实CT通过；批量rewrite_queries已通过4题混合假响应及编程异常传播检查，失败记录／用量保留；无批量API或改写检索收益 | 用户；助手未修改核心 |
 | run_query_rewrite.py | 独立读取LLM配置、加载项目环境并单次调用核心；用户真实CT单题通过，422／96／518 tokens，CLI已统一--config | 用户；助手只纠正CLI参数，业务函数未改 |
-| run_query_rewrite_batch.py | 读取指定划分并选前limit条，共享一次客户端调用批量核心，保存三产物；默认／显式名称及防覆盖本地检查通过，真实8题待用户执行 | 用户；助手未修改实现 |
+| run_query_rewrite_batch.py | 指定划分／limit、共享客户端、保存结果；用户真实8题已核验，1变化有语义观察，尚无检索收益 | 用户；助手未修改实现 |
 | query_rewrite_io.py | save_rewrite_results保存逐题JSONL、状态／已知token摘要及公开运行配置，防覆盖；实际单题已无损归档 | 助手辅助，每行中文注释；不调用模型或读取环境 |
 | frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
 | retrieve_evalution.py | 两类 Recall 与逐题批量评测，沿用实际文件名 | 用户 |
@@ -20,14 +20,14 @@
 | reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B及BGE真实完整运行均已核对 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；save_beir_results支持原方法及frozen_rerank，保留候选来源和正确计时范围 | 助手辅助，逐行中文注释 |
-| benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
+| benchmark_data.py | 已完成BEIR读取适配；下一项新增apply_query_rewrites连接原问题与保存改写，当前尚未实现 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分；新增可选query_id回调和冻结候选重排包装，10项小样本检查通过，真实324题假打分衔接核对通过 | 用户 |
 | run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
 | run_reranking_eval.py | 固定候选重排入口；四套重排dev已核对，旧历史资源异常继续披露；CLI统一--config且原业务函数不变 | 用户；助手只纠正CLI参数 |
 
 ## 数据维护模块
 
-configs/llm_profiles.json由助手补充，保存公开参数，不含密钥；单题真实结果与本地假响应记录分别说明范围。run_query_rewrite_batch.py已通过真实dev前8题／假客户端接线，记录results/query_rewrite_batch_entry_validation_01.json，下一步用户终端真实运行；命令及5个外层输出保护见query_rewrite_task.md。CLI只用--config／args.config，函数仍config_dir，不保留旧名别名；--run-name可选，未传按既有规则生成默认名，显式名称优先。旧测试跟随接口，历史记录不改。
+configs/llm_profiles.json由助手补充，保存公开参数，不含密钥；单题、假响应与真实8题记录分别说明范围。真实8题核验results/nfcorpus_query_rewrite_dev_8_01_validation.json及_semantic_review.json，准备源码／输入与原件均未改，状态passed_with_semantic_observation。下一项apply_query_rewrites的完整输入输出、显式检索回退及验收见query_rewrite_task.md；复用原结果，不重发API。CLI只用--config／args.config，run-name可选默认命名，旧测试跟随接口，历史记录不改。
 
 configs/reranker_profiles.json保存三种重排候选的固定版本与运行参数。tests现有21个模块；原模型支持／入口相关50项与预检辅助相关14项均通过，真实GPU预检另有已保存报告。新增test_beir_run_validation.py的4项验证新重排／原BM25的完整临时产物协议、候选集合、固定配置与资源CLI身份；未加载模型。当前用户下一项见reranking_runtime_task.md完整开发集节；文末“17个模块”属于此前整理记录。
 

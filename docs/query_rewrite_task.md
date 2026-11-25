@@ -14,7 +14,11 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
-## 当前进度：批量入口本地验收通过，下一步真实8题
+## 当前进度：真实8题链路核验通过，下一步接入检索
+
+2026-11-26用户完成nfcorpus_query_rewrite_dev_8_01，8题均status=ok，1改写／7原样，0失败，已知用量8条。逐题独立汇总3260输入／706输出／3966总tokens；输入中cache_read=2048已包含在3260内，不能再加到总量。单题改写流程耗时合计7388.057ms、平均923.507ms；整个本地进程8.31秒、主机RSS峰值211596KiB、退出0且无中断，不称远程模型推理耗时。6份准备源码与快照／3份输入身份／8条题号和原文／公开配置／5份原始输出一致，原件及准备audit未改。结果_validation.json状态passed_with_semantic_observation，协议与产物核验passed；_semantic_review.json单独保存语言层面的观察，不作临床事实或总体保真率验证。
+
+唯一变化为PLAIN-77：Phosphate Additives in Chicken Banned Elsewhere → phosphate additives in chicken banned in other countries。elsewhere没有明确是其他国家还是其他地点，输出具体化为其他国家，标为可能地域范围收窄，不能直接认证同义。reason声称改善检索但目前未测检索；7条字面未变也不等于原问题医学陈述已经核实或表达已最优。保留全部模型原输出，不为提高改写率重调提示词，也不先手工修正后再比较收益。当前只完成8题真实改写链路及逐条观察，没有nDCG／Recall收益；下一步直接复用保存结果与同一Dense配置比较。
 
 2026-11-26，用户完成run_query_rewrite_batch.py，源码SHA-256为456a055983d902b2713e7f2de0bb19445bb9731c45edd235009323d2962d79a7。使用真实公共dev文件、真实CLI／单题和批量核心／保存辅助，只有dotenv读取及真实客户端被替换：默认命名8题和显式命名3题均按序处理、客户端只构造一次、记录及config只包含选中题目、三份产物与打印摘要一致；解析失败的已知用量、连接异常的未知用量均保留。重复运行在客户端构造前被已有文件拦住，原文件不变；非正limit在请求前拒绝。记录results/query_rewrite_batch_entry_validation_01.json。假调用及token不是实际成本，未由助手发起API或读取.env；用户原入口代码未被助手修改，尚无真实8题或改写检索成绩。
 
@@ -72,7 +76,7 @@ CLI位于if __name__ == "__main__"，Path默认值沿用项目目录：--config�
 
 验收先看原数据前8题按序交给批量核心、客户端构造一次、批量调用一次、配置为可JSON保存的公开值、既有输出或无效limit在请求前拒绝、成功／失败记录都交给保存辅助。之后才由用户跑真实8题并复查改写忠实性与成本；完整召回比较仍为同一324条dev和原Qwen Dense文档缓存，产生新候选，当前不执行或声称该结果。
 
-### 当前用户运行：NFCorpus dev前8题
+### 已执行：NFCorpus dev前8题命令（历史记录）
 
 本地检查、归档提交并同步后执行。run-name在本命令中显式指定编号便于保留这次实验，CLI选项仍可省略。运行前检查5份原始输出，避免外层time／tee先覆盖；代码与输入准备记录为results/nfcorpus_query_rewrite_dev_8_01_audit.json及_source_snapshot目录，不列入这5个原始输出保护项。助手只准备材料，真实API仍由用户执行。
 
@@ -102,6 +106,22 @@ fi
 ```
 
 运行后先贴终端摘要或错误。助手再读取逐题JSONL，检查8条题号和原文、改写是否篡改语义、失败处理、实际用量及耗时。单题与整个进程计时按各自范围报告；changed多或少都不直接说明质量。此轮不运行Dense或重排、不改文档缓存，也不将它当作324题检索评测；通过后再推进已保存改写与同一Dense配置的对照。
+
+## 下一项用户任务：apply_query_rewrites
+
+用户在现有benchmark_data.py中新增apply_query_rewrites(queries_df, rewrite_records)，它只把已保存改写适配成检索输入，不读文件、不请求模型、不检索或保存。原有load_beir_dataset及查询改写核心不改，无新依赖；输入queries_df是加载器返回的完整原问题表（当前324条，id／query），rewrite_records是本批JSONL读取的字典列表（当前8条）。函数仅返回这批记录覆盖的题目，按原问题表顺序排列；不把其余316题混入8题对照。后续完整324条复用同一接口。
+
+逻辑和字段约定：
+
+1. 用record["query_id"]建立映射，重复ID先报错，避免字典静默覆盖。同原问题id列比较，改写记录中的未知ID拒绝，不能悄悄丢弃。原问题ID唯一性已由现有加载器检查，无需再重复整套数据校验。缺失字段等保留自然异常，不强制包装统一类型。
+2. 使用queries_df["id"].isin(...)选出映射覆盖的行，并.copy()取得副本，保持原文件顺序。将副本的原query保存在original_query列。对每题检查record["original_query"]与当前原问题一致，避免把另一版问题的改写挂到同ID。
+3. status=ok时，使用保存的retrieval_query作为新query；清理后须非空。不重新让模型改写，不依据人工语义观察手工更正PLAIN-77。记录query_source="llm_output"，rewrite_status="ok"；即使changed=false，也表示采用了这次LLM输出，不等于文字发生变化。
+4. status=error时，检索输入显式使用该题原问题，记录query_source="original_fallback"、rewrite_status="error"。这是本阶段公开定义的检索层失败回退，为全题对照保留失败题；原始改写记录的error、未知或已有token均不修改，原单题函数仍返回error而不回退。未知status拒绝。不能把失败题从评测中剔除后只报成功题收益。
+5. 返回DataFrame，保留id以及供检索的query，新增original_query／query_source／rewrite_status；输入表和rewrite_records都不修改。常见当前输入2列时输出为5列，其他已有列不需要丢掉。函数不接收qrels，标注留在评测层。
+
+本轮只写函数保存，助手审核后用最小CPU例子核对。验收例：原问题A／B／C，改写记录顺序B成功／A失败，返回顺序A／B，C不进入此次比较；A保留原题且明确error／fallback，B使用保存表达，两个原问题仍可回查，输入不变；重复ID、未知ID、原题不匹配不能静默通过。不要为样例增加无业务用途的兼容或异常分支。
+
+接线时还要按返回ID筛选同一份qrels，满足现有evaluate_beir_retrieval对查询与qrels键集合一致的要求；原题组与改写组用相同8题、相同qrels和Qwen Dense配置，复用原文档向量，重新生成检索候选。已有原冻结Top100只作基线记录，不能当新表达已完成检索。324题完整比较仍待后续，8题只用于流程和逐题观察。现在没有apply_query_rewrites实现或新的Dense结果。
 
 ### 独立入口的完整任务
 
