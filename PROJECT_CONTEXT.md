@@ -6,6 +6,10 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新：BGE-v2-m3固定快照下载核验通过，下一步用户终端真实预检。** BAAI/bge-reranker-v2-m3 revision953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e已在项目cache；13文件／单权重2271071852字节，393个张量原生F32、张量数据2271023108字节，逐文件SHA256／普通Git blob地址、链接归属、头部形状／偏移／字节总量均匹配，无.incomplete。下载200.37秒（3:20.37）、主机RSS1764348KiB、退出0且无中断标记；记录results/bge_reranker_v2_m3_download_validation.json。离线AutoConfig／AutoTokenizer及短句对分词成功，本地类映射XLMRobertaForSequenceClassification、num_labels=1且权重分类头为[1,1024]；该类声明支持SDPA，不冒称实际模型加载成功。助手未加载权重或GPU。
+
+现有加载器／预检代码无需改，profile=bge_v2_m3保持batch4、4096联合预算、CUDA BF16／SDPA、右填充、无Qwen指令、Identity原始分类logit。检查点F32与计划运行BF16须区分，实际精度和容量由用户执行确认。先归档同步本节点，再交nfcorpus_rerank_bge_v2_m3_preflight_01命令；启动time／tee前检查JSON、资源、日志三名称，已确认均未用。复用同一324题／32400原候选，BGE自己分词统计全部联合输入，再取最长4对真实打分；不能沿用Qwen的长度或显存，通过后才准备完整BGE dev。旧4B历史资源异常状态与原预期继续保留，不因新下载通过而改写。命令与验收见docs/reranking_runtime_task.md“BGE-v2-m3下载验收与真实预检”。以下为历史节点记录。
+
 **2026-11-25最新：4B batch4完整dev02当前运行核验通过，但有一处历史资源覆盖异常；下一步BGE下载。** 四指标0.40770144978894557／0.20511966645543572／0.378699429264687／0.39709670188154617，执行提交40712d368c9d2d46a9c5cb786905baab7b5984ba。对4B batch1，nDCG@10相对-0.554337%、Recall@10-0.900884%，新增阶段均值3236.2094056732553ms（仅少0.677616%）、中位3219.8874420064385、最近秩P95=3716.3080089958385；进程1052.91秒／17:32.91，RSS5344568KiB、退出0。22101／32400句对分数变化，绝对差均值0.0569386574、P95=.125、最大.5；83题Top10集合变化，245题Top10顺序变化；nDCG@10对batch1为41升／42降／241同。原100候选及Recall@100不变。当前单次未观察到明显批量提速，不宣称所有差异归因于batch或统计显著。同batch4的8B nDCG@10更高2.178317%、Recall@10低1.037300%，本次阶段均值为4B的1.677891倍；BGE待补，不先定最终模型。
 
 **核验限制必须保留。** 严格核验发现唯一变化是旧nfcorpus_rerank_qwen3_4b_preflight_02_resources.txt，预期67bcf01a…实际db163c9f…，当前内容为同预检命令signal 2中断／2.45秒尝试，原预检JSON、日志和核验JSON均未变。不能恢复或用聊天文本伪造旧资源原件；保留异常原件快照和_prior_artifact_drift.json。原严格核验器未改；临时副本只排除该一历史项后，当前五产物／原qrels四指标逐题重算／原候选／配置、三输入／十文件源码快照及其余67历史文件全部通过。主_validation.json为current_run_validated_with_prior_artifact_drift，audit=complete_with_prior_artifact_drift，strict_full_history_validation=failed而current_run_integrity=passed。原保护清单和旧预期未改，原五产物未改；不能称全历史通过。后续新运行前回执应以当前实际内容建立新的保护身份，并显式链接本异常；不要改写旧回执或反复用旧失败清单宣称通过。详情docs/nfcorpus_retrieval_baselines.md及ENG-025。
