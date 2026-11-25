@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-25。根目录现有17个Python模块，14个数据维护工具集中到scripts/data；新增用户query_rewrite.py已通过本地假响应检查，尚无真实API或改写检索成绩，下一步用户写独立运行入口。Qwen Dense与4B batch1／batch4、8B batch4、BGE batch4同候选dev均已实测。BGE保留负向对照，历史资源异常继续披露；助手未执行GPU或真实LLM调用。
+整理日期：2026-11-19，进度更新2026-11-25。根目录现有18个Python模块，14个数据维护工具集中到scripts/data；用户query_rewrite.py及run_query_rewrite.py已通过本地假响应及CLI接线检查，尚无真实API或改写检索成绩，下一步用户终端真实单题。Qwen Dense与4B batch1／batch4、8B batch4、BGE batch4同候选dev均已实测。BGE保留负向对照，历史资源异常继续披露；助手未执行GPU或真实LLM调用。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -9,6 +9,7 @@
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
 | rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | query_rewrite.py | 单条检索表达改写与结构化结果，12个本地输入情形核对通过；原问题／用量保留，无真实API或收益结果 | 用户；助手未修改核心 |
+| run_query_rewrite.py | 独立读取LLM配置、加载项目环境、构造客户端并单次调用核心；CLI到实际核心的假响应检查通过，真实单题待用户运行 | 用户；助手未修改实现 |
 | frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
 | retrieve_evalution.py | 两类 Recall 与逐题批量评测，沿用实际文件名 | 用户 |
 | run_retrieval_eval.py | CLI、方法选择与评测入口 | 用户 |
@@ -24,7 +25,7 @@
 
 ## 数据维护模块
 
-configs/llm_profiles.json由助手补充，保存DeepSeek公开参数，不含密钥；核心完成后的下一项为用户新建run_query_rewrite.py，读取该配置并独立构造客户端，完整逻辑和参数见query_rewrite_task.md。当前入口尚未实现，不从Notebook导入。
+configs/llm_profiles.json由助手补充，保存DeepSeek公开参数，不含密钥；run_query_rewrite.py已由用户实现并通过本地CLI接线检查，不从Notebook导入。完整逻辑、参数及用户首次真实单题命令见query_rewrite_task.md。本地核验记录results/query_rewrite_entry_validation_01.json，不是API或检索成绩。
 
 configs/reranker_profiles.json保存三种重排候选的固定版本与运行参数。tests现有21个模块；原模型支持／入口相关50项与预检辅助相关14项均通过，真实GPU预检另有已保存报告。新增test_beir_run_validation.py的4项验证新重排／原BM25的完整临时产物协议、候选集合、固定配置与资源CLI身份；未加载模型。当前用户下一项见reranking_runtime_task.md完整开发集节；文末“17个模块”属于此前整理记录。
 

@@ -10,11 +10,11 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
-## 当前进度：核心已通过本地检查，下一步独立入口
+## 当前进度：核心及独立入口已通过本地检查，下一步真实单题
 
 2026-11-25，用户完成query_rewrite.py，本轮审阅源码SHA-256为eaba30a9f7efa31a0850e72a6f475eb0869fcff3c7b1a3d465889ca5fd20daed。以真实ChatPromptTemplate、RewriteResult及AIMessage搭配最小FakeLLM检查六类响应：有效改写、仅首尾空白差异、空白查询、空白原因、解析异常、parsed缺失，均符合本文返回协议；另检查四个非法输入零模型调用、网络异常原样传播及未知用量保留None。成功／失败返回均可JSON序列化，已有响应保留原问题及两类元数据，每次模型invoke一次。假响应中的token值只是检查数据，不是实际用量，助手未调用API或GPU；这不证明真实服务兼容性、医学语义保真或检索收益。原用户核心未修改，未新增隐藏测试脚本。离线观察归档results/query_rewrite_core_validation_01.json。
 
-助手补充configs/llm_profiles.json作为公开配置；用户下一步新建run_query_rewrite.py，不从Notebook导入对象。核心rewrite_query的接口和8字段返回不变。当前尚无此入口或真实单题输出，不提前执行批量改写。
+助手补充configs/llm_profiles.json作为公开配置；用户已实现run_query_rewrite.py，不从Notebook导入对象，核心rewrite_query的接口和8字段返回不变。入口38行源码SHA-256为8f9783b2730a8b7cb82de9f1351c1bfce708132217c768e5f6a95327c2aa2773，记录results/query_rewrite_entry_validation_01.json。修正--query后，真实argparse到实际核心的CPU假响应链路通过，配置／项目dotenv路径／单次invoke／原问题／JSON输出正确；导入及help无客户端构造，缺query在调用前拒绝。dotenv及真实客户端被mock，未读密钥或发起API；假token不是成本。没有修改用户实现，也未把局部变量名作为阻断。当前等待用户首次真实单题输出，不提前执行批量改写。
 
 ### 独立入口的完整任务
 
@@ -35,6 +35,33 @@
 用户先写入口并保存，助手审核且同步后再给终端执行命令；助手不发起真实请求。首个输入固定为：Which reporting framework applies to a chest CT report with a pulmonary nodule when the examination purpose is not stated? 它只用于验证缺失条件是否保留，不是新增人工标注或检索成绩。
 
 真实单题验收看status=ok、两个非空字段、Python计算的changed、真实usage_metadata及response_metadata，确认检查目的缺失仍然缺失，没有被改成筛查或偶发发现，也没有生成医学回答。changed=False合法，具体措辞不设标准答案；finish_reason若为tool_calls可能是结构化工具格式的正常结束，不强求stop。若失败，保留本次真实错误和用量再排查。成功后才做保存辅助和少量开发题，后续批量编排仍由用户完成。当前不加载向量或运行324次API，执行命令继续通过bash scripts/project_env.sh。
+
+### 首次真实单题命令：由用户在终端执行
+
+入口本地验收、归档并同步GitHub后执行。准备时确认下列两个01文件尚不存在；每次启动time和tee前仍检查，重复运行手动改02等编号。日志保存终端输出，资源文件记录整个本地进程，不当远程模型推理耗时；结构化JSON保存辅助尚未加入。此次只有一条query、不加载本地模型或文档向量，SDK max_retries=0。
+
+```bash
+# 进入项目目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 在启动计时和日志写入前，保护已有记录。
+if [[ -e results/ct_query_rewrite_single_01_run.log || -e results/ct_query_rewrite_single_01_resources.txt ]]; then
+  printf '%s\n' '本轮记录已存在，请改用新的运行编号。'
+else
+  # 通过项目环境执行一条真实请求，同时保存实时输出和资源统计。
+  bash scripts/project_env.sh \
+    /usr/bin/time -v \
+    -o results/ct_query_rewrite_single_01_resources.txt \
+    /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_query_rewrite.py \
+    --config-dir configs \
+    --profile deepseek_flash \
+    --query 'Which reporting framework applies to a chest CT report with a pulmonary nodule when the examination purpose is not stated?' \
+    2>&1 | tee results/ct_query_rewrite_single_01_run.log
+fi
+```
+
+用户提交本次完整JSON或错误后再检查，不用旧Notebook输出推断新入口成功，也不能把本地假响应写成真实服务结果。
 
 ## 文件和库
 
