@@ -6,6 +6,12 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新实测：Qwen4B真实预检01通过并已离线核对，下一步用户终端完整重排dev。** RTX4090／cuda:0、实际BF16、4096联合上限、SDPA、batch1及Identity／query指令均符合固定profile。324题／32400联合输入最短93、最长2414、P95=654、超限0；实际仅打分3对，float32一维全有限，分数5.0625／3.75／-4.375。样本为PLAIN-1→MED-2418（560tokens）、PLAIN-1→MED-4070（384）、PLAIN-2639→MED-957（2414）。显存峰值已分配8657582592字节（8.063002GiB）、预留8875147264（8.265625GiB）；进程15.04秒、主机RSS5352928KiB、退出0。加载0.79804秒、小批0.39160秒不当完整运行成本或稳定查询延迟。
+
+记录results/nfcorpus_rerank_qwen3_4b_preflight_01.json与_validation.json；报告绑定的配置／源码／三输入／三原产物、样本归属及命令／资源均通过，未重新加载模型或GPU。当前已证明这批固定输入在4B配置下无截断且小批可运行，尚无完整排序效果。首次完整运行名nfcorpus_rerank_qwen3_4b_dev_01（无时间戳），该前缀产物目前不存在；同一Qwen8B Dense原Top100、324 dev及四指标，源Recall@100=0.39709670188154617。保持4B固定配置，仅测重排；不重做Dense／换候选。预检峰值不能充当完整运行GPU峰值，本轮正式入口未记录全程GPU峰值，GNU time只提供主机RSS及整进程耗时，结果必须如实说明。
+
+为复用离线核验，助手扩展scripts/evaluation/validate_beir_run.py支持frozen_rerank：按已有run_reranking_eval.py的--profile核对资源命令，不强迫用户增加旧--method；独立检查原候选集合、与预检固定的模型配置、Recall@100不变量及原计时范围。新增tests/test_beir_run_validation.py共4项通过，含合法重排／原BM25完整临时产物、错候选／错配置／错资源profile拒绝；没有真实模型调用。报告results/rerank_validator_support_validation.json。先归档同步本节点，再准备本地_run_audit.json及实际10文件源码快照、保护既有结果／缓存身份，交用户执行docs/reranking_runtime_task.md完整开发集命令。用户返回后核对5产物、候选逐题集合、独立四指标重算、逐题收益与新增重排成本；当前不运行官方test或MIRAGE。tests现21模块，用户核心源码未改。
+
 **2026-11-25最新：下载节点804b1dc已同步，真实重排预检工具已实现，等待用户终端执行。** 新scripts/evaluation/preflight_reranker.py由助手编写，复用现有build_reranker／describe_reranker及固定候选加载器，不改用户核心。先核对来源并在CUDA加载唯一reranker，然后用实际CrossEncoder.preprocess、原query／完整正文／同一默认指令统计全部32400联合输入长度（含模板），统计时关闭截断；首两对加最长一对去重，最多3对真实predict。输入超4096则在打分前停止，不默默裁剪；输出只检查一维、数量、有限性，允许负数和大于1的原始logit，不要求L2或概率。记录真实设备／BF16／长度／指令、显存峰值、加载与小批打分耗时及输入前后指纹；不算完整排序指标，不将样本耗时当稳定查询延迟。
 
 tests/test_reranker_preflight.py的4项辅助检查，加原支持6项及入口4项，共14项通过；报告results/reranker_preflight_helper_validation.json及快照，命令行help实际通过，旧输入／产物SHA未变。仅CPU假预处理器／假模型，不是实际GPU预检通过。原文“支持7项＋CT保存5项”系模块计数笔误，已改为实际6＋6，原46与50总数不变，未改用户实现或新增验收要求。tests现20模块，根模块仍16。当前用户命令见docs/reranking_runtime_task.md真实预检节：显式config-dir／data-dir／receipt／profile=qwen3_4b／output，离线环境经project_env.sh运行，保存nfcorpus_rerank_qwen3_4b_preflight_01.json、日志、资源。工具验收提交同步后交用户运行；收到输出再核对真实结果，通过后才准备完整324题重排。当前无真实模型推理或完整重排成绩。

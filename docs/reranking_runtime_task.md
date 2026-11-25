@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25真实预检01通过。** 4090／cuda:0、BF16／4096／batch1及原始logit配置与实际模型一致；32400联合输入最小93、最大2414、P95=654、超限0。3对实际分数5.0625／3.75／-4.375，显存峰值已分配8.063002GiB、预留8.265625GiB。报告与源码／输入／命令／资源身份核对通过，进程15.04秒、退出0。记录results/nfcorpus_rerank_qwen3_4b_preflight_01_validation.json。下一步运行文末“完整开发集重排”；小批显存和耗时不代表完整运行成本。
+
 **2026-11-25预检工具已实现。** 助手新增scripts/evaluation/preflight_reranker.py，4项新辅助检查与支持6项／入口4项共14项通过，CLI帮助可运行，尚未执行真实GPU预检。工具沿用同一配置、加载及候选来源；统计全部联合长度后，只打分最多3对样本。完整用户命令见文末“真实预检”。根目录核心保持原样。
 
 **2026-11-25下载已核对。** 固定Qwen4B快照17文件全部齐全，2权重分片8043614960字节，内容哈希与项目blobs地址一致；索引、BF16头部及张量总字节核对通过，无未完成分片。离线配置／分词器与yes/no ID检查成功，未加载真实权重。用户终端下载10:29.07、退出0，记录results/qwen3_reranker_4b_download_validation.json。下一项是小批真实预检，下载成功不等于模型推理通过。
@@ -128,3 +130,33 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/tim
 预期通过范围：status=passed，query_count=324、length_check.pair_count=32400、pairs_over_limit=0，实际CUDA／BF16／4096与配置一致，score_check形状为样本数量的一维数组且全部有限。显存峰值属于本次模型加载＋少量样本打分，不能替代完整运行峰值；sample_predict_seconds也不是稳定查询延迟。报告绑定配置、代码、原描述文件、三输入和三产物身份，不修改旧检索结果或向量缓存。
 
 当前辅助验证报告results/reranker_preflight_helper_validation.json：新4项＋模型支持6项＋用户入口4项，共14项通过，均未加载真实模型。真实预检结果只有用户执行上述命令后才能确认。报告拒绝覆盖，失败日志保留，必要重跑改成preflight_02等独立编号。通过并归档后，再准备完整324题重排命令。
+
+## 完整开发集重排
+
+本次只对既有Qwen3-Embedding-8B Dense的Top100进行Qwen3-Reranker-4B重排；使用相同324道dev原问题、文档正文、标签和四项指标。固定候选来源nfcorpus_dense_qwen3_8b_dev_01，模型仍为22e683...固定版本、BF16／4096／SDPA／batch1，不加入其他检索改动，也不选择test或MIRAGE。
+
+正式run_name为nfcorpus_rerank_qwen3_4b_dev_01，显式名称沿用既有规则，不添加时间戳。助手在交运行命令前保存_run_audit.json、实际源码快照与三输入指纹，保护既有基线、预检及BGE／Qwen文档缓存；运行本身只读原候选并加载一个重排模型。用户在可见终端执行：
+
+```bash
+# 进入项目目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 离线使用已通过预检的固定配置，保存结果、日志和整进程资源。
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh /usr/bin/time -v -o results/nfcorpus_rerank_qwen3_4b_dev_01_resources.txt /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_reranking_eval.py --config-dir configs --data-dir data/external/nfcorpus/prepared/nfcorpus --receipt results/nfcorpus_qwen3_8b_frozen_candidates.json --profile qwen3_4b --run-name nfcorpus_rerank_qwen3_4b_dev_01 --result-dir results 2>&1 | tee results/nfcorpus_rerank_qwen3_4b_dev_01_run.log
+```
+
+终端进度以324道题为单位，每题内部处理100个句对；本次合计32400对都将真实打分。最后打印四项指标字典，保存_results.jsonl、_run.json和_summary.json，加日志／资源共5个正式产物。
+
+| 相同候选的原Dense基线 | 数值 |
+| --- | --- |
+| nDCG@10 | 0.3921959681142708 |
+| Recall@10 | 0.19220254685998026 |
+| nDCG@100 | 0.37012524211267905 |
+| Recall@100 | 0.39709670188154617 |
+
+本轮主要看前部排序质量、逐题变化与新增重排延迟。由于返回全部原100候选，Recall@100应保持0.39709670188154617；其他指标是否提升以实测为准。当前没有完整重排成绩，不由3对预检推断收益或运行时间。
+
+逐题latency_ms覆盖候选副本读取＋重排，原Dense召回均值53.69274598138244ms单独报告；这不是完整两阶段端到端实测。GNU time提供整进程时间和主机RSS，本次正式入口没有采集全程GPU峰值，不拿预检显存或主机RSS代替。模型4B／8B／BGE后续同候选对照可沿用该入口，每套配置先独立预检。
+
+结果返回后，由助手使用已适配新入口的scripts/evaluation/validate_beir_run.py独立重新评分、核对候选集合与预检固定配置、输入／源码／旧产物身份及实际资源命令。核验工具按--profile识别重排入口，旧BM25／Dense／RRF仍按--method，不让用户为旧脚本新增无意义参数。新增4项临时核验检查通过，结果results/rerank_validator_support_validation.json；不是完整真实运行的提前验收。

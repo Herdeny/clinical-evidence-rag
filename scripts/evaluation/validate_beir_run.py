@@ -169,6 +169,44 @@ def validate_rrf_reference(rows, audit, config):
     return {"query_count": len(rows), "all_rankings_and_scores_match": True, "candidate_k": candidate_k, "rrf_constant": constant, "final_k": max(audit["ks"]), "references": audit["reference_rankings"]}
 
 
+# 核对冻结重排的模型配置和候选集合，不调用原模型。
+def validate_rerank_reference(rows, audit, config):
+    # 原三种检索运行沿用原有检查，不新增要求。
+    if audit['method'] != 'frozen_rerank':
+        # 本轮不属于冻结候选重排。
+        return None
+    # 候选来源应与真实预检后固定的记录完全一致。
+    assert config['candidate_source'] == audit['expected_candidate_source']
+    # 模型、指令、精度、输入预算和批次不能在运行后被换成另一套。
+    assert config['rerank'] == audit['expected_rerank']
+    # 原始逐题结果由启动前已固定的候选来源指定。
+    source = audit['expected_candidate_source']
+    # 不通过本轮输出反推原候选。
+    reference_path = Path(source['source_files']['results.jsonl']['path'])
+    # 核对原文件内容仍保持相同身份。
+    assert file_sha(reference_path) == source['source_files']['results.jsonl']['sha256']
+    # 原问题文字可能重复，关联必须按ID。
+    references = {row['query_id']: row for line in reference_path.read_text(encoding='utf-8').splitlines() if line.strip() for row in [json.loads(line)]}
+    # 不能丢题或引入另一组查询。
+    assert set(references) == {row['query_id'] for row in rows}
+    # 每题完整返回原100候选时，集合和最大K召回均应保持。
+    for row in rows:
+        # 取得原实验该题候选。
+        original = references[row['query_id']]
+        # 问题原文不能被重排入口改写。
+        assert row['query'] == original['query']
+        # 当前工作单元固定全部候选重排并全部返回。
+        assert len(original['retrieved_ids']) <= max(audit['ks'])
+        # 所有文档须来自该题的原候选，没有跨题替换或新增召回。
+        assert set(row['retrieved_ids']) == set(original['retrieved_ids'])
+    # 当前固定实验的最大K指标应与原来源相同。
+    metric = f"recall_at_{max(audit['ks'])}"
+    # 独立比较全部题目的平均召回。
+    assert same_number(sum(row[metric] for row in rows) / len(rows), source['baseline_metrics'][metric])
+    # 记录实际完成的候选不变量检查。
+    return {'source_run_name': source['source_run_name'], 'query_count': len(rows), 'all_candidate_sets_match': True, 'max_k_recall_unchanged': True, 'reranker_profile': audit['reranker_profile']}
+
+
 # 核验保存结果；checked_on由调用方传客户端日期。
 def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     # 限定到当前结果目录的单个文件名前缀。
@@ -259,6 +297,12 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     assert list(summary["config"]["ks"]) == ks
     # 融合正确性独立于效果优劣，使用已有两路排名核对。
     fusion_check = validate_rrf_reference(rows, audit, summary["config"])
+    # 重排检查遵循新入口真实使用的profile配置，不要求添加旧method参数。
+    rerank_check = validate_rerank_reference(rows, audit, summary['config'])
+    # 本轮只测候选读取与重排，保存摘要不得冒称完整检索延迟。
+    if audit['method'] == 'frozen_rerank':
+        # 计时范围由运行前回执固定。
+        assert summary['latency_ms']['scope'] == audit['expected_latency_scope']
     # 重新计分使用相同的评分包版本。
     assert summary["scorer"]["version"] == audit["packages"]["pytrec-eval-terrier"] == version("pytrec-eval-terrier")
     # 使用原始标注和已保存run独立重新调用评分器。
@@ -311,8 +355,14 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     assert resources["Exit status"] == "0"
     # 核对资源统计属于当前运行。
     assert f"--run-name {run_name}" in resources["Command being timed"]
-    # 资源统计中的实际方法也必须与回执一致。
-    assert f"--method {audit['method']}" in resources["Command being timed"]
+    # 核对对应入口真正支持的参数，不让用户核心迁就旧核验脚本。
+    if audit['method'] == 'frozen_rerank':
+        # 新入口以profile选择模型，方法由脚本职责确定。
+        assert 'run_reranking_eval.py' in resources['Command being timed'] and f"--profile {audit['reranker_profile']}" in resources['Command being timed']
+    # 原检索入口继续用method参数区分方法。
+    else:
+        # 保留旧运行的验证口径。
+        assert f"--method {audit['method']}" in resources["Command being timed"]
     # 提取时间字符串，支持时分秒或分秒。
     elapsed = next(value for name, value in resources.items() if name.startswith("Elapsed (wall clock)"))
     # 将不同长度的时间表示统一为秒。
@@ -326,7 +376,7 @@ def validate_run(run_name, *, checked_on, result_dir=ROOT / "results"):
     # 全部检查通过后才创建验证结果。
     validation = {"checked_on": checked_on, "status": "passed", "run_name": run_name, "dataset_name": audit["dataset_name"], "method": audit["method"], "split": audit["split"], "document_count": len(document_ids), "query_count": len(rows), "qrel_pairs": len(labels), "metrics": means, "mean_query_latency_ms": mean_latency, "process_wall_seconds": elapsed_seconds, "maximum_process_rss_kib": int(resources["Maximum resident set size (kbytes)"]), "exit_status": 0, "returned_count_distribution": hit_counts, "queries_with_positive_hit_at_max_k": positive_queries, "queries_without_positive_hit_at_max_k": len(rows) - positive_queries, "per_query_metrics_match_rescoring": True, "max_k_recall_matches_set_intersection": True, "inputs_and_snapshot_and_current_code_match_receipt": True, "output_sha256": {name: file_sha(path) for name, path in paths.items()}, "validator_sha256": file_sha(Path(__file__)), "validator_retrieval_or_model_calls": False, "scorer": summary["scorer"], "execution_git_commit": audit.get("git_commit")}
     # 补充缓存与已有基线保护的实际检查结果。
-    validation.update(dense_cache=dense_cache, protected_prior_output_count=len(audit.get("protected_prior_outputs", {})), rrf_reference_check=fusion_check, inputs_and_snapshot_match_receipt=True, current_code_matches_receipt=current_code_matches, inputs_and_snapshot_and_current_code_match_receipt=current_code_matches)
+    validation.update(dense_cache=dense_cache, protected_prior_output_count=len(audit.get("protected_prior_outputs", {})), rrf_reference_check=fusion_check, frozen_rerank_reference_check=rerank_check, inputs_and_snapshot_match_receipt=True, current_code_matches_receipt=current_code_matches, inputs_and_snapshot_and_current_code_match_receipt=current_code_matches)
     # 诊断留在本地结果目录，报告可以引用其指纹与结论。
     validation_path = result_dir / f"{run_name}_validation.json"
     # 保存完整验证结论。

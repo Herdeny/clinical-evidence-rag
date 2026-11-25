@@ -4,7 +4,7 @@
 
 代码目录已整理：根目录现有16个开发模块（含已验收benchmark_data.py和benchmark_eval.py，以及已验收run_benchmark_eval.py和run_reranking_eval.py），14个可复现数据工具集中在scripts/data，助手源码已补逐行中文注释。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
 
-**当前任务：用户终端执行真实重排预检。** 运行入口50项相关检查已通过，固定Qwen4B的17文件／2分片约8.04GB已完整核对。助手提供了联合长度扫描与少量打分工具，新增辅助及直接依赖14项检查通过，真实GPU尚未运行。按[预检命令](docs/reranking_runtime_task.md#真实预检)检查32400联合输入长度、最多3对打分和显存，通过后才运行324题。Qwen8B与BGE对照均保留；4096／batch1只是待实测的起点，暂无真实重排成绩。既有Qwen Dense对照见[开发集归档](docs/nfcorpus_retrieval_baselines.md)，核心仍由用户写，检查先审语义再用测试复查。
+**当前任务：用户终端运行完整开发集重排。** Qwen4B真实预检已通过：4090／BF16／4096／batch1，32400联合输入最大2414、0截断，3对原始打分有效，预检峰值已分配显存8.06GiB。源码、配置、来源与资源核对通过，按[完整运行命令](docs/reranking_runtime_task.md#完整开发集重排)在同一Qwen8B Dense Top100上重排324道dev，测排序效果与新增成本；当前尚无完整重排成绩。预检显存不替代完整运行峰值，Qwen8B与BGE对照保留。既有Dense成绩见[开发集归档](docs/nfcorpus_retrieval_baselines.md)，核心仍由用户写，检查先审语义再用测试复查。
 
 **2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
 

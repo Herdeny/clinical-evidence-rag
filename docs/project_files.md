@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。Qwen完整Dense dev已实测核验，用户rerank及冻结候选评测已接通。运行辅助与用户run_reranking_eval.py共50项相关检查通过；下一步用户终端下载固定模型，尚无真实重排成绩。
+整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；旧BM25／BGE-small Dense／RRF dev结果及缓存已核验。Qwen完整Dense dev已实测核验，运行辅助与用户重排入口50项相关检查通过；固定Qwen4B已下载并通过真实GPU预检，下一步完整324题重排，尚无完整重排成绩。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@
 
 ## 数据维护模块
 
-configs/reranker_profiles.json保存三种重排候选的固定版本与初始运行参数。tests现有20个模块，test_reranking_support.py的6项检查针对真实构造签名转发、合成实际属性及重排结果来源／候选集合／计时范围；test_reranking_entry.py的4项覆盖导入保护、三profile默认／显式名称、CLI和原生输入错误的加载顺序，加原相关40项共50项通过。新增test_reranker_preflight.py有4项辅助检查，验证联合长度／prompt／原始logit／导入与CUDA边界；加直接依赖10项共14项通过，不是实际GPU预检结果。用户下一项见reranking_runtime_task.md真实预检节，文末“17个模块”属于此前整理记录。
+configs/reranker_profiles.json保存三种重排候选的固定版本与运行参数。tests现有21个模块；原模型支持／入口相关50项与预检辅助相关14项均通过，真实GPU预检另有已保存报告。新增test_beir_run_validation.py的4项验证新重排／原BM25的完整临时产物协议、候选集合、固定配置与资源CLI身份；未加载模型。当前用户下一项见reranking_runtime_task.md完整开发集节；文末“17个模块”属于此前整理记录。
 
 | scripts/data 内的模块 | 保留理由 |
 | --- | --- |
@@ -46,7 +46,9 @@ configs/reranker_profiles.json保存三种重排候选的固定版本与初始�
 
 ## 评测核验工具
 
-scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度，再对最多3对样本打分，记录实际CUDA／BF16／预算／显存及来源指纹；不运行完整排序评分。Qwen4B下载已核对，工具14项相关辅助检查通过，真实运行等待用户终端执行。命令与验收见reranking_runtime_task.md真实预检节。
+scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度，再对最多3对样本打分，记录实际CUDA／BF16／预算／显存及来源指纹；不运行完整排序评分。Qwen4B真实预检01已通过，来源及实际报告身份核对完成。命令与结果范围见reranking_runtime_task.md真实预检节。
+
+scripts/evaluation/validate_beir_run.py已适配frozen_rerank：固定候选集合／模型实际配置与原最大K召回不变量核对，按重排入口实际--profile检查资源命令，旧方法保留--method。4项新临时检查通过；正式完整运行结束后再核对原始产物，不为适配核验工具修改用户CLI。
 
 scripts/evaluation/validate_beir_run.py从已保存run及原始标注重新评分，检查题目覆盖、原query、分数、指标均值、输入／源码与资源统计，验证通过后更新本地审计。它不重新检索或加载模型，不在检索入口中隐式运行。三种方法首轮均通过；Dense缓存分块核对形状、数值、范数与文件身份，RRF还从归档两路排名独立重算324题的名次贡献并检查旧产物未改。历史执行快照必须匹配回执，后续开发后的当前工作区是否一致另报布尔值；结果汇总见docs/nfcorpus_retrieval_baselines.md。
 
