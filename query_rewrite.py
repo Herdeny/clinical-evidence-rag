@@ -1,3 +1,7 @@
+from time import perf_counter
+from tqdm import tqdm
+from openai import APIError
+
 from unittest import result
 
 from pydantic import BaseModel, Field
@@ -64,5 +68,37 @@ def rewrite_query(query, *, llm):
     results["changed"] = changed
     
     return results
+
+
+def rewrite_queries(queries_df, *, llm):
+    results = list()
+    
+    for _, query in tqdm(queries_df.iterrows(), total=len(queries_df), desc="改写查询"):
+        query_id = query['id']
         
+        try:
+            time_1 = perf_counter()
+            result = rewrite_query(query["query"], llm=llm)
+
+        except APIError as exc:
+            result = {
+                "original_query": query["query"],
+                "status": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+                "retrieval_query": None,
+                "changed": None,
+                "reason": None,
+                "usage_metadata": None,
+                "response_metadata": None
+            }
+        
+        time_2 = perf_counter()
+        
+        rewrite_elapsed_ms = (time_2 - time_1) * 1000
+        result["rewrite_elapsed_ms"] = rewrite_elapsed_ms
+        result["query_id"] = query_id
+        results.append(result)
+    
+    return results
+         
     

@@ -10,7 +10,9 @@
 
 已核查[DeepSeek Tool Calls官方说明](https://api-docs.deepseek.com/guides/tool_calls/)与本地已安装SDK实际实现。这里借助tool-calling格式取得结构化字段，不执行外部业务工具。模型返回的reason是改写说明，不是医学证据或条件核验结论。
 
-## 当前进度：真实单题通过，下一步小批量核心
+## 当前进度：批量核心本地验收通过，下一步数据集入口
+
+用户完成rewrite_queries，当前query_rewrite.py的SHA-256为0767d5da2a8c4ffd25768d1b18d9f75dfe9e3210a53e6cee281886095fabf6f5。已通过四行真实DataFrame搭配假LLM的本地检查：有效改写、解析失败、连接异常、原样返回依次得到ok／error／error／ok，四题四次假invoke、顺序及原文保持、每条10字段／非负有限计时／JSON可保存；解析失败保留用量，连接异常用量未知，后续题继续，输入DataFrame不改。和save_rewrite_results实际衔接后3条已知用量／1条未知，失败的已知用量未漏计；另验证原TypeError实例向外传播。原RewriteResult和rewrite_query相对上一提交AST不变，未重新跑单题API。记录results/query_rewrite_batch_validation_01.json；假用量不是实际成本，助手未改核心或运行API，批量入口及真实8题仍未完成。
 
 2026-11-25，用户终端完成ct_query_rewrite_single_01：status=ok，检索表达与原问题完全相同，changed=false，保留检查目的未说明；模型deepseek-flash，finish_reason=tool_calls，422输入／96输出／518总tokens，缓存读取0。本地整个进程1.47秒、主机RSS峰值96700KiB、退出0且无中断标记，不称远程模型推理延迟。日志及资源原件未改；8字段无损归档results/ct_query_rewrite_single_01_results.jsonl、_summary.json、_run.json，核验_validation.json。原始日志与用户提交内容一致，当前三份源码／配置SHA匹配入口本地验收；本次未在请求前创建代码回执或抓取原始HTTP消息，不能冒称已严格绑定请求时源码。
 
@@ -26,9 +28,9 @@
 
 逐题保留原始metadata，解析失败但有用量时仍计入已知token；缺失或不完整用量单独计数，全部未知时三项总量为None，不能假设为0。query_id要求非空字符串且同一批不重复；status沿用ok/error。写前检查字段及JSON可序列化，任意一份输出已存在即拒绝覆盖，并使用x模式创建；普通写入失败只清理本次已创建文件，原异常继续抛出。这是批次结束后的保存，不宣称具备逐请求断点恢复、跨进程锁或断电事务保证。临时目录检查已覆盖无损往返、输入不变、已知错误用量、未知用量、覆盖保护、重复ID及不可序列化配置；未为此改用户核心。
 
-## 下一项用户任务：rewrite_queries
+## 已完成：rewrite_queries的任务约定
 
-在现有query_rewrite.py中增加rewrite_queries(queries_df, *, llm)，复用已完成的rewrite_query，不改它的8字段协议。当前只写该函数，保存后由助手审阅；不直接调用8次API或修改入口。下一次接线后用现有load_beir_dataset(...,split="dev")得到的queries_df.head(8)作流程检查，完整评测仍用同一324道dev题。已核对前8题为PLAIN-1、PLAIN-11、PLAIN-22、PLAIN-32、PLAIN-43、PLAIN-55、PLAIN-67、PLAIN-77；按原文件顺序选取，不依检索分数或标签挑题。
+现有query_rewrite.py中rewrite_queries(queries_df, *, llm)已由用户完成并通过上文本地检查，复用单题函数及其8字段协议。以下保留任务定义供后续核对。数据集入口完成后用现有load_beir_dataset(...,split="dev")得到的queries_df.head(8)作流程检查，完整评测仍用同一324道dev题。已核对前8题为PLAIN-1、PLAIN-11、PLAIN-22、PLAIN-32、PLAIN-43、PLAIN-55、PLAIN-67、PLAIN-77；按原文件顺序选取，不依检索分数或标签挑题。
 
 输入queries_df是上游加载器已经检查的DataFrame，列为id和query；不在该函数里重新读取数据或重复整套标注验证。llm是入口创建的一份共享客户端。需要time.perf_counter计时、tqdm显示进度，以及openai.APIError处理请求本身失败；本地openai1.109.1已核实连接／超时／限流／HTTP错误类都继承APIError，无需新安装。
 
@@ -42,6 +44,25 @@
 6. 每条结果加query_id=row["id"]及rewrite_elapsed_ms，追加到列表，结束后返回列表。它共10字段，不改核心函数返回；函数不调用保存辅助，输出落盘由后续入口统一执行。
 
 验收看正常／原样／解析失败／请求异常均每输入一条就有一条记录，ID顺序一致；有有效输入的请求每题最多调用一次；失败不伪造changed或token，编程错误不吞掉，计时非负。先审实际代码再做最小CPU假调用检查，真实8题仍由用户终端执行。保存辅助已能接收这批记录，接入入口后复用同一模型配置和原文档向量；当前尚无8题API输出、批量缓存、改写检索或收益结果。
+
+## 下一项用户任务：run_query_rewrite_batch.py
+
+保留已跑通的单题入口run_query_rewrite.py，用户新建独立数据集批量入口run_query_rewrite_batch.py。main(config_dir, data_dir, *, profile_name, split, limit, run_name, result_dir)串起配置、数据读取、一份客户端、批量核心和保存辅助；本轮只写文件，保存后审核和同步，再交真实8题终端命令。新的入口不是新的改写算法，不改核心／模型配置／候选预算或标注。
+
+除已有argparse／json／Path／load_dotenv／ChatDeepSeek，导入benchmark_data.load_beir_dataset、query_rewrite.rewrite_queries和query_rewrite_io.save_rewrite_results；无需新安装。参数职责：config_dir是公开配置目录，data_dir是准备好的BEIR数据集目录，profile_name选择deepseek_flash，split本轮dev，limit本轮8，run_name由用户手动指定如nfcorpus_query_rewrite_dev_8_01，result_dir保存本次三份JSON产物。
+
+main顺序固定为：
+
+1. 拒绝非正limit，按run_name检查result_dir内_results.jsonl、_summary.json、_run.json是否任一已存在；已有时在请求前报错，避免付费后才发现不能保存。不要调用保存辅助生成空文件来做预检查。最终保存辅助仍保留独占创建保护。
+2. 按已完成单题入口的方式读取llm_profiles.json并选当前profile；使用load_beir_dataset(data_dir,split=split)，忽略本阶段不用的corpus_df与qrels，只使用返回的queries_df。qrels仅由现有加载器确定split成员，不传给模型。
+3. selected=queries_df.head(limit)，保留原文件顺序，空选择在请求前报错。limit超过总题数时自然选到全部，元数据分别记录请求limit和实际query_count，不伪称选满。模型只会接收选出的query文本。
+4. 在main内按原入口显式加载项目.env，override=False；用同一profile构造一次ChatDeepSeek，调用一次rewrite_queries(selected,llm=llm)，不在外层再逐题调用或添加重试／回退。
+5. 构建公开config字典，至少包含dataset_name=data_dir.resolve().name、data_dir的绝对路径字符串、split、limit、query_count=len(selected)、query_ids=selected["id"].tolist()、profile_name、llm_profile=当前profile。不要把DataFrame、客户端、异常对象或密钥放入config。
+6. 调用save_rewrite_results(records,config=config,run_name=run_name,result_dir=result_dir)，main返回它的summary。保留失败记录，不只保存status=ok。它生成三份原件，外层终端命令后续另保护run.log与resources.txt，二者分层防覆盖。
+
+CLI位于if __name__ == "__main__"，Path默认值沿用项目目录，实际命令显式传入：--config-dir（Path，configs）、--data-dir（Path，data/external/nfcorpus/prepared/nfcorpus）、--profile（deepseek_flash）、--split（dev，choices沿用train/dev/test）、--limit（int，8）、--run-name（required=True，不加时间戳）、--result-dir（Path，results）。解析后按上述main签名传参，打印json.dumps(summary,ensure_ascii=False,indent=2)。导入与--help不读.env、不创建客户端或请求。
+
+验收先看原数据前8题按序交给批量核心、客户端构造一次、批量调用一次、配置为可JSON保存的公开值、既有输出或无效limit在请求前拒绝、成功／失败记录都交给保存辅助。之后才由用户跑真实8题并复查改写忠实性与成本；完整召回比较仍为同一324条dev和原Qwen Dense文档缓存，产生新候选，当前不执行或声称该结果。
 
 ### 独立入口的完整任务
 

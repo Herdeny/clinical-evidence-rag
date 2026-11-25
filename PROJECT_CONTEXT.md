@@ -6,13 +6,17 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新：用户rewrite_queries已通过本地验收，下一项写数据集批量入口。** 重读104行源码，失败original_query已取问题字符串、error为具体类型及消息字符串、两路径统一添加ID／计时并append一次。实际4题混合假响应依次为有效改写／解析失败／连接异常／原样返回，4次假invoke，状态ok／error／error／ok，顺序、原文、10字段、JSON、有限非负计时、失败后下一题继续、输入DataFrame不变全部符合约定；解析失败保留用量，连接异常未知，和保存辅助衔接统计3已知／1未知，假token不作真实成本。另验证原TypeError实例自然向外传播。原RewriteResult与rewrite_query的AST对HEAD不变。源码SHA=0767d5da2a8c4ffd25768d1b18d9f75dfe9e3210a53e6cee281886095fabf6f5，记录results/query_rewrite_batch_validation_01.json。助手未改核心或加永久测试脚本，未读.env或运行API／GPU；本次通过只是本地逻辑，不是8题真实API或检索收益。归档提交同步后才交下一工作单元。
+
+下一用户任务新建run_query_rewrite_batch.py，保留已验收单题入口，实现main(config_dir,data_dir,*,profile_name,split,limit,run_name,result_dir)。非正limit及三份已有输出在请求前拒绝；读取同一llm profile，用load_beir_dataset(data_dir,split=split)取queries_df.head(limit)，原文件顺序／空选择提前报错，qrels不传模型。显式项目dotenv后创建一次客户端，调用一次rewrite_queries，将全部记录交给save_rewrite_results，返回summary。公开config含dataset_name／绝对data_dir字符串／split／limit／实际query_count／query_ids列表／profile_name／llm_profile，不放DataFrame、客户端或密钥。CLI七项：config-dir／data-dir／result-dir为Path，profile=deepseek_flash，split=dev（train/dev/test），limit=int默认8，run-name必填手动编号不加时间戳；实际命令显式config-dir。保存后先审核／同步再由用户终端运行dev前8题；当前新入口还不存在，根目录仍19模块。详细步骤、参数理由、输出保护和验收必须写在聊天，docs/query_rewrite_task.md为档案。
+
 **2026-11-25当前：用户真实CT查询改写单题通过，已归档；下一项用户写小批量核心。** 用户在终端完成ct_query_rewrite_single_01，原问题及检索表达完全一致、changed=false，检查目的未说明保留，status=ok、error=None、finish_reason=tool_calls。真实输入422／输出96／总518 tokens、cache_read0，响应ID=f2c04abe-bda3-4c7d-a89d-e1b70d1ec294，model_name=deepseek-flash。资源为整个本地进程1.47秒、RSS96700KiB、退出0无中断，不称远程模型推理延迟。原_run.log／_resources.txt与用户提交一致且未改，已无损生成_results.jsonl、_summary.json、_run.json、_validation.json。验证时当前core／entry／配置SHA匹配原入口验收，但没有请求前代码回执或HTTP消息快照，不能冒称严格证明请求时源码身份。入口此前d21bd5d已成功推送。
 
 单题reason声称无negations，但输入有not stated；检索表达保留原句，流程通过，说明文本的不准确观察记ENG-026。reason不是独立保真核验，changed也只判断文本变化；不为单题措辞重跑或修改prompt。目前只有这一真实输入的服务与条件保留观察，无批量、改写检索或广泛医学语义结果。助手未调用API／GPU或读取.env，用户核心与入口未改。
 
 助手按计划新增query_rewrite_io.py，save_rewrite_results(records,*,config,run_name,result_dir)：每条query_id加核心8字段、允许额外计时字段，保存_results.jsonl／_summary.json／_run.json并返回summary。公开config由入口传入；不读环境或调用模型。摘要统计成功／失败／changed及完整已知token；错误响应有用量也计入，未知／不完整单独计数，全未知总量None；ID唯一、防覆盖、写前序列化及本次部分产物清理。临时目录已检查实际JSON无损、输入不变、失败已知用量、未知用量、覆盖保护与写前拒绝错误数据。此为批次结束保存，不宣称有逐请求断点恢复或事务。现19根目录模块，新增辅助逐行中文注释；本工作单元归档提交同步后再交下一项。
 
-下一用户任务在现query_rewrite.py新增rewrite_queries(queries_df,*,llm)，先只写函数保存，不改入口或执行API。输入已有id／query列，客户端由入口创建一次。tqdm包iterrows并设置total／desc，每题perf_counter前后计时、只调一次现有rewrite_query，status error返回也保留真实metadata；仅捕获openai.APIError作同8字段失败结果，original_query原样，检索／changed／reason／两类metadata均None、error为含类型及信息字符串，继续下一题。数据／编程错误不吞掉，不自动重试或回退。追加query_id及rewrite_elapsed_ms，总10字段按序返回list，保存由后续入口用已有辅助处理。计时含单题提示／请求／解析及错误处理，不含客户端、打印与落盘；本地openai1.109.1确认连接／超时／限流／HTTP异常皆为APIError子类。先审核CPU假例，再接NFCorpus dev.head(8)：PLAIN-1／11／22／32／43／55／67／77，现324dev已读核对；8题是流程检查，完整检索对照仍324题、同Qwen Dense文档缓存及新候选。完整参数、失败字段和验收必须在聊天给出，docs/query_rewrite_task.md只是档案。当前批量函数、8题真实输出及改写召回均未实现。
+批量核心约定现已实现：输入id／query，客户端由入口共享；tqdm逐题、perf_counter计时，只有APIError转失败记录，编程异常自然传播，不重试／回退。计时含提示／请求／解析及错误处理，不含客户端、打印、落盘；本地openai1.109.1确认连接／超时／限流／HTTP异常皆为APIError子类。下一真实流程检查用NFCorpus dev.head(8)：PLAIN-1／11／22／32／43／55／67／77；完整检索对照仍324题、同Qwen Dense文档缓存及新候选，当前尚无真实8题、批量缓存或改写召回结果。
 
 **入口本地验收记录：** 用户run_query_rewrite.py已通过CLI到核心函数检查，第28行--query正确。真实argparse／实际核心／假LLM验证配置展开、项目dotenv路径override=False、单次invoke、原问题、8字段JSON；导入无客户端构造，help／缺query在请求前退出。此轮不读密钥或API，假token不作成本。入口SHA=8f9783b2730a8b7cb82de9f1351c1bfce708132217c768e5f6a95327c2aa2773，记录query_rewrite_entry_validation_01.json，与后续真实单题记录分开。
 
