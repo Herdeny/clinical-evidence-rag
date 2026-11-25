@@ -1,5 +1,15 @@
 # 单题查询改写：保留原问题，生成检索表达
 
+## 当前任务：用户自行运行同324题三方法对照，编号02
+
+2026-11-26：用户明确要求模型／API／GPU由自己执行。助手此前将“跑完324再分析”误读为代跑，已说明实际调用及费用并停止；01产物保留作为该事件记录，不能冒称用户亲自运行的结果。“继续”不重新授权助手执行。此后只准备命令、检查代码，等用户实际输出再分析。
+
+本轮用户可直接复用results/nfcorpus_query_rewrite_dev_324_01_results.jsonl，已检查324条且题号唯一，SHA=ccbb27de7427b403e59fa3ee13ac758faf491e342b62474b5f121344dc2bed95；无需重复调用DeepSeek。三方法02输出前缀分别为nfcorpus_bm25_query_rewrite_dev_324_02、nfcorpus_dense_qwen3_8b_query_rewrite_dev_324_02、nfcorpus_rrf_qwen3_8b_query_rewrite_dev_324_02，准备时都没有同名文件。原01文件不覆盖。
+
+准备文件为results/nfcorpus_query_rewrite_retrieval_dev_324_02_source_snapshot/user_terminal_command.sh及_audit.json。命令仍调用原run_benchmark_eval.py，使用--config configs、--split dev、--cache cache/embeddings，Dense／RRF指定qwen3_8b，BM25不传embedding选项。每种方法分别原问题／改写两组324题，原qrels与全部3633文档不变；每方法在time／tee启动前保护两份记录及两组三JSON共8份，冲突或失败立即停止。助手只检查脚本语法、不执行；完整命令须在聊天提供。
+
+用户完成三种方法后贴终端输出，助手再按同324题复算四指标、检查配置和缓存、保存逐题差异与成本。8题只验流程；当前不引用它作效果结论，不用旧01分析替代用户02结果。后文所有8题待办和原任务初始状态均作为历史记录理解。
+
 2026-11-26接口纠正：命令行只用已有基准入口的--config，解析属性为args.config，Python函数参数仍叫config_dir。助手引入--config-dir及随后添加兼容别名均未遵守用户要求，现已撤回，不为旧测试保留额外接口；测试改用实际的--config。下文首次真实单题原命令仅作已执行历史记录，原日志、源码快照和验证摘要不改，不作为当前运行命令。
 
 同日命名约定纠正：--run-name沿用已有入口的可选方式，不设required=True。传入时使用用户名称，省略时按数据集_方法_配置_划分生成有效默认名，如nfcorpus_query_rewrite_deepseek_flash_dev，不加时间戳。默认名在防覆盖检查及请求之前确定；保存器需要有效名称，不意味着CLI必须强制用户填写。助手此前的必填要求撤回，不能作为验收条件。
