@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；Qwen完整Dense及4B batch1／batch4、8B batch4同候选dev均已实测。4B batch4当前运行核对通过，历史资源异常单独披露；阶段均值仅较batch1降低0.68%。BGE固定快照下载已核验，13文件／约2.27GB单权重，下一步复用现有工具做真实预检。本轮只检查文件头部、内容地址和离线配置／分词器，未改核心／核验器或运行GPU。
+整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；Qwen完整Dense及4B batch1／batch4、8B batch4同候选dev均已实测。4B历史资源异常单独披露。BGE真实BF16／4096／batch4预检已由用户完成并离线核验，下一步完整dev；助手本轮只核对产物与四对CPU分词，未改核心／核验器或执行GPU。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -13,7 +13,7 @@
 | run_retrieval_eval.py | CLI、方法选择与评测入口 | 用户 |
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
 | embedding_adapter.py | 共享模型构造与显式FP32输出归一化；6项无权重验证通过，预检和正式入口已共用，真实GPU预检03通过 | 助手辅助，逐行中文注释 |
-| reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B实际加载和完整运行已通过，BGE待实测 | 助手辅助，逐行中文注释 |
+| reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B完整运行及BGE真实小批预检已通过，BGE完整dev待实测 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；save_beir_results支持原方法及frozen_rerank，保留候选来源和正确计时范围 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |

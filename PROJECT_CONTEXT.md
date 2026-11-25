@@ -6,6 +6,12 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-25最新：BGE真实预检01通过并离线核验，下一步用户完整dev。** nfcorpus_rerank_bge_v2_m3_preflight_01，固定953dc6f版本，实际RTX4090／cuda:0、BF16／SDPA／4096／batch4、右填充、无指令及Identity均符合profile。324题／32400句对真实长度最小32、最大2624、P95=609、超限0；实际一个batch4，样本长度2624／2620／2619／2616，float32有限原始分数-3.984375／-3.953125／-4.0625／-5.53125。GPU已分配1435868672字节（1.337256908GiB）、预留1629487104（1.517578125GiB）；进程12.83秒、主机RSS4144888KiB、退出0且无中断。加载0.672743715秒、四对打分0.163378023秒不当稳定单题成本或完整峰值。
+
+_validation.json核对模型实际属性及完整profile、原候选来源、源码／三输入／三原产物、实际命令和终端JSON一致；四个样本以固定BGE分词器和完整原文独立重算长度一致，未重新扫描全部长度，助手未执行模型或GPU。cache_dir弃用提示已记录，本地CrossEncoder的普通分类加载分支内部向Transformer传cache_dir；是兼容提示而非本次失败，缓存仍在项目内，不为消除提示改动本轮加载器或已通过的配置。
+
+先归档同步本节点，再准备nfcorpus_rerank_bge_v2_m3_dev_01的十文件执行前快照、三输入和旧文件保护回执，交用户终端完整324题／32400对，仍复用原Qwen Dense Top100，不重做检索。新回执必须显式继承4B dev02的历史资源异常：旧回执原预期保留，新周期以当前实际文件身份冻结并链接旧异常报告，不能把原失败清单直接复制后称全历史通过；运行后报告也须保留该继承范围。运行前检查五个原始输出名称，排除已预建audit／snapshot，不用整个前缀存在性阻断准备好的运行。完整命令见docs/reranking_runtime_task.md“BGE-v2-m3完整开发集重排”。Recall@100应仍0.39709670188154617，其他指标与耗时以完整实测为准，不能由预检4对选定最终模型。以下为历史记录。
+
 **2026-11-25最新：BGE-v2-m3固定快照下载核验通过，下一步用户终端真实预检。** BAAI/bge-reranker-v2-m3 revision953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e已在项目cache；13文件／单权重2271071852字节，393个张量原生F32、张量数据2271023108字节，逐文件SHA256／普通Git blob地址、链接归属、头部形状／偏移／字节总量均匹配，无.incomplete。下载200.37秒（3:20.37）、主机RSS1764348KiB、退出0且无中断标记；记录results/bge_reranker_v2_m3_download_validation.json。离线AutoConfig／AutoTokenizer及短句对分词成功，本地类映射XLMRobertaForSequenceClassification、num_labels=1且权重分类头为[1,1024]；该类声明支持SDPA，不冒称实际模型加载成功。助手未加载权重或GPU。
 
 现有加载器／预检代码无需改，profile=bge_v2_m3保持batch4、4096联合预算、CUDA BF16／SDPA、右填充、无Qwen指令、Identity原始分类logit。检查点F32与计划运行BF16须区分，实际精度和容量由用户执行确认。先归档同步本节点，再交nfcorpus_rerank_bge_v2_m3_preflight_01命令；启动time／tee前检查JSON、资源、日志三名称，已确认均未用。复用同一324题／32400原候选，BGE自己分词统计全部联合输入，再取最长4对真实打分；不能沿用Qwen的长度或显存，通过后才准备完整BGE dev。旧4B历史资源异常状态与原预期继续保留，不因新下载通过而改写。命令与验收见docs/reranking_runtime_task.md“BGE-v2-m3下载验收与真实预检”。以下为历史节点记录。

@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25当前节点：BGE真实预检01已核验，下一步完整dev。** 实际cuda:0／BF16／SDPA／4096／batch4、Identity及无指令符合profile。32400联合输入最短32、最长2624、P95=609、超限0；完整4对打分有限，预检已分配1.337257GiB、预留1.517578GiB，进程12.83秒、退出0且无中断。源码／输入／候选／命令及日志一致，四对样本长度以固定分词器独立重算通过；_validation.json只验证本次预检，旧4B资源异常继续披露。cache_dir为库兼容弃用提示，加载器／配置保持。下一命令见“BGE-v2-m3完整开发集重排”。
+
 **2026-11-25当前节点：BGE下载核验通过，下一步真实预检。** 固定953dc6f快照13文件，单权重2271071852字节／393个原生F32张量，内容地址／头部／离线配置和分词器一致，无未完成下载。用户下载3:20.37、退出0、无中断标记；助手没有加载权重或执行GPU。现有profile=bge_v2_m3及工具可复用，运行仍按计划BF16／SDPA／4096／batch4，真实状态等待用户确认。新命令见“BGE-v2-m3下载验收与真实预检”。原4B历史资源异常保持披露。
 
 **2026-11-25当前节点：4B batch4完整dev02当前运行已核对，历史资源有一处覆盖异常，下一步BGE下载。** 指标0.407701／0.205120／0.378699／0.397097，新增重排3.236秒/题、整进程17:32.91；相对batch1耗时仅少0.68%、nDCG@10略降0.55%，不宣称已获得明显批量加速。当前五产物／指标／源码和其余67份历史文件匹配，旧4B预检02资源文件被一个中断尝试覆盖，严格全历史检查未通过；_validation.json及audit均用带历史异常的限定状态，旧预期摘要保留，严格核验器／用户核心未改。详情见实测归档与ENG-025。下一命令见“BGE-v2-m3同候选对照：下载”，新增启动前检查保护日志名称。
@@ -378,6 +380,43 @@ fi
 ```
 
 验收看status=passed、实际cuda:0／torch.bfloat16／4096，324题／32400对的pairs_over_limit=0，以及4个有限一维分数、batch_check完整batch4已覆盖。长度和显存以BGE自己统计的真实输出为准，不复制Qwen的2414上限或预检显存，不将本次四对分数当完整排序效果；超限就保留记录并判断预算，不能静默裁剪。通过并归档后，再准备nfcorpus_rerank_bge_v2_m3_dev_01的回执、旧历史异常链接和完整运行命令，仍复用原Top100，不重建Dense。
+
+## BGE-v2-m3完整开发集重排
+
+2026-11-25预检01已通过：BGE自己统计32400对，32～2624 tokens、P95=609、0超限；最长四对2624／2620／2619／2616实际在一个batch4内打分，float32原始logit为-3.984375／-3.953125／-4.0625／-5.53125。实际CUDA BF16／SDPA／4096、Identity、无指令和右填充保持。GPU已分配1435868672字节（1.337256908416748GiB）、预留1629487104（1.517578125GiB）；进程12.83秒、RSS4144888KiB、退出0。小批0.163378023秒和预检峰值不充当完整运行成本。
+
+助手已核对原始三产物、配置／源码／三输入／原Dense产物、实际参数和终端JSON；用固定BGE分词器对四个原query／完整正文句对独立重算长度一致，没有加载模型或GPU，也未重扫全部长度。cache_dir提示来自本地CrossEncoder普通分类加载分支内部向Transformer传递兼容参数，本次成功且缓存仍在项目内；不为消除提示改动本轮加载配置。
+
+正式名称nfcorpus_rerank_bge_v2_m3_dev_01，复用同一324条dev／每题原100候选／原文与标签，只加载一个BGE重排模型。归档提交同步后准备_run_audit.json、十文件源码快照和当前旧文件保护基线；原4B dev02历史异常及其旧预期仍保留，并以inherited_prior_integrity_exceptions显式链接。本轮新基线从当前文件内容建立，不修改旧回执，不把旧异常称为已恢复。后续核验区分本周期文件未变与继承的历史限制。
+
+启动前只检查五个正式输出，不检查已预建的audit／snapshot；用户在可见终端执行：
+
+```bash
+# 进入项目目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留Python失败时的管道退出状态。
+set -o pipefail
+# 在启动计时和日志前检查五个原始输出，保护已有运行。
+if [[ -e results/nfcorpus_rerank_bge_v2_m3_dev_01_resources.txt || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_run.log || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_summary.json || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_results.jsonl || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_run.json ]]; then
+  # 重试需改用新的独立编号，原记录保留。
+  printf '%s\n' '本轮记录已存在，请改用新的运行编号。'
+else
+  # 复用原候选，离线运行BGE完整开发集并保存结果和资源。
+  HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh \
+    /usr/bin/time -v \
+    -o results/nfcorpus_rerank_bge_v2_m3_dev_01_resources.txt \
+    /home/wzh/miniforge3/envs/all-in-rag/bin/python -u run_reranking_eval.py \
+    --config-dir configs \
+    --data-dir data/external/nfcorpus/prepared/nfcorpus \
+    --receipt results/nfcorpus_qwen3_8b_frozen_candidates.json \
+    --profile bge_v2_m3 \
+    --run-name nfcorpus_rerank_bge_v2_m3_dev_01 \
+    --result-dir results \
+    2>&1 | tee results/nfcorpus_rerank_bge_v2_m3_dev_01_run.log
+fi
+```
+
+验收为324题各返回原100候选、五产物齐全且退出0／无中断标记；以原qrels独立重算四指标，核对逐题及均值、候选集合、固定配置、输入／执行快照和新保护周期文件身份。Recall@100应保持0.39709670188154617，nDCG／Recall@10收益与逐题退化看实测，不预设胜出。分别比较BGE与Qwen4B batch4、Qwen8B batch4的前部排序和阶段延迟，原4B batch1也保留；不同模型原始logit标度不能直接比较。正式入口未记录全程GPU峰值，不用预检值或主机RSS替代。方法固定后才进入test及后续MIRAGE，不用这些留出内容选参数。
 
 ## Jina候选调研：尚未接入或实测
 
