@@ -389,15 +389,19 @@ fi
 
 正式名称nfcorpus_rerank_bge_v2_m3_dev_01，复用同一324条dev／每题原100候选／原文与标签，只加载一个BGE重排模型。归档提交同步后准备_run_audit.json、十文件源码快照和当前旧文件保护基线；原4B dev02历史异常及其旧预期仍保留，并以inherited_prior_integrity_exceptions显式链接。本轮新基线从当前文件内容建立，不修改旧回执，不把旧异常称为已恢复。后续核验区分本周期文件未变与继承的历史限制。
 
-启动前只检查五个正式输出，不检查已预建的audit／snapshot；用户在可见终端执行：
+本节点工具端多次HTTPS推送因TLS握手中断而失败，HTTP/1.1重试及只读SSH连接也未恢复；本地提交不冒称已同步。先完成本地回执和快照，记录准备时同步状态；本次交付命令先执行已授权的git push，只有成功才检查五个正式输出并启动评测，不检查已预建的audit／snapshot。同步在GNU time之外，不计入模型运行成本。用户在可见终端执行：
 
 ```bash
 # 进入项目目录。
 cd /home/wzh/clinical-evidence-rag
 # 保留Python失败时的管道退出状态。
 set -o pipefail
+# 只有GitHub同步成功后，才进入下一项模型评测。
+if ! git push origin main; then
+  # 同步失败则停止本次启动，保留已准备的本地材料。
+  printf '%s\n' 'GitHub同步未成功，本次不启动评测。'
 # 在启动计时和日志前检查五个原始输出，保护已有运行。
-if [[ -e results/nfcorpus_rerank_bge_v2_m3_dev_01_resources.txt || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_run.log || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_summary.json || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_results.jsonl || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_run.json ]]; then
+elif [[ -e results/nfcorpus_rerank_bge_v2_m3_dev_01_resources.txt || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_run.log || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_summary.json || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_results.jsonl || -e results/nfcorpus_rerank_bge_v2_m3_dev_01_run.json ]]; then
   # 重试需改用新的独立编号，原记录保留。
   printf '%s\n' '本轮记录已存在，请改用新的运行编号。'
 else

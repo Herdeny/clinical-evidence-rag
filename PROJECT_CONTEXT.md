@@ -12,6 +12,8 @@ _validation.json核对模型实际属性及完整profile、原候选来源、源
 
 先归档同步本节点，再准备nfcorpus_rerank_bge_v2_m3_dev_01的十文件执行前快照、三输入和旧文件保护回执，交用户终端完整324题／32400对，仍复用原Qwen Dense Top100，不重做检索。新回执必须显式继承4B dev02的历史资源异常：旧回执原预期保留，新周期以当前实际文件身份冻结并链接旧异常报告，不能把原失败清单直接复制后称全历史通过；运行后报告也须保留该继承范围。运行前检查五个原始输出名称，排除已预建audit／snapshot，不用整个前缀存在性阻断准备好的运行。完整命令见docs/reranking_runtime_task.md“BGE-v2-m3完整开发集重排”。Recall@100应仍0.39709670188154617，其他指标与耗时以完整实测为准，不能由预检4对选定最终模型。以下为历史记录。
 
+**本节点同步连接异常：** 本地预检归档提交2e908f0已完成，但工具端连续三次HTTPS推送（含单次HTTP/1.1）均报gnutls_handshake连接中断，独立HTTPS探测和只读SSH探测也未连通，不能声称已同步。继续完成本地回执／快照准备，单独记录准备时同步状态；不因网络问题改模型或Git证书校验。当前交付命令增加最外层git push成功条件，再检查五原件并启动GPU，推送失败则不启动评测；push在GNU time之外，不混入模型成本。用户终端执行时可同时完成既定同步和评测，无需先追加确认回合。若后续工具端推送恢复，应以实际origin/main或远端核对更新同步状态，不只看本地commit成功。
+
 **2026-11-25最新：BGE-v2-m3固定快照下载核验通过，下一步用户终端真实预检。** BAAI/bge-reranker-v2-m3 revision953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e已在项目cache；13文件／单权重2271071852字节，393个张量原生F32、张量数据2271023108字节，逐文件SHA256／普通Git blob地址、链接归属、头部形状／偏移／字节总量均匹配，无.incomplete。下载200.37秒（3:20.37）、主机RSS1764348KiB、退出0且无中断标记；记录results/bge_reranker_v2_m3_download_validation.json。离线AutoConfig／AutoTokenizer及短句对分词成功，本地类映射XLMRobertaForSequenceClassification、num_labels=1且权重分类头为[1,1024]；该类声明支持SDPA，不冒称实际模型加载成功。助手未加载权重或GPU。
 
 现有加载器／预检代码无需改，profile=bge_v2_m3保持batch4、4096联合预算、CUDA BF16／SDPA、右填充、无Qwen指令、Identity原始分类logit。检查点F32与计划运行BF16须区分，实际精度和容量由用户执行确认。先归档同步本节点，再交nfcorpus_rerank_bge_v2_m3_preflight_01命令；启动time／tee前检查JSON、资源、日志三名称，已确认均未用。复用同一324题／32400原候选，BGE自己分词统计全部联合输入，再取最长4对真实打分；不能沿用Qwen的长度或显存，通过后才准备完整BGE dev。旧4B历史资源异常状态与原预期继续保留，不因新下载通过而改写。命令与验收见docs/reranking_runtime_task.md“BGE-v2-m3下载验收与真实预检”。以下为历史节点记录。
