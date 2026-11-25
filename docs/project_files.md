@@ -1,25 +1,25 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；Qwen完整Dense及Qwen4B／8B同候选重排dev均已实测核验。4B batch1提高平均前部排序但新增3.258秒/题成本，8B batch4当前nDCG@10更高而Recall@10较低、新增5.430秒/题，下一步补4B batch4控制；尚未完成模型选型。本轮只离线核验和记录，没有改核心或重新运行GPU。
+整理日期：2026-11-19，进度更新2026-11-25。根目录现有16个Python模块，14个数据维护工具集中到scripts/data；Qwen完整Dense及4B batch1／batch4、8B batch4同候选dev均已实测。4B batch4当前运行及指标核对通过，历史一份旧预检资源覆盖单独披露，不能称全历史通过；阶段均值仅较batch1降低0.68%，下一步BGE对照。本轮只离线核验和记录，没有改核心、核验器或重新运行GPU。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
 | retrieve_core.py | 已实现的向量相似度与 Top-K | 用户 |
 | retrieve_bm25.py | 分词、BM25 构建与检索 | 用户 |
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
-| rerank_core.py | 纯函数12项无权重验收全部通过；原分数转换保留原生异常，尚未接真实模型 | 用户；助手仅整理异常提示及无用导入／空白 |
+| rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
 | retrieve_evalution.py | 两类 Recall 与逐题批量评测，沿用实际文件名 | 用户 |
 | run_retrieval_eval.py | CLI、方法选择与评测入口 | 用户 |
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
 | embedding_adapter.py | 共享模型构造与显式FP32输出归一化；6项无权重验证通过，预检和正式入口已共用，真实GPU预检03通过 | 助手辅助，逐行中文注释 |
-| reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；只验证参数和合成运行属性，尚未加载真实权重 | 助手辅助，逐行中文注释 |
+| reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B实际加载和完整运行已通过，BGE待实测 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | 验证并保存CT及BEIR既有结果；save_beir_results支持原方法及frozen_rerank，保留候选来源和正确计时范围 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR基准读取适配，真实dev、通用目录、ID保真及既定输入检查9项全部通过 | 用户 |
 | benchmark_eval.py | 公共查询循环与逐题评分；新增可选query_id回调和冻结候选重排包装，10项小样本检查通过，真实324题假打分衔接核对通过 | 用户 |
 | run_benchmark_eval.py | 三方法及BGE／Qwen配置选择，config_dir必填，15项临时集成检查通过；旧三方法dev已核验，Qwen完整dev已实测核验，未接重排 | 用户 |
-| run_reranking_eval.py | 固定候选重排运行入口；4项编排检查及Qwen4B／8B真实324题运行核验通过；原候选集合／配置和来源保持，4B batch4控制及BGE仍待实测 | 用户 |
+| run_reranking_eval.py | 固定候选重排入口；Qwen4B batch1／batch4及8B batch4实际运行、指标已核对；4B batch4历史资源异常另有披露，BGE待实测 | 用户 |
 
 ## 数据维护模块
 
@@ -46,7 +46,7 @@ configs/reranker_profiles.json保存三种重排候选的固定版本与运行�
 
 ## 评测核验工具
 
-scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度；batch1保留首两对加最长一对，batch>1选出最长batch_size对实际覆盖完整批次，报告实际样本数及是否覆盖整批，记录CUDA／BF16／预算／显存及来源指纹，不运行完整排序评分。Qwen4B batch1、8B batch4预检01及4B batch4预检02均已通过；4B batch4预检已分配9.615714GiB、预留10.130859GiB，下一步完整dev02，保留旧01。tests/test_reranker_preflight.py现5项CPU检查，命令与范围见reranking_runtime_task.md的4B batch4完整控制节。
+scripts/evaluation/preflight_reranker.py由助手提供，调用与正式入口相同的加载器和模型构造接口，扫描全部固定候选的真实联合输入长度；batch1保留首两对加最长一对，batch>1选出最长batch_size对实际覆盖完整批次，报告实际样本数及是否覆盖整批，记录CUDA／BF16／预算／显存及来源指纹，不运行完整排序评分。Qwen4B batch1、8B batch4预检01及4B batch4预检02均已完成，正式dev也已执行；4B预检02资源后来被中断尝试覆盖，原JSON与日志保留，历史异常见ENG-025，不能将当前资源文件与旧成功JSON拼作同一轮。tests/test_reranker_preflight.py现5项CPU检查，BGE下载后继续复用工具独立预检。
 
 scripts/evaluation/validate_beir_run.py已适配frozen_rerank：固定候选集合／模型实际配置与原最大K召回不变量核对，按重排入口实际--profile检查资源命令，旧方法保留--method。4项新临时检查通过；正式完整运行结束后再核对原始产物，不为适配核验工具修改用户CLI。
 

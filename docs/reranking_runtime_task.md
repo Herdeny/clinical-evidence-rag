@@ -1,5 +1,7 @@
 # 真实重排运行入口
 
+**2026-11-25当前节点：4B batch4完整dev02当前运行已核对，历史资源有一处覆盖异常，下一步BGE下载。** 指标0.407701／0.205120／0.378699／0.397097，新增重排3.236秒/题、整进程17:32.91；相对batch1耗时仅少0.68%、nDCG@10略降0.55%，不宣称已获得明显批量加速。当前五产物／指标／源码和其余67份历史文件匹配，旧4B预检02资源文件被一个中断尝试覆盖，严格全历史检查未通过；_validation.json及audit均用带历史异常的限定状态，旧预期摘要保留，严格核验器／用户核心未改。详情见实测归档与ENG-025。下一命令见“BGE-v2-m3同候选对照：下载”，新增启动前检查保护日志名称。
+
 **2026-11-25当前节点：4B batch4预检02已核验，下一步完整dev02。** CUDA BF16／SDPA／4096／batch4及原指令均按配置生效，32400对无超限，四个最长样本实际打分成功；预检已分配9.615714GiB、预留10.130859GiB，进程15.24秒、退出0。源码／输入／候选和资源参数均匹配，样本分词长度独立核对通过，记录results/nfcorpus_rerank_qwen3_4b_preflight_02_validation.json。下一命令见“Qwen4B batch4完整开发集控制”，原batch1和8B结果保留。下方为较早节点记录。
 
 **2026-11-25当前节点：8B batch4完整dev已核验，下一步4B batch4控制。** 四指标0.4165824815915057／0.20299195976049142／0.38352092086136175／0.39709670188154617；相对Dense nDCG@10+6.22%、Recall@10+5.61%，对旧4B batch1则nDCG@10+1.61%、Recall@10-1.93%。新增重排均值5.430秒/题、整轮29:24.12。三输入／十文件快照和当前源码／56旧产物／固定配置及独立逐题重评分均通过，原Top100不变。完整对照见nfcorpus_retrieval_baselines.md；当前模型与批次同时变化，下一步补已下载4B在batch4下的独立运行，BGE计划保留。命令见“Qwen4B批次控制：batch4预检02”。
@@ -311,6 +313,36 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/project_env.sh \
 ```
 
 验收仍为324题各返回原100候选、原始五产物齐全且退出0，按原qrels独立逐题重评分，源码／配置／来源和旧文件身份不变。Recall@100应保持0.39709670188154617，不预设其他指标与batch1完全相同。返回后比较4B batch1→batch4的分数差、排名／逐题指标和新增阶段耗时，再比较同batch4的4B／8B。单次耗时不冒充多次重复测量，正式入口仍未记录全程GPU峰值；不将预检峰值或主机RSS代替该数据。
+
+## BGE-v2-m3同候选对照：下载
+
+4B batch1、4B batch4及8B batch4已完成；BGE仍属既定候选，不因当前耗时或单项dev指标直接跳过。2026-11-25重新查验[官方固定版本模型卡](https://huggingface.co/BAAI/bge-reranker-v2-m3/blob/953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e/README.md)及[文件列表](https://huggingface.co/BAAI/bge-reranker-v2-m3/tree/953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e)：Apache-2.0、提供CrossEncoder／AutoModelForSequenceClassification用法；固定快照包含model.safetensors、配置及分词器，单权重文件页面约2.27GB。当前项目固定快照尚不存在，尚无本地BGE推理或排序成绩，不把官方速度描述当实测。
+
+现有profile=bge_v2_m3及build_reranker可沿用；当前batch4、4096联合预算、CUDA BF16／SDPA、右填充、无Qwen指令、Identity保留原始分类logit。下载后仍须核对文件身份和实际接口，再真实扫描本模型分词后的全部输入长度及完整batch4；不能复制Qwen长度或显存。
+
+旧预检资源文件出现覆盖，说明Python内部的output.exists检查不足以保护外层GNU time -o和tee。因此后续命令先检查本轮资源和日志名称，已有记录则停止这次启动；需要重试时手动用download_02等新编号，Hub会复用现有模型内容。该检查用于单用户顺序运行，不宣称跨进程锁或并发发布机制。用户在可见终端执行：
+
+```bash
+# 进入项目目录。
+cd /home/wzh/clinical-evidence-rag
+# 保留下载程序失败时的管道退出状态。
+set -o pipefail
+# 在启动计时和日志写入之前检查名称，保护已保存记录。
+if [[ -e results/bge_reranker_v2_m3_download_01_resources.txt || -e results/bge_reranker_v2_m3_download_01_run.log ]]; then
+  # 已有前缀需改用新编号，不启动本次下载命令。
+  printf '%s\n' '本轮记录已存在，请改用新的运行编号。'
+else
+  # 下载固定候选，单文件进度与所有模型缓存均沿用项目设置。
+  HF_HUB_DISABLE_PROGRESS_BARS=0 TQDM_POSITION=-1 bash scripts/project_env.sh \
+    /usr/bin/time -v \
+    -o results/bge_reranker_v2_m3_download_01_resources.txt \
+    /home/wzh/miniforge3/envs/all-in-rag/bin/hf download BAAI/bge-reranker-v2-m3 \
+    --revision 953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e \
+    2>&1 | tee results/bge_reranker_v2_m3_download_01_run.log
+fi
+```
+
+快照路径为项目cache/huggingface/hub/models--BAAI--bge-reranker-v2-m3/snapshots/953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e。完成后由助手核对索引／内容地址、配置与离线分词器，再准备用户终端预检。资源判断除退出状态外还应检查signal／中断标记；不能将被中断尝试的资源文件与旧成功JSON拼作同一轮结果。
 
 ## Jina候选调研：尚未接入或实测
 
