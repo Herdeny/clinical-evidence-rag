@@ -6,6 +6,12 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26当前：MIRAGE五上游的公开发布声明与评测角色核查完成，下一项用户写已有benchmark_data.py的离线读取函数。** 四个上游原仓库声明MIT，BioASQ官方数据页声明CC BY 2.5并要求归属／引用、原站下载需注册；本轮只确认公开声明与本地科研评测用途，不打包再发布第三方题目／摘要／教材。完整原作者链接、条件边界、MedMCQA原README划分表与MIRAGE构建映射差异，见docs/benchmark_scope.md。MIRAGE五部分1089／1273／4183／500／618，共7663，均作为本项目最终评测；不能将其中MedMCQA的上游dev当本项目调参集。后续联调先另取官方train／dev并做与MIRAGE重叠核查，当前未下载新开发包、未运行模型。
+
+只读核验原三份SHA和本地结构：外层任务字典，内层字符串原题号字典，所有记录有question／options／answer；PubMedQA与BioASQ还有参考文献PMID，留评测侧。原采集source_manifest保留pending历史状态、revision=null及原SHA，不改写原件。results/mirage_upstream_review_01.json记录本轮核查，没有展示本地题干或标准答案。官方QADataset每任务sorted原题号，后续读取器沿用；官方解析失败回退A的评分行为需后续单独处理并说明，不默默照搬。
+
+本轮只交一个完整核心任务：用户在benchmark_data.py添加load_mirage_dataset(benchmark_path, *, task=None)，使用json和已有Path／pandas，不改BEIR读取与apply_query_rewrites、不新建脚本。None读全部，或指定五任务键之一；json.load一次后分任务sorted字符串题号，id=任务名:原题号。返回questions_df（id／task／query／options四列）及gold_answers（全局id→原答案键字典）。query保留原question，options保留字典，answer／PMID均不进入题目表；检索只用query，生成可另取options，gold仅评分。输入有效性检查按数据语义，不由测试强定异常类，不在业务读取器硬编码题数。验收只输出全量(7663,4)、分任务数量、答案数7663、ID唯一与双集合一致；pubmedqa单任务500，不打印题干／答案。该函数尚未实现；用户保存后再读代码和输出，真实模型执行仍由用户完成。
+
 **2026-11-26最新用户要求：评测只采用可公开考据、有说服力和可信度的公开benchmark。** 用户在澄清324题与120题的区别及自建题来源后明确收紧评测标准。NFCorpus的324道dev查询是公开检索基准；CT的180道题（120开发／60留出）全部为助手合成／初标，非公开benchmark。当前复核表120行均pending、具名复核者0；构建清单formal comparison ready为false。此前将其称为“正式CT开发验证”不够准确，已纠正。立即撤回120题运行计划，不再用自建CT题扩充、调参或证明效果；旧文件与成绩仅作历史回查，不删除或改写原件。本地medical_v3_bm25_ct_review_dev_120_01_preparation.json是用户收紧标准前的未执行准备记录，命令计划已撤回，不是待用户运行任务，实际模型调用0。
 
 保留已有公开NFCorpus成绩及配套3633文档／官方qrels，dev=324、test=323，test仍未运行；NFCorpus标签由网站链接／主题关系自动构造，不冒称医生金标准，也不能把它当充分性／必要澄清标签。MIRAGE医学QA为既定最终7663题目标，官方论文与仓库已再次核实，原快照已下载，五上游数据条件与完整QA适配仍待完成；遵守零样本、question-only retrieval、答案只供评测，不能反复用正式测试题调prompt。报告澄清、引用支持、用药与多模态指标还需要各自适配的公开benchmark，当前两项不能代证这些能力。公开来源、原标注、版本／划分、评分协议、使用条件及覆盖边界是后续准入依据；不以可下载或模型自产标签代替。

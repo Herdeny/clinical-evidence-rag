@@ -1,5 +1,7 @@
 # 现在应该看哪些文件
 
+**当前用户任务：在benchmark_data.py增量写load_mirage_dataset(benchmark_path, *, task=None)。** MIRAGE五上游公开声明与任务角色已核查，本地快照结构和三原件SHA复核通过；五部分都作最终评测，上游dev不等于本项目调参集。函数尚未实现，返回四列questions_df（id／task／query／options）和单独gold_answers；不传answer／参考PMID给检索或生成。按官方sorted字符串题号，保留前导零和原文本，None读取全量7663，单任务可选。完整输入／逻辑／验收见[当前读取任务](benchmark_scope.md#当前用户任务在已有模块添加mirage读取函数)，聊天内同样完整说明；无新脚本、无模型运行。
+
 **2026-11-26最新要求：评测只用可核查的公开benchmark。** 324题来自NFCorpus官方dev，120题来自助手自建CT初稿，二者不能混称。刚提出的120题运行计划已撤回，未执行；自建题及成绩仅保留历史，不继续扩题、调参或作效果依据。当前公开主线为已完成dev对照的NFCorpus及待QA适配的MIRAGE7663；下一项先核查MIRAGE上游条件与开发／测试协议，再复用既有模块增量接入。专项追问／引用／多模态需另选覆盖相应标注的公开benchmark。详见[当前评测范围](benchmark_scope.md#2026-11-26仅使用可核查的公开benchmark)，以下CT待运行安排按历史理解。
 
 整理日期：2026-11-19，进度更新2026-11-26。根目录共21个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法改写对照，并完成CT单轮评估3题真实联调。结构化响应均有效，但观察到过度追问、已知事实误列缺项和适用条件推断错误，待受控上下文诊断。有限补查与图编排待完成。此前误代跑及权限纠正、负结果和历史异常继续保留。
@@ -31,7 +33,7 @@
 | reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B及BGE真实完整运行均已核对 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | CT分阶段计时、评估状态及完整已知用量汇总，保留失败原始记录并保护同名输出；CT 8项通过。BEIR协议不变，6项通过 | 助手辅助，逐行中文注释 |
-| benchmark_data.py | BEIR读取及apply_query_rewrites已完成；原题／状态／来源保留，失败原样回退，实际8条适配通过，原loader AST未改 | 用户；助手未改核心 |
+| benchmark_data.py | BEIR读取及apply_query_rewrites已完成；当前用户待添加MIRAGE四列问题表／独立答案读取，不改原两函数 | 用户；助手未改核心 |
 | benchmark_eval.py | 公共评分、冻结重排及evaluate_query_rewrite_retrieval已实现；同题两组共享标签／检索器，CPU假检索核对通过，非真实改写收益 | 用户；助手未改核心 |
 | run_benchmark_eval.py | 三方法可选改写及防覆盖已验收；用户324题三方法02已实测核验，无需重写；改写收益与退化均归档 | 用户；助手未改核心 |
 | run_reranking_eval.py | 固定候选重排入口；四套重排dev已核对，旧历史资源异常继续披露；CLI统一--config且原业务函数不变 | 用户；助手只纠正CLI参数 |
