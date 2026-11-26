@@ -63,6 +63,8 @@ prepared/benchmark.json的SHA-256为2afd9c360b5b59dd07059743630358f1f480be46650e
 
 当前任务只实现qa_core.py，不新增批量入口或评分脚本。现有query_rewrite.py负责改写，evidence_review.py明确只核验不回答，benchmark_data.py负责保真读取；生成有独立职责，因此新增这一个核心模块有必要。具体代码仍由用户写，助手只审查，不代跑真实调用。
 
+当前实现检查点：用户已写三个结构化字段、输入检查、四字段证据投影、JSON序列化及human消息／结构化调用框架。源码SHA=591b4e8bf03bb0e3f9e0b67fbf9ff2796d7212c082ff44d0ef8fb20c27653d97；两条证据、顺序／四字段／缺省元数据、输入未改、两种模式的空证据、重复ID拒绝均通过本地消息接收器检查。尚无system消息、模式指令、响应校验或返回值，不是可用QA功能或效果成绩。下一项仍在原文件定义base_instruction与mode_instruction，拼成system_text，在system模板和invoke字典中绑定同名变量；完整内容和插入步骤在聊天说明。没有真实API调用、独立新测试脚本或助手核心修改。
+
 **先固定答题语义。** [MedRAG官方模板](https://github.com/gzxiong/MedRAG/blob/main/src/template.py)的无检索与RAG选择题均要求给出一个确定选项。本核心按该MCQ协议选择最佳答案，RAG参考相关材料并允许结合内部知识；材料无关或不足时说明限制、不伪造引用，不能将找不到证据自动映射成PubMedQA的maybe。maybe是专家定义的有效科学结论选项。临床产品的严格证据核验、追问／补查／停止仍由evidence_review及后续Agent控制，不能将基准强制选择行为直接当临床建议。简短理由、结构化输出和引用记录是本项目设置，不照搬原模板的逐步思维字段；未来成绩说明该差异，不宣称严格复现原分数。
 
 使用已装的标准库json、pydantic的BaseModel／Field和langchain_core.prompts的ChatPromptTemplate，不加依赖。定义MultipleChoiceAnswer，三个字段都必填：answer_choice为str（从本题options的键中选择），reason为非空str（简短依据，不要求完整思维过程），cited_evidence_ids为list[str]（只填真正引用的输入片段ID，无引用为[]）。不将答案键硬编码为A—D，不给字段默认值掩盖漏项。

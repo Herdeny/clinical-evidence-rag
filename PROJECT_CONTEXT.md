@@ -6,13 +6,17 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26当前代码检查点：用户已创建qa_core.py，输入整理段通过本地无模型检查，下一项仍在该文件填写系统提示词和模式分支。** MultipleChoiceAnswer三个字段已定义；选项类型／空值、证据ID／正文、重复ID、closed_book携带证据检查已写。两条不同证据保留原顺序和id／text／source_id／locator四字段，缺省元数据为None，输入未改；rag和closed_book的空证据都能格式化成[]，重复ID在调用前拒绝。检查源码SHA=591b4e8bf03bb0e3f9e0b67fbf9ff2796d7212c082ff44d0ef8fb20c27653d97。助手仅用一次性内存消息接收器检查格式，无模型／API调用、无新测试脚本、未修改核心。此前列表追加自身导致的循环引用、选项遍历和模板空占位符等是普通代码修正，不登记为工程常见问题。
+
+当前消息只有human，系统提示词与mode指令尚未加入；虽然已有结构化客户端和invoke框架，但函数还没有响应校验／返回值，不得当成可用问答功能或宣称问答成绩。下一用户操作：在option_text／context_text之后定义共用base_instruction，根据mode选择mode_instruction，拼成system_text；模板新增system消息中的{system_text}，prompts.invoke补同名参数，已有human三变量和函数签名保持。聊天需给出两个模式的具体指令内容、变量类型、插入位置及绑定方式，不能只说“构造提示词”。保存后用本地消息接收器检查两种模式，无真实调用；再教raw／parsed／parsing_error与元数据保留和返回。按用户约定先同步当前输入整理检查点；仅一次PR例外已用完，继续main正常提交。
+
 **2026-11-26当前：用户已亲自完成公开PubMedQA开发池准备，真实数据离线复核通过；下一项由用户编写选择题生成核心。** 原作者PQA-L的1000道专家标注题减去官方500个测试ID，实际得到500题CV池；与固定MIRAGE的测试ID、全7663题规范化题干及记录中的参考PMID交集均为0。此检查不代表语义／研究主题完全隔离。沿用原专家标签，不合成、不重标；整个CV池用于项目开发，不宣称原论文十折或给定context实验。原作者固定提交1cbae8e92f72f20c8d3747cbb3bf5bc53554d997，原始许可和划分脚本已保存。
 
 助手在现有scripts/data/prepare_mirage_data.py增量实现--development与--verify-only，未新增脚本或改用户核心。默认行为仍核验原MIRAGE，开发模式下载五份固定原件（ori_pqal、官方测试标签、LICENSE、README、split_dataset.py），显示单文件字节进度。先核对官方测试ID／问题／标签同已固定MIRAGE，再核对CV池与全MIRAGE的标准化题干不重叠；冲突时停止，不悄悄删题／补题。共同参考PMID另计，不称为研究主题完全隔离。转换结果仅question／options／answer，去掉给定context、LONG_ANSWER和模型预测字段，复用已验收load_mirage_dataset。
 
 真实输出data/external/pubmedqa_development/prepared/benchmark.json已存在，SHA=2afd9c360b5b59dd07059743630358f1f480be46650e4f5cb53f1e0756d6ca82，复用load_mirage_dataset得到(500,4)及500项独立gold。标签yes=276、no=169、maybe=55；后续开发答题应对照55.2%的始终选yes基线，并报告Accuracy、macro-F1和失败数。maybe是原任务合法答案，不是系统未检出证据时的默认选项。五份原件、source_manifest及用户原日志／资源均有指纹，真实准备耗时3.95s、RSS74076KiB、退出0，没有模型调用。results/pubmedqa_development_prepare_01_validation.json记录真实核查；此前_preparation.json仍保留prepared_not_executed的原始准备状态，不覆盖历史。助手本轮只读核查，真实下载由用户执行。
 
-下一用户操作：新建qa_core.py，实现MultipleChoiceAnswer与answer_multiple_choice(query, options, hits, *, llm, mode="rag")。生成是独立职责，现有query_rewrite.py只改写、evidence_review.py明确不回答，故不挤入这些模块；目前尚无该文件或问答成绩。三个必填结构化字段为answer_choice／reason／cited_evidence_ids；mode取closed_book或rag，两组共用同一核心／注入客户端，保留原始用量和响应元数据，解析及动态选项／引用ID校验失败保留成本并返回error，API或编程异常自然上抛。依官方MedRAG选择题协议给出确定选项；RAG可结合内部知识，证据无关时不强造引用。该行为仅是公开MCQ基准答题，不替代临床产品的证据不足→追问／补查／停止；maybe也不等同证据不足。实际引用支持另评，结构化输出和引用记录有别于原提示，不能宣称严格复现原成绩。完整逻辑、参数理由与验收见docs/benchmark_scope.md当前任务节，聊天同样给出。用户先写核心，助手只做离线审查；不提前新增入口、调用模型或运行MIRAGE测试。
+QA核心总体约定：qa_core.py的MultipleChoiceAnswer与answer_multiple_choice(query, options, hits, *, llm, mode="rag")由用户实现，目前仅输入整理段已验收，完整问答尚未完成。生成是独立职责，现有query_rewrite.py只改写、evidence_review.py明确不回答，故不挤入这些模块。三个必填结构化字段为answer_choice／reason／cited_evidence_ids；mode取closed_book或rag，两组共用同一核心／注入客户端，保留原始用量和响应元数据，解析及动态选项／引用ID校验失败保留成本并返回error，API或编程异常自然上抛。依官方MedRAG选择题协议给出确定选项；RAG可结合内部知识，证据无关时不强造引用。该行为仅是公开MCQ基准答题，不替代临床产品的证据不足→追问／补查／停止；maybe也不等同证据不足。实际引用支持另评，结构化输出和引用记录有别于原提示，不能宣称严格复现原成绩。完整逻辑、参数理由与验收见docs/benchmark_scope.md当前任务节，聊天同样给出。用户先写核心，助手只做离线审查；不提前新增入口、调用模型或运行MIRAGE测试。
 
 PR #1已实际MERGED，合并提交c6cd197，本地main已同步；仅一次新分支／PR例外已使用完，本单元恢复main常规提交推送。以下开发包待准备及旧任务状态按历史日期理解。
 
