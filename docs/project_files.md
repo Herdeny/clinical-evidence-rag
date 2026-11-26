@@ -8,6 +8,8 @@
 
 受控对照现已由用户完成：三题充分性由false／false／false变为true／true／false，前两题不必要缺项消失，第三题仍索要超出当前范围的资料。用户随后只改evidence_review.py现有system提示词，强化当前决策层次、缺失事实的必要性、上游适用条件与两类缺口独立判断；五字段和Python校验、模型、数据均保持。助手已通过语法／消息构造检查，并以AST确认提示词以外代码不变，未修改核心或发起新调用。下一项由用户运行medical_v3_bm25_ct_review_scope_control_3_02，同组3题／5片段／deepseek_flash；本地_preparation.json保存新旧身份，真实效果待回归，完整开发验证仍待完成。
 
+02与03现已由用户完成，分别使用Flash和新增deepseek_v4_pro profile；模型响应标识与命令／配置一致。三轮逐题问题、候选ID／分数及Recall相同，02标签true／true／false，03全false；02第三题仍过度追问和补查，03前两题反而混淆已知筛查背景与资格条件，第一题还把证据内容归入报告。03第三题的missing_evidence为空，是两类缺口区分的局部改善。详见[实测对照](medical_v3_bm25_baseline.md#2026-11-26提示词增量后的flash与v4-pro对照)，不据标签数认定安全或准确，不因三题切换默认。两个_validation.json及03_comparison.json保留本地，下一项是既定正式开发验证；助手未调用模型或新增脚本。
+
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
 | retrieve_core.py | 已实现的向量相似度与 Top-K | 用户 |
@@ -15,7 +17,7 @@
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
 | rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | query_rewrite.py | 单题真实CT通过；批量rewrite_queries已通过4题混合假响应及编程异常传播检查，失败记录／用量保留；无批量API或改写检索收益 | 用户；助手未修改核心 |
-| evidence_review.py | 五字段与单轮评估通过18项假响应检查；范围控制对照前两题改善、第三题仍越界，用户已改通用提示词，待同组02真实回归 | 用户；助手只读审查，未改核心 |
+| evidence_review.py | 五字段与单轮评估通过18项假响应检查；用户完成提示词增量及Flash／V4 Pro三题对照，仍有任务边界与报告事实混淆，待正式开发验证 | 用户；助手只读审查，未改核心 |
 | run_query_rewrite.py | 独立读取LLM配置、加载项目环境并单次调用核心；用户真实CT单题通过，422／96／518 tokens，CLI已统一--config | 用户；助手只纠正CLI参数，业务函数未改 |
 | run_query_rewrite_batch.py | 指定划分／limit、共享客户端、保存结果；用户真实8题已核验，1变化有语义观察，尚无检索收益 | 用户；助手未修改实现 |
 | query_rewrite_io.py | save_rewrite_results保存逐题JSONL、状态／已知token摘要及公开运行配置，防覆盖；实际单题已无损归档 | 助手辅助，每行中文注释；不调用模型或读取环境 |
