@@ -47,6 +47,16 @@
 
 2026-11-26离线验收通过：全量shape=(7663,4)，gold为7663项字典，五单任务分别与全量子集内容及顺序一致；逐字段核对原问题／选项／标准答案、官方排序和题号前导零。ID唯一且双方集合相同，题目表无answer／PMID，空及未知任务名正确拒绝，三份原始文件指纹未变。旧两函数AST相同，既有BEIR的9项测试通过。只输出结构和计数，没有展示题干／答案、运行模型或下载数据；结果不能表述为问答或临床效果成绩。验证results/mirage_loader_validation_01.json对应源码SHA=81507dda72bb063ffabdca5c13cb2367e091c88005009ba8f3b5571c7742acd2，review_01／02保留历史，助手未修改用户核心。
 
+### 当前用户操作：准备官方PubMedQA开发池
+
+开发材料选择[PubMedQA原作者发布的PQA-L](https://pubmedqa.github.io/)，不使用PQA-A人工生成部分。原作者[划分代码](https://github.com/pubmedqa/pubmedqa/blob/master/preprocess/split_dataset.py)说明1000专家题分为500测试和500交叉验证池；[公开测试标签](https://github.com/pubmedqa/pubmedqa/blob/master/data/test_ground_truth.json)给出测试ID。本项目取官方1000题减去官方500测试ID，保持原专家答案，使用整个官方CV池作开发材料；不把这一步说成原论文十折实验或MIRAGE最终成绩。
+
+原作者仓库MIT声明沿用此前核查，固定提交1cbae8e92f72f20c8d3747cbb3bf5bc53554d997，不跟随master更新。已有数据准备脚本新增--development，下载ori_pqal.json、test_ground_truth.json、LICENSE、README及split_dataset.py，保留字节和SHA。转换为单任务MIRAGE结构，只保留question／三选项／原专家标签对应的答案键，question不拼给定摘要，后续复用已验收读取器，答案留评分侧。
+
+准备时先要求官方500测试ID、题目及标签与当前固定MIRAGE的PubMedQA部分一致，再要求CV池与全部7663题的大小写／连续空白规范化题干没有重叠；规范化仅用于审计，实际输入不改。遇到冲突即停止，不静默删题或补题。共同参考论文PMID单独统计，不把同论文自动等同同题，也不宣称主题隔离。输出固定到data/external/pubmedqa_development，原MIRAGE原件不动；该真实开发包当前尚未下载，500及零重叠仍是待验证的准入目标。
+
+助手只用临时IO夹具与内存下载响应完成9项辅助流程检查，未形成新的合成评测数据，没有运行模型或下载真实题库。用户执行现有入口python -u -m scripts.data.prepare_mirage_data --development后，检查source_manifest.json中的实际统计及prepared/benchmark.json；已有包会只核验，--verify-only缺包不会下载。准备记录results/pubmedqa_development_prepare_01_preparation.json为未执行，真实结果由用户终端运行后确认。
+
 ## 2026-11-24 当前实测进度
 
 NFCorpus BM25、Dense与RRF dev已运行并独立核验：3633文档／324查询，BM25的nDCG@10／Recall@100为0.265738／0.205678、平均查询2.839ms；Dense为0.327186／0.315082、23.262ms；RRF为0.312468／0.300335、35.872ms。文档缓存完整并由RRF复用，324题融合顺序和分数独立核对一致。见[开发集对照](nfcorpus_retrieval_baselines.md)。当前Dense四指标均值最高，下一步固定其Top100候选测试重排；尚无重排成绩。官方test未运行，MIRAGE全量7663问答对标仍是最终验收要求。以下11月21日及更早的“尚无成绩／待下载”状态按历史日期理解。

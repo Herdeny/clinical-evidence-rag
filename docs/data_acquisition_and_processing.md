@@ -4,6 +4,12 @@
 
 ## 数据与代码的位置
 
+2026-11-26公开QA开发材料准备：既有scripts.data.prepare_mirage_data新增--development及--verify-only，目标为PubMedQA原作者PQA-L官方500题CV池，固定提交1cbae8e92f72f20c8d3747cbb3bf5bc53554d997。准备辅助已通过离线IO检查，真实数据下载待用户执行，不能将下述目标路径写成已经取得。
+
+开发模式保存官方ori_pqal.json、test_ground_truth.json、LICENSE、README.md、preprocess/split_dataset.py到data/external/pubmedqa_development/raw/固定提交/原路径；按官方测试ID从1000专家题中取CV池，不合成题目或重标答案。先核对原测试与固定MIRAGE的ID／问题／标签，再检查CV题干与全MIRAGE不重叠；共同参考PMID另计。转换结果prepared/benchmark.json只保留question／options／answer，原给定context及LONG_ANSWER保留raw而不送模型；文件身份、实际数量与隔离结果写source_manifest.json。
+
+运行命令为python -u -m scripts.data.prepare_mirage_data --development，由用户终端执行，支持单文件字节进度。无--development时沿用原MIRAGE流程；已有开发包只离线复核，不覆盖原件，--verify-only缺包直接退出。完整包在项目内临时目录准备后整体落位。详情见[公开开发池](benchmark_scope.md#当前用户操作准备官方pubmedqa开发池)，不能把本项目使用整个CV池的开发验证宣称为原论文十折结果。
+
 2026-11-21新增公开检索基准NFCorpus，位于data/external/nfcorpus。原站ZIP连接失败后采用BEIR官方HF镜像具体提交，保存原始Parquet／TSV／数据卡，再保真转换成标准BEIR目录；没有合成问题或标签。实际3633文档、2590 train／324 dev／323 test查询。下载／复验入口scripts.data.prepare_nfcorpus，独立校验scripts.data.validate_nfcorpus；命令与全部版本指纹见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。未编码或跑分，用户读取适配见[任务契约](nfcorpus_benchmark_task.md)。
 
 2026-11-21新增专项评测目录data/evaluation/ct_v3：原48题保留，新增132题，共120开发／60留出、30家族。它是查询侧数据扩充，不更改主语料或重编码；来源身份、预期行为、必要缺项、引用及复核状态见[数据说明](../data/evaluation/ct_v3/DATA_CARD.md)。全部仍待独立人工复核，当前从review.dev.csv开始。
