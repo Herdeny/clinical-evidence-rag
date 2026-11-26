@@ -6,6 +6,8 @@
 
 原run_retrieval_eval.py可选评估已通过5项入口／CLI与9组假模型联结，并完成medical_v3_bm25_ct_review_smoke_3_01真实3题。三次有效结构化响应共7527 tokens，语义问题见[联调记录](medical_v3_bm25_baseline.md)。当前复用同入口和原--evidences参数，以scope_context_control_5.jsonl给同三题提供明确范围依据，只做评估器诊断；索引实际仅5条，不计作全库检索改进。准备记录在本地results/medical_v3_bm25_ct_review_scope_control_3_01_preparation.json；助手不改核心或prompt、不代跑，真实调用由用户执行。完整进度见PROJECT_CONTEXT.md第1节。
 
+受控对照现已由用户完成：三题充分性由false／false／false变为true／true／false，前两题不必要缺项消失，第三题仍索要超出当前范围的资料。当前用户任务只改evidence_review.py现有system提示词，强化当前决策层次、缺失事实的必要性、上游适用条件与两类缺口独立判断；五字段和Python校验、模型、数据均保持。助手已保存两轮对照，未改prompt或运行新调用。修改后先核对源码，再由用户同组回归；完整开发验证仍待完成。
+
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
 | retrieve_core.py | 已实现的向量相似度与 Top-K | 用户 |
