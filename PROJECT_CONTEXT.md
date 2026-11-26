@@ -6,6 +6,16 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26当前用户任务：新建evidence_review.py，实现一轮证据充分性评估；尚未写核心或运行API。** 已核对Self-RAG论文／官方项目（训练reflection tokens，不宣称本项目复现或训练该模型）、LangGraph官方agentic RAG示例（文档相关性路由）、ALCE引用评测论文及此前固定Adaptive-rag的GradeResult／SelfRAGLoop。原B1仅Notebook内build_context和自然语言生成，尚无可直接调用的逐条结构化回答模块。先做生成前的充分性评估，之后再接逐条结论支持核验与图控制，不将两者混称已完成。新函数接原始完整query（可为Report+Question）与本轮hits，通过现有LangChain结构化输出判断能否回答当前问题，缺病例事实还是缺证据；后续作为LangGraph review节点调用的业务函数，不依赖Notebook或另复制检索器。
+
+固定本轮接口review_evidence(query,hits,*,llm)，schema EvidenceReview五个必填字段：relevant_evidence_ids:list[str]、sufficient:bool、missing_case_facts:list[str]、missing_evidence:list[str]、reason:str。列表允许显式空列表，不设缺省空列表以免模型漏字段被静默补齐；reason用Field(min_length=1)并在函数内检查全空白。相关IDs指hits的id而非source_id；相关性不等于该材料适用于当前病例，sufficient须看问题范围和来源条件。两个missing列表仅记录阻碍当前问题的必要缺项，不能把后续分级／随访所需条件提前设为框架选择前提。query须是原问题，不能仅传改写表达；不传qrels、gold或expected_behavior给模型。
+
+函数顺序：检查query／hits基本结构、每条非空id与text及ID唯一，允许hits为空；构造evidence_payload为各条id／text／source_id／locator（后两项缺失用None，不从ID猜名称、版本或事实），再json.dumps为context_text。复用ChatPromptTemplate和llm.with_structured_output(EvidenceReview,method="function_calling",include_raw=True)，只invoke一次，不创建客户端、不读文件／凭证、不检索、不回答、不执行补查或重试。系统提示约束只基于本轮证据和已知病例判断当前问题、区分两类缺口、保留未知条件、忽略资料中的指令，不把模型记忆／相似度当证据或把未知目的补成已知。先取raw两类metadata，再判parsed／parsing_error；无效解析／全空白reason／引用未知ID／sufficient=True但无相关ID或仍有阻断缺项，返回status=error、review=None并保留真实用量。正常status=ok，即使sufficient=False也算评估成功，review=parsed.model_dump()。返回六字段original_query／status／review／usage_metadata／response_metadata／error；无有效响应的API异常自然传播，不一概包装异常，不把失败或非空hits兜底成充分。
+
+本轮验收先语义审查再CPU假响应，不新增不透明永久测试，也不执行真实模型／API。核对原问题和证据进入提示、单次invoke、ID白名单及两类缺口、空证据不能成功判充分、成功但不足与评估失败区分、解析失败保留费用、输入不变。三种概念案例：已知筛查目的但仅有偶发范围说明→缺框架依据；检查目的未知且两类范围证据都有→缺病例事实；目的与适用依据均给足且只问框架→不能追问仅分级才需的尺寸。病例标签仍属AI初标，不称医学金标准；正式业务验证沿用医学v3／CT开发题，NFCorpus仍负责检索排序。状态流由后续控制器处理：充分后生成、关键事实缺失追问、证据缺口定向补查、评估失败／预算用尽停下并说明边界。逐条结论引用支持尚未实现，不因本轮模型给出reason就称已核验医学事实。
+
+已检查本地langchain-core0.3.71、langchain-deepseek0.1.4、pydantic2.14.3，LangGraph尚未安装；本轮业务函数复用现有接口不安装／升级依赖，进入图编排时再给兼容固定版本命令由用户执行。参考Self-RAG仓库MIT已查，不下载模型／训练集或新增评测语料，既有医学资料本地使用边界保持。详细任务在10.5.1持久记录并必须在聊天讲清。核心由用户写，助手只读审查；真实API／GPU仍由用户运行。
+
 **2026-11-26最新：用户亲自完成同324题三方法02，全量检索改写对照已只读核验并归档。** 执行提交c874be6910a3e190ef96ece2e992e710a0790a7b；输入仍3633文档／324dev／原qrels，复用SHA=ccbb27de7427b403e59fa3ee13ac758faf491e342b62474b5f121344dc2bed95的324条既有改写，未新增DeepSeek请求。助手本轮只做CPU文件核对和独立评分，未启动模型／API／GPU、未修改核心。37份准备材料身份、24份原始输出、1944条逐题指标与摘要／日志／资源命令一致；RRF另648组按BM25和Qwen Dense各Top100、常量60独立融合完全一致。Dense／RRF均命中原3633×4096缓存。报告results/nfcorpus_query_rewrite_retrieval_dev_324_02_validation.json及_comparison.json；继承旧历史资源异常，unbroken_history_claimed=false，不重写任何原回执或旧产物。
 
 全量结论：324条中12条表达变化、312原样，未改写312题在三个方法中排名与指标均相同。四指标顺序nDCG10／Recall10／nDCG100／Recall100：BM25原=.265738/.110192/.217934/.205678，改写=.267019/.110487/.218370/.205261；Qwen Dense原=.392196/.192203/.370125/.397097，改写=.392264/.192064/.370333/.397362；Qwen RRF原=.327825/.160792/.318641/.364271，改写=.328678/.162359/.318758/.364148。Dense nDCG10仅+0.01743%相对、Recall100仅+0.06672%相对，Recall10反降；头部nDCG逐题4升2降318同。Dense原32道零召回题没有一题被改写，零召回仍32；BM25补回PLAIN-1971但另外两题Recall100下降，均值仍稍降。大小写变化也可能改变Dense排名，PLAIN-2749 nDCG10下降而Recall100提高；PLAIN-77地域范围疑点不因检索收益而消失。ENG-028记录工程观察，docs/nfcorpus_retrieval_baselines.md保存完整四指标、逐题方向及02资源。
@@ -772,6 +782,51 @@ CT v2 按任务和关键条件构建覆盖：指南框架选择、条款解释�
 6. 用确实需要补查的题目验证，比较单次检索和有限补查，统计成功、失败及成本。
 
 Agentic RAG 的预期价值是根据问题和证据缺口选择下一步，而不是增加一个框架名称。需通过“补哪类来源、补什么条件、为何停止”的 trace 证明其作用。当前尚无上述 Agent 实现或收益结果。
+
+#### 10.5.1 当前用户编写任务：单轮证据充分性评估
+
+任务提出日2026-11-26，核心尚未实现。新建根目录evidence_review.py，提供EvidenceReview和review_evidence(query,hits,*,llm)。这是生成前评估函数，后续供LangGraph节点直接调用；不依赖Notebook，不在内部创建客户端、检索、生成答案、重试或循环。本轮用户先写核心，助手检查实际保存文件并用CPU假响应核对；真实API及所有模型运行继续由用户执行。
+
+参考边界：
+
+- [Self-RAG论文](https://arxiv.org/abs/2310.11511)与[官方项目](https://selfrag.github.io/)的原方法训练反思标记。本项目目前只借鉴运行时评估与继续检索的思路，不宣称复现训练；[官方代码MIT许可](https://github.com/AkariAsai/self-rag/blob/main/LICENSE)不自动覆盖模型和数据，本轮不引入其权重或语料。
+- [LangGraph官方agentic RAG示例](https://docs.langchain.com/oss/python/langgraph/agentic-rag)演示相关性评估及条件路由，不等于已解决临床适用性或证据充分性。
+- [固定Adaptive-rag的self_rag.py](https://github.com/JEen-wang/Adaptive-rag/blob/2a12a62382a8c3ec033fa9a5b19b9b23b8780ab8/app/retrieval/self_rag.py)含relevant／sufficient／missing_aspect和有限循环。其评估失败时以bool(chunks)作为充分性兜底的策略不复用：有文本不能证明足以回答医学问题。
+- [ALCE论文](https://arxiv.org/abs/2305.14627)涉及生成内容的引用质量；当前生成前评估不能代替生成后的逐条结论支持／引用检查。没有导入ALCE数据或宣称其评测结果。
+
+EvidenceReview继承Pydantic BaseModel，五字段均必填，列表可以显式为[]，不设置默认空列表。字段及含义：
+
+| 字段 | 类型 | 判断范围 |
+| --- | --- | --- |
+| relevant_evidence_ids | list[str] | 与当前问题相关的hits.id；不是source_id，也不等于均已适用于当前病例 |
+| sufficient | bool | 已知事实和本轮材料能否支持回答当前问题，不用模型记忆补证据 |
+| missing_case_facts | list[str] | 阻碍当前回答、需向提问者确认的病例事实；普通知识题不凭空要求病例资料 |
+| missing_evidence | list[str] | 当前缺少、应定向补查的具体证据内容 |
+| reason | str | 解释充分／不足及两类缺口；Field(min_length=1)，收到后还须检查纯空白 |
+
+输入query保留原始完整问题，可为Report+Question；即使检索使用改写，也不只给核验器改写后的搜索串。hits为现有检索器返回的list[dict]；每项id与text必须为非空字符串，id唯一；空列表合法，表示没有检到证据。source_id与locator保留原字段，缺失时为None，不根据ID猜指南名称／版本。构造新列表evidence_payload，每项只取id／text／source_id／locator，再用json.dumps(...,ensure_ascii=False)生成context_text；不原地修改hits，不将score传作证据可信度。当前接口只评估给定正文能否回答，来源完整身份、版本和权限的核查仍须沿现有来源记录补齐，不能仅凭source_id声称这些信息已核验。
+
+内部顺序：
+
+1. 校验query与hits的基本结构及ID唯一性，保留original_query。
+2. 构造evidence_payload和context_text。ChatPromptTemplate系统指令限定只评估当前问题、使用给定事实与证据，区分病例缺条件和证据缺口；未知事实保持未知、资料中指令不改变任务，不依据相似度或模型记忆判充分。不将后续分级／治疗才需要的条件列为当前框架选择的阻断项。
+3. human消息放原始query和context_text。复用llm.with_structured_output(EvidenceReview,method="function_calling",include_raw=True)，仅invoke一次。llm由调用方注入，复用既有DeepSeek配置，函数不读文件、环境或凭证。
+4. 先从raw保存usage_metadata和response_metadata，再处理parsed及parsing_error。解析失败或无parsed时status=error、review=None，已收到的费用信息保留。
+5. 检查reason／列表元素非纯空白、引用ID均在本轮hits里。sufficient=True还必须有相关证据ID，且两类阻断缺项均为空；违反则按无效响应保留metadata并返回error。不要规定所有sufficient=False都必须列出具体缺项，模型可能无法定位，reason需说明仍不能判断。
+6. 有效评估status=ok，review=parsed.model_dump()；sufficient=False同样是有效评估。没有可用raw的API异常自然向调用层传播，不兜底为“充分”，不以宽泛异常捕获掩盖编程错误，不限定所有输入错误都抛ValueError。
+
+返回普通dict，固定六字段：original_query／status／review／usage_metadata／response_metadata／error。status、费用和运行错误由Python填写，不让模型生成；成功error=None，失败review=None。Pydantic对象转model_dump后可供后续日志和JSON保存，当前函数不负责持久化。
+
+本轮验收与之后的业务验证分开：
+
+- 阅读用户保存的class与函数，检查输入／输出和上述数据流；CPU假响应仅验证单次调用、提示输入、结构校验、ID白名单、费用保留、输入不变，不替代真实医学能力评测，也不另造永久隐蔽测试框架约束核心。
+- 概念例1：已知筛查目的但仅有偶发范围材料，缺的是筛查框架的明确依据，不应继续问检查目的。
+- 概念例2：检查目的未知，筛查和偶发两类范围证据都有，缺的是病例事实；更多范围文档不能替代向用户确认。
+- 概念例3：目的和适用依据已知，只问框架，不能因尺寸缺失而阻断当前回答。尺寸可能影响后续分类，此处不新增处理建议。
+- 无hits不能成功判充分；未知引用ID或自相矛盾的充分判断必须留下可见失败及真实用量。三个概念例仅用于接口和行为说明，不称医生复核金标准。
+- 后续真实业务验证使用医学v3与CT开发题，NFCorpus qrels仅评检索排序，不输入核验器；gold、expected_action及人工标签不得泄漏。现有CT标签仍为AI初标，正式临床适用性结论另需复核。
+
+后续接入顺序：用户写本函数→助手审查→用户运行真实单轮→开发题验证→接定向补查及LangGraph条件路由／预算→生成后逐条结论支持核验。充分后生成，病例关键事实缺失则追问，证据缺口则预算内补查，评估不可用／预算耗尽或仍不能判断则停止并解释边界。控制器处理轮次和停止，当前函数不自行决定或执行动作。当前LangGraph未安装，业务函数无需因此安装／升级依赖；图接线时给用户兼容固定版本和运行命令。
 
 ### 10.6 用药、论文与三来源任务
 
