@@ -6,6 +6,12 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27当前：用户qa_core.py已完成响应处理，14项本地软件行为检查通过；下一项由用户亲自运行公开开发池单题真实联调。** 当前源码SHA=5029c01bde71ccf4426ee18014a2958e46709a816711455303a0a9f5873c97ca。有效RAG／无检索／空命中RAG／动态选项键成功，解析失败／缺parsed／同时有parsed和解析异常／越界答案／纯空白理由／未知引用／无检索引用均返回error且answer=None；已知用量和原始元数据保留，未知用量保持None。两种本地调用异常对象原样上抛，输入和原响应未改，每场景只调用一次替身。results/qa_core_validation_01.json记录实际14项及源码身份，仅软件验收，无模型／API调用或医学成绩。首次辅助检查误将异常对象深拷贝后比较导致误报，已改检查方式，未为检查工具修改核心；不是新的工程常见问题条目。文件顶部两条未用导入仅属可清理项，不阻塞行为验收。
+
+下一项使用既有deepseek_flash配置及公开PubMedQA开发池的第一道题，仅closed_book、一次核心调用，确认真实结构化回答／用量／响应模型标识。标准答案和题号不进入模型，MIRAGE最终测试不动，不据单题给模型排名或准确率。命令在聊天给出，不新增项目入口，直接从终端调用现有读取器与核心；运行名pubmedqa_closed_book_smoke_1_01，保护_results.jsonl／_run.log／_resources.txt三件。结果内保存题号、选项、公开profile、输入／源码指纹、qa_latency_ms和完整七字段返回，不保存密钥；沿用项目环境与dotenv／ChatDeepSeek构造，max_retries=0。准备记录results/pubmedqa_closed_book_smoke_1_01_preparation.json保留完整命令／Python源码及指纹，状态prepared_not_executed，仅bash -n和AST检查，助手没有执行其中API代码。用户运行后再读真实日志与结果，不提前写成已通过真实联调。后续正式批量及RAG仍复用当前核心，完整500开发比较与7663最终对标未运行。
+
+下面“响应处理待写／函数返回None”的检查点为此前状态，当前以本段完整核心的软件验收和待用户真实联调为准。
+
 **2026-11-27当前：用户qa_core.py的系统提示词和两模式消息构造已通过本地检查，下一项由用户完成响应处理与返回。** 当前源码SHA=f68582d7f34250fee61dd970ed02c6eded21ebd74c82e57c7bfc78830e1d4dea。使用一次性内存替身覆盖closed_book空证据、rag一条证据、rag空证据三种情况；每次只提交一次消息，均为system／human顺序，包含共同要求及对应模式指令。题目／选项／证据原样保留，中文／字面花括号／嵌套locator正确，四字段投影无score，输入对象未改；空命中RAG不切模式，schema与function_calling／include_raw配置一致。助手未修改核心、未新增测试脚本，真实模型／API调用0，无医学效果成绩。先前缺逗号为普通代码修正，现已由用户修复。
 
 下一用户操作仍在qa_core.py的responses赋值之后：依已有evidence_review.py风格取raw_response=responses["raw"]、schema_response=responses["parsed"]及parsing_error；先保存raw的usage_metadata／response_metadata到统一结果，未知用量保留None，不填0。外层最终七字段original_query／mode／status／answer／usage_metadata／response_metadata／error；初始answer=None，解析失败先返回error，再检查选项键精确属于options、理由去空白后非空、引用ID都在seen，成功才填schema_response.model_dump()。closed_book已要求hits为空，未知ID检查自然拒绝所有非空引用，不必为了形式重复写一套分支；RAG允许无引用。错误结果保留已知用量，不兜底A、不删除失败题、不用宽泛except吞API或编程异常。当前函数尚无响应处理和返回，仍为None，完整QA未验收。聊天必须按变量类型、初始化字段、逐个失败条件／动作和最终返回具体讲清楚；用户写核心，保存后只做本地假响应检查，真实API仍由用户运行。

@@ -1,4 +1,6 @@
 import json
+from unittest import result
+from xml.dom import NOT_FOUND_ERR
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -79,9 +81,44 @@ def answer_multiple_choice(query, options, hits, *, llm, mode="rag"):
     messages = prompts.invoke({"system_text": system_text, "query": query, "option_text": option_text, "context_text": context_text})
     responses = structured_llm.invoke(messages)
     
+    raw_response = responses["raw"]
+    schema_response = responses["parsed"]
+    
+    results = {
+        "original_query": query,
+        "mode": mode,
+        "status": None,
+        "answer": None,
+        "usage_metadata": raw_response.usage_metadata,
+        "response_metadata": raw_response.response_metadata,
+        "error": None
+    }
     
     
+    if not schema_response or responses["parsing_error"] is not None: 
+        results["status"] = "error"
+        results["error"] = str(responses["parsing_error"]) if responses["parsing_error"] else "No structured parsing results were obtained"
+        return results
     
+    answer_choice = schema_response.answer_choice  # 选中的选项键，例如 "A"。
+    reason = schema_response.reason  # 回答依据，是字符串。
+    cited_evidence_ids = schema_response.cited_evidence_ids  # 引用的证据 ID，是字符串列表。
+        
+    if answer_choice not in options:
+        results["status"] = "error"
+        results["error"] = "Non-existed answer in options"
+        return results
+    if not reason.strip(): 
+        results["status"] = "error"
+        results["error"] = "Reason is blank"
+        return results
+    if any(evidence_id not in seen for evidence_id in cited_evidence_ids): 
+        results["status"] = "error"
+        results["error"] = "Non-existed ids in evidence_ids"
+        return results 
     
+    results["status"] = "ok"
+    results["answer"] = schema_response.model_dump()
+    return results
     
     
