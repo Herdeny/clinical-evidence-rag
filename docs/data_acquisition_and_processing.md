@@ -4,11 +4,13 @@
 
 ## 数据与代码的位置
 
-2026-11-26公开QA开发材料准备：既有scripts.data.prepare_mirage_data新增--development及--verify-only，目标为PubMedQA原作者PQA-L官方500题CV池，固定提交1cbae8e92f72f20c8d3747cbb3bf5bc53554d997。准备辅助已通过离线IO检查，真实数据下载待用户执行，不能将下述目标路径写成已经取得。
+2026-11-26公开QA开发材料已由用户亲自准备并通过只读核查：既有scripts.data.prepare_mirage_data以--development取得PubMedQA原作者PQA-L的官方500题CV池，固定提交1cbae8e92f72f20c8d3747cbb3bf5bc53554d997。原1000专家题减去官方500测试ID，实际500开发题；与MIRAGE测试ID、全7663题规范化题干及记录中的参考PMID交集均为0，不宣称语义主题完全隔离。
 
 开发模式保存官方ori_pqal.json、test_ground_truth.json、LICENSE、README.md、preprocess/split_dataset.py到data/external/pubmedqa_development/raw/固定提交/原路径；按官方测试ID从1000专家题中取CV池，不合成题目或重标答案。先核对原测试与固定MIRAGE的ID／问题／标签，再检查CV题干与全MIRAGE不重叠；共同参考PMID另计。转换结果prepared/benchmark.json只保留question／options／answer，原给定context及LONG_ANSWER保留raw而不送模型；文件身份、实际数量与隔离结果写source_manifest.json。
 
-运行命令为python -u -m scripts.data.prepare_mirage_data --development，由用户终端执行，支持单文件字节进度。无--development时沿用原MIRAGE流程；已有开发包只离线复核，不覆盖原件，--verify-only缺包直接退出。完整包在项目内临时目录准备后整体落位。详情见[公开开发池](benchmark_scope.md#当前用户操作准备官方pubmedqa开发池)，不能把本项目使用整个CV池的开发验证宣称为原论文十折结果。
+运行命令为python -u -m scripts.data.prepare_mirage_data --development，由用户终端执行，支持单文件字节进度。无--development时沿用原MIRAGE流程；已有开发包只离线复核，不覆盖原件，--verify-only缺包直接退出。完整包在项目内临时目录准备后整体落位。详情见[公开开发池](benchmark_scope.md#官方pubmedqa开发池真实准备已验收)，不能把本项目使用整个CV池的开发验证宣称为原论文十折结果。
+
+转换文件SHA-256=2afd9c360b5b59dd07059743630358f1f480be46650e4f5cb53f1e0756d6ca82，已验收读取器返回500行四列及独立500项gold。标签yes／no／maybe为276／169／55；55.2%是始终选yes的统计基线，尚非模型成绩。真实准备3.95s、RSS74076KiB、退出0，无模型调用；五份原件、manifest和运行日志／资源指纹见results/pubmedqa_development_prepare_01_validation.json。助手仅离线核对；此前_preparation.json仍保留准备时的未执行状态。
 
 2026-11-21新增公开检索基准NFCorpus，位于data/external/nfcorpus。原站ZIP连接失败后采用BEIR官方HF镜像具体提交，保存原始Parquet／TSV／数据卡，再保真转换成标准BEIR目录；没有合成问题或标签。实际3633文档、2590 train／324 dev／323 test查询。下载／复验入口scripts.data.prepare_nfcorpus，独立校验scripts.data.validate_nfcorpus；命令与全部版本指纹见[数据说明](../data/external/nfcorpus/DATA_CARD.md)。未编码或跑分，用户读取适配见[任务契约](nfcorpus_benchmark_task.md)。
 
@@ -26,6 +28,7 @@
 | 正式检索输入 | data/v3/evidence.jsonl、sources.json | 783,847 片段、10,840 来源；以下游清单为准 |
 | 质量隔离 | data/v3/exclusions.json、quarantine_manifest.json | 未准入文档、单元原因及没有入索引的试解析记录 |
 | 外部评测题 | data/external/mirage | 独立保存的 7,663 道题，不混进检索库 |
+| 公开QA开发池 | data/external/pubmedqa_development | 官方专家CV池500题；原件与独立开发转换保留，不作MIRAGE最终分数 |
 | 可复现处理代码 | scripts/data | 下载、解析、构建、核验模块；逐行中文注释 |
 
 根目录不再散放这些工具。它们仍然用于扩库和复现，因此集中保留，而不是按“只运行过一次”直接丢弃。模块迁移对照和删除的旧自动编译缓存记录在 results/source_maintenance_2026-11-19/maintenance.json。

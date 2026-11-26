@@ -213,12 +213,13 @@ Qwen3 8B 重排相对原 Dense 的 nDCG@10 提升 **6.22%（相对值）**；4B 
 |:---|:---|:---|
 | NFCorpus | 3,633 文档；324 dev 查询 | 已完成检索、重排与改写对照；官方 test 未运行 |
 | MIRAGE | 7,663 道公开医学问答题 | 快照、五上游公开声明及全量／单任务读取已核验；完整问答链路和全量模型对标待完成 |
+| PubMedQA 官方专家 CV 池 | 500 道题；yes／no／maybe | 已准备并核对与 MIRAGE 的 ID／规范化题干及记录中参考 PMID 不重叠，仅作项目 QA 开发材料 |
 
 NFCorpus 使用其配套文档和 qrels；医学主语料用于项目业务验证；MIRAGE 保持独立，不把标准答案或给定支持上下文塞入检索。数据来源、许可筛选和处理边界见[语料调研](docs/medical_corpus_v3_research.md)、[采集处理](docs/data_acquisition_and_processing.md)与[对标要求](docs/benchmark_scope.md)。
 
 评测只采用可公开核查的benchmark，并按其标注与协议报告对应能力。原180道CT合成题（120开发／60留出）仅保留历史记录，不属于当前评测集。报告澄清、引用支持、用药与多模态专项需另选匹配的公开benchmark，不能由上述两项成绩代替。
 
-医学QA联调将使用PubMedQA原作者的专家标注CV池，固定官方测试ID并核查与MIRAGE隔离；下载与转换辅助已就绪，真实开发包待用户执行准备，不计作新增问答成绩。见[当前数据准备步骤](docs/benchmark_scope.md#当前用户操作准备官方pubmedqa开发池)。
+医学QA开发池已由用户准备并复用原读取器验收；500题标签分布为yes 276、no 169、maybe 55，始终选yes的统计基线为55.2%。这不是模型成绩，也不宣称原论文十折实验或语义主题完全隔离。下一项为用户编写共用的选择题生成核心，见[开发池与当前任务](docs/benchmark_scope.md#官方pubmedqa开发池真实准备已验收)。
 
 <a id="docs"></a>
 

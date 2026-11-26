@@ -1,10 +1,12 @@
 # 现在应该看哪些文件
 
-**当前用户操作：运行既有scripts/data/prepare_mirage_data.py的--development。** 助手已增量加入PubMedQA官方专家CV池下载／原测试隔离／格式转换与只核验模式，9项临时IO和内存响应检查通过，未改核心或新增脚本。固定原作者提交1cbae8e，预期1000专家题减官方500测试后500开发题，真实数量与题干重叠尚待用户下载验证。输出data/external/pubmedqa_development/prepared/benchmark.json可直接复用已验收读取器，不将给定context／LONG_ANSWER输入模型。命令与边界见[开发池说明](benchmark_scope.md#当前用户操作准备官方pubmedqa开发池)，准备记录状态未执行。PR #1已合并，一次性PR例外结束，本轮恢复main提交推送。
+**当前用户任务：新建qa_core.py，编写选择题生成核心。** 现有改写／核验模块都不负责回答，生成有独立职责，因此仅新增这一必要模块，不提前新增批量入口。计划定义MultipleChoiceAnswer及answer_multiple_choice(query, options, hits, *, llm, mode="rag")，共用无检索与RAG、动态选项校验、四字段证据、结构化回答及原始用量；完整步骤与边界见[当前任务](benchmark_scope.md#当前用户任务实现选择题生成核心)，聊天同样说明。该文件目前未实现，不计入下方21个已跟踪模块。
+
+PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 
 **最新验收：load_mirage_dataset已通过离线读取验证。** 全量(7663,4)与7663项答案字典、五任务数量／顺序、原文／选项／答案保真、唯一ID和独立gold均通过；空与未知任务名正确拒绝，三份原件及旧函数AST未变。既有BEIR的9项测试通过；没有模型／API调用。验证保存在本地results/mirage_loader_validation_01.json，先前review_01／02保留。按用户仅本次要求通过codex/mirage-dataset-loader分支创建PR后直接合并；后续恢复原提交同步方式。
 
-**已实现：benchmark_data.py中的load_mirage_dataset(benchmark_path, *, task=None)。** MIRAGE五上游公开声明与任务角色已核查；五部分都作最终评测，上游dev不等于本项目调参集。函数返回四列questions_df（id／task／query／options）和单独gold_answers；不传answer／参考PMID给检索或生成。按官方sorted字符串题号，保留前导零和原文本，None读取全量7663，单任务可选。完整约定与验收见[读取适配记录](benchmark_scope.md#mirage读取函数已验收)；无新脚本、无模型运行。下一项独立官方开发材料与后续QA接线待完成。
+**已实现：benchmark_data.py中的load_mirage_dataset(benchmark_path, *, task=None)。** MIRAGE五上游公开声明与任务角色已核查；五部分都作最终评测，上游dev不等于本项目调参集。函数返回四列questions_df（id／task／query／options）和单独gold_answers；不传answer／参考PMID给检索或生成。按官方sorted字符串题号，保留前导零和原文本，None读取全量7663，单任务可选。完整约定与验收见[读取适配记录](benchmark_scope.md#mirage读取函数已验收)；无新脚本、无模型运行。独立官方开发池现已准备，QA生成尚待用户实现。
 
 **2026-11-26最新要求：评测只用可核查的公开benchmark。** 324题来自NFCorpus官方dev，120题来自助手自建CT初稿，二者不能混称。刚提出的120题运行计划已撤回，未执行；自建题及成绩仅保留历史，不继续扩题、调参或作效果依据。当前公开主线为已完成dev对照的NFCorpus及待QA适配的MIRAGE7663；下一项先核查MIRAGE上游条件与开发／测试协议，再复用既有模块增量接入。专项追问／引用／多模态需另选覆盖相应标注的公开benchmark。详见[当前评测范围](benchmark_scope.md#2026-11-26仅使用可核查的公开benchmark)，以下CT待运行安排按历史理解。
 

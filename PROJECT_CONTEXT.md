@@ -6,13 +6,15 @@
 
 ## 1. 当前应从哪里继续
 
-**2026-11-26当前：公开QA开发池准备辅助已完成，等待用户亲自下载和核查PubMedQA官方CV池。** 选用原作者PQA-L的1000道专家标注题，去掉原作者test_ground_truth.json的500个测试ID，得到官方500题CV池作为项目开发材料。沿用原专家标签和题目，不合成、不重标；将整个CV池用于项目开发，不宣称复现原论文十折训练或给定context实验。原作者仓库MIT已核查，固定提交1cbae8e92f72f20c8d3747cbb3bf5bc53554d997；官方主页和划分脚本见docs/benchmark_scope.md新增开发池节。
+**2026-11-26当前：用户已亲自完成公开PubMedQA开发池准备，真实数据离线复核通过；下一项由用户编写选择题生成核心。** 原作者PQA-L的1000道专家标注题减去官方500个测试ID，实际得到500题CV池；与固定MIRAGE的测试ID、全7663题规范化题干及记录中的参考PMID交集均为0。此检查不代表语义／研究主题完全隔离。沿用原专家标签，不合成、不重标；整个CV池用于项目开发，不宣称原论文十折或给定context实验。原作者固定提交1cbae8e92f72f20c8d3747cbb3bf5bc53554d997，原始许可和划分脚本已保存。
 
 助手在现有scripts/data/prepare_mirage_data.py增量实现--development与--verify-only，未新增脚本或改用户核心。默认行为仍核验原MIRAGE，开发模式下载五份固定原件（ori_pqal、官方测试标签、LICENSE、README、split_dataset.py），显示单文件字节进度。先核对官方测试ID／问题／标签同已固定MIRAGE，再核对CV池与全MIRAGE的标准化题干不重叠；冲突时停止，不悄悄删题／补题。共同参考PMID另计，不称为研究主题完全隔离。转换结果仅question／options／answer，去掉给定context、LONG_ANSWER和模型预测字段，复用已验收load_mirage_dataset。
 
-真实输出目标data/external/pubmedqa_development/prepared/benchmark.json及source_manifest.json，原件保留raw/固定提交/原路径；该目录当前不存在，实际500题与真实重叠数量仍待下载。完整包在项目内临时目录准备好后整体落位；已有包只离线复核原SHA／划分／转换关系，--verify-only缺包在请求前退出。9项离线辅助检查通过（临时IO夹具和内存响应，不是新评测题或模型成绩），真实MIRAGE三原件未改，真实数据下载0、模型／API调用0；记录results/pubmedqa_development_helper_validation_01.json，源码SHA=e5453b317855e3e742289d25a4cfb6c3b5a5e1b20442334f8c7ab0ba3fd72bf6。准备记录results/pubmedqa_development_prepare_01_preparation.json为prepared_not_executed，仅bash -n检查命令，未执行。
+真实输出data/external/pubmedqa_development/prepared/benchmark.json已存在，SHA=2afd9c360b5b59dd07059743630358f1f480be46650e4f5cb53f1e0756d6ca82，复用load_mirage_dataset得到(500,4)及500项独立gold。标签yes=276、no=169、maybe=55；后续开发答题应对照55.2%的始终选yes基线，并报告Accuracy、macro-F1和失败数。maybe是原任务合法答案，不是系统未检出证据时的默认选项。五份原件、source_manifest及用户原日志／资源均有指纹，真实准备耗时3.95s、RSS74076KiB、退出0，没有模型调用。results/pubmedqa_development_prepare_01_validation.json记录真实核查；此前_preparation.json仍保留prepared_not_executed的原始准备状态，不覆盖历史。助手本轮只读核查，真实下载由用户执行。
 
-下一用户操作：运行python -u -m scripts.data.prepare_mirage_data --development，保存pubmedqa_development_prepare_01日志与资源；核对1000专家题、500官方测试、500开发，题号与全MIRAGE标准化题干重叠都0，并保留共同参考PMID统计。真实准备通过后才接QA生成／评分，不重写读取器、不提前跑模型。PR #1已实际MERGED，合并提交c6cd197，本地main已同步；仅一次新分支／PR例外已使用完，本单元恢复main常规提交推送。
+下一用户操作：新建qa_core.py，实现MultipleChoiceAnswer与answer_multiple_choice(query, options, hits, *, llm, mode="rag")。生成是独立职责，现有query_rewrite.py只改写、evidence_review.py明确不回答，故不挤入这些模块；目前尚无该文件或问答成绩。三个必填结构化字段为answer_choice／reason／cited_evidence_ids；mode取closed_book或rag，两组共用同一核心／注入客户端，保留原始用量和响应元数据，解析及动态选项／引用ID校验失败保留成本并返回error，API或编程异常自然上抛。依官方MedRAG选择题协议给出确定选项；RAG可结合内部知识，证据无关时不强造引用。该行为仅是公开MCQ基准答题，不替代临床产品的证据不足→追问／补查／停止；maybe也不等同证据不足。实际引用支持另评，结构化输出和引用记录有别于原提示，不能宣称严格复现原成绩。完整逻辑、参数理由与验收见docs/benchmark_scope.md当前任务节，聊天同样给出。用户先写核心，助手只做离线审查；不提前新增入口、调用模型或运行MIRAGE测试。
+
+PR #1已实际MERGED，合并提交c6cd197，本地main已同步；仅一次新分支／PR例外已使用完，本单元恢复main常规提交推送。以下开发包待准备及旧任务状态按历史日期理解。
 
 **2026-11-26最新：用户load_mirage_dataset已通过离线验收，本次按用户要求走一次新分支→PR→直接合并。** 当前全量questions_df为(7663,4)、gold_answers为7663项dict；五个单任务分别1273／4183／500／618／1089行，均与全量对应子集的内容和顺序一致。逐字段核对原question／options／answer、字符串题号及官方sorted顺序、唯一ID与问题／答案双集合一致，问题表无answer／PMID，空和未知任务名被拒绝。三个原始快照SHA及旧两函数AST未变，既有BEIR的9项测试通过。没有模型／API／GPU调用或新数据下载，未打印试题／答案；这是读取适配验收，不是QA或临床效果成绩。
 

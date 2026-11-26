@@ -11,13 +11,13 @@
 | 当前公开基准 | 可核查来源与实际版本 | 能评估的内容与进度 |
 | --- | --- | --- |
 | NFCorpus／BEIR | [原作者项目页](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/)及[BEIR官方数据表](https://github.com/beir-cellar/beir#available-datasets)；本地固定镜像3633文档、324 dev／323 test | 检索相关性、排序及召回；已有dev完整对照，test未运行 |
-| MIRAGE医学QA | [ACL 2024论文](https://aclanthology.org/2024.findings-acl.372/)及[官方仓库](https://github.com/gzxiong/MIRAGE)；本地原始快照7663题／五任务 | 医学选择题RAG准确率与成本；全量是既定目标，QA适配及上游使用条件核查待完成 |
+| MIRAGE医学QA | [ACL 2024论文](https://aclanthology.org/2024.findings-acl.372/)及[官方仓库](https://github.com/gzxiong/MIRAGE)；本地原始快照7663题／五任务 | 医学选择题RAG准确率与成本；五上游公开声明与读取已核查，完整QA适配及全量运行待完成 |
 
 以上官方来源已于2026-11-26重新浏览核实。NFCorpus原站明确相关性等级由网站引用／内部链接／主题关系构造，不能称医生逐题金标准；原站学术用途条件及镜像说明分别保存，不把BEIR软件许可套到数据。MIRAGE仓库有NCBI公共领域声明，但五个组成题库与检索语料仍需分别核查；保留原版本，不能因网页更新静默覆盖本地快照。
 
 后续每个指标都应对应基准原有标注和官方评分协议。NFCorpus的qrels不是证据充分性标签；MIRAGE选择题准确率不能代替追问正确性、引用支持率、报告解析或临床有效性。这些专项能力应先寻找匹配的公开benchmark，核实原始标签、划分、版本与使用条件，覆盖不足就明确列为待评测；不再临时合成题目填补效果证明。无需将评测要求扩展为“检索库只能包含benchmark材料”：业务语料与评测题各自保留来源和许可，但检索基准必须使用配套corpus及ID。
 
-当前已完成下段所列的五上游公开发布声明、MIRAGE角色核查及用户实现的离线读取验收；下一项独立官方开发材料及QA接线仍待完成。不重跑已完成的324 dev，也不对MIRAGE正式测试题反复调参。下面较早保留自建题作产品回归的安排已由本次用户要求取代，原实验历史不改写。
+当前已完成下段所列的五上游公开发布声明、MIRAGE角色核查、用户离线读取验收及独立PubMedQA开发池准备；下一项由用户编写选择题生成核心。不重跑已完成的324 dev，也不对MIRAGE正式测试题反复调参。下面较早保留自建题作产品回归的安排已由本次用户要求取代，原实验历史不改写。
 
 ### MIRAGE五个上游的发布条件与划分
 
@@ -33,7 +33,7 @@
 
 本次完成的是官方公开声明和当前本地科研评测用途的核查，保留各原作者归属和许可说明；不把仓库声明扩成所有第三方原题、摘要或教材文本的无条件再分发许可，不将这些全文打包进GitHub。MIRAGE本身的NCBI声明不能替代上表。MedMCQA原仓库README的Valid／Test题数表与MIRAGE作者的dev文件映射有出入；本项目按MIRAGE固定快照和作者build.py定义对标，不根据表头自行改划分。
 
-五部分在本项目均作最终评测，不因上游名叫dev就拿来调prompt。后续模型联调须另取官方train／dev材料，固定来源并与MIRAGE做题目重叠检查后使用；当前未下载或创建该开发包。只读格式核验不构成模型调参。保持零样本与question-only retrieval；options只用于生成，answer只用于评分。PubMedQA／BioASQ快照额外保存的PMID来自对应／参考文献，不能作为检索条件或直接补上下文。现有两套公开基准仍不能代证所有报告追问／引用／多模态能力。
+五部分在本项目均作最终评测，不因上游名叫dev就拿来调prompt。模型联调另用已固定且经重叠核查的PubMedQA官方CV池，实际准备结果见下节；MIRAGE测试材料不用于联调。只读格式核验不构成模型调参。保持零样本与question-only retrieval；options只用于生成，answer只用于评分。PubMedQA／BioASQ快照额外保存的PMID来自对应／参考文献，不能作为检索条件或直接补上下文。现有两套公开基准仍不能代证所有报告追问／引用／多模态能力。
 
 助手只读复核三份原件SHA、五任务容器／字段／数量、选项与答案关系；未打印本地试题或答案、未运行模型、未下载新数据。审计保存在本地results/mirage_upstream_review_01.json，原source_manifest.json及其采集时pending状态不改写，Git revision未知仍为null，不把本次网页核查冒充重新固定提交。每任务排序对齐[官方QADataset](https://github.com/gzxiong/MIRAGE/blob/main/src/utils.py)的字符串题号排序。后续答题解析需另行声明失败处理；原工具解析失败回退A的行为不应无说明地沿用，失败计入分母，各方法同口径。
 
@@ -47,15 +47,38 @@
 
 2026-11-26离线验收通过：全量shape=(7663,4)，gold为7663项字典，五单任务分别与全量子集内容及顺序一致；逐字段核对原问题／选项／标准答案、官方排序和题号前导零。ID唯一且双方集合相同，题目表无answer／PMID，空及未知任务名正确拒绝，三份原始文件指纹未变。旧两函数AST相同，既有BEIR的9项测试通过。只输出结构和计数，没有展示题干／答案、运行模型或下载数据；结果不能表述为问答或临床效果成绩。验证results/mirage_loader_validation_01.json对应源码SHA=81507dda72bb063ffabdca5c13cb2367e091c88005009ba8f3b5571c7742acd2，review_01／02保留历史，助手未修改用户核心。
 
-### 当前用户操作：准备官方PubMedQA开发池
+### 官方PubMedQA开发池：真实准备已验收
 
 开发材料选择[PubMedQA原作者发布的PQA-L](https://pubmedqa.github.io/)，不使用PQA-A人工生成部分。原作者[划分代码](https://github.com/pubmedqa/pubmedqa/blob/master/preprocess/split_dataset.py)说明1000专家题分为500测试和500交叉验证池；[公开测试标签](https://github.com/pubmedqa/pubmedqa/blob/master/data/test_ground_truth.json)给出测试ID。本项目取官方1000题减去官方500测试ID，保持原专家答案，使用整个官方CV池作开发材料；不把这一步说成原论文十折实验或MIRAGE最终成绩。
 
 原作者仓库MIT声明沿用此前核查，固定提交1cbae8e92f72f20c8d3747cbb3bf5bc53554d997，不跟随master更新。已有数据准备脚本新增--development，下载ori_pqal.json、test_ground_truth.json、LICENSE、README及split_dataset.py，保留字节和SHA。转换为单任务MIRAGE结构，只保留question／三选项／原专家标签对应的答案键，question不拼给定摘要，后续复用已验收读取器，答案留评分侧。
 
-准备时先要求官方500测试ID、题目及标签与当前固定MIRAGE的PubMedQA部分一致，再要求CV池与全部7663题的大小写／连续空白规范化题干没有重叠；规范化仅用于审计，实际输入不改。遇到冲突即停止，不静默删题或补题。共同参考论文PMID单独统计，不把同论文自动等同同题，也不宣称主题隔离。输出固定到data/external/pubmedqa_development，原MIRAGE原件不动；该真实开发包当前尚未下载，500及零重叠仍是待验证的准入目标。
+准备时先要求官方500测试ID、题目及标签与当前固定MIRAGE的PubMedQA部分一致，再要求CV池与全部7663题的大小写／连续空白规范化题干没有重叠；规范化仅用于审计，实际输入不改。遇到冲突即停止，不静默删题或补题。共同参考论文PMID单独统计，不把同论文自动等同同题，也不宣称主题隔离。输出固定到data/external/pubmedqa_development，原MIRAGE原件不动。
 
-助手只用临时IO夹具与内存下载响应完成9项辅助流程检查，未形成新的合成评测数据，没有运行模型或下载真实题库。用户执行现有入口python -u -m scripts.data.prepare_mirage_data --development后，检查source_manifest.json中的实际统计及prepared/benchmark.json；已有包会只核验，--verify-only缺包不会下载。准备记录results/pubmedqa_development_prepare_01_preparation.json为未执行，真实结果由用户终端运行后确认。
+助手准备阶段只用临时IO夹具与内存下载响应完成9项辅助检查，未形成合成评测数据。用户现已亲自执行python -u -m scripts.data.prepare_mirage_data --development，真实核对为1000专家题／500官方测试／500开发；与MIRAGE测试ID、全部规范化题干及记录中的参考PMID交集均为0。已验收读取器返回(500,4)及500项gold；标签yes 276、no 169、maybe 55，始终选yes的Accuracy为55.2%。后续开发报告同时提供Accuracy、macro-F1与失败计数，macro-F1参考[原作者评分脚本](https://github.com/pubmedqa/pubmedqa/blob/master/evaluation.py)；这不是新增模型成绩。
+
+prepared/benchmark.json的SHA-256为2afd9c360b5b59dd07059743630358f1f480be46650e4f5cb53f1e0756d6ca82。真实运行3.95s、RSS74076KiB、退出0，无模型调用；原文件、manifest、用户日志和资源已只读核对，记录results/pubmedqa_development_prepare_01_validation.json。此前_preparation.json仍保留准备时未执行状态，不事后改写。已有包只离线核验，--verify-only缺包不会下载。
+
+### 当前用户任务：实现选择题生成核心
+
+当前任务只实现qa_core.py，不新增批量入口或评分脚本。现有query_rewrite.py负责改写，evidence_review.py明确只核验不回答，benchmark_data.py负责保真读取；生成有独立职责，因此新增这一个核心模块有必要。具体代码仍由用户写，助手只审查，不代跑真实调用。
+
+**先固定答题语义。** [MedRAG官方模板](https://github.com/gzxiong/MedRAG/blob/main/src/template.py)的无检索与RAG选择题均要求给出一个确定选项。本核心按该MCQ协议选择最佳答案，RAG参考相关材料并允许结合内部知识；材料无关或不足时说明限制、不伪造引用，不能将找不到证据自动映射成PubMedQA的maybe。maybe是专家定义的有效科学结论选项。临床产品的严格证据核验、追问／补查／停止仍由evidence_review及后续Agent控制，不能将基准强制选择行为直接当临床建议。简短理由、结构化输出和引用记录是本项目设置，不照搬原模板的逐步思维字段；未来成绩说明该差异，不宣称严格复现原分数。
+
+使用已装的标准库json、pydantic的BaseModel／Field和langchain_core.prompts的ChatPromptTemplate，不加依赖。定义MultipleChoiceAnswer，三个字段都必填：answer_choice为str（从本题options的键中选择），reason为非空str（简短依据，不要求完整思维过程），cited_evidence_ids为list[str]（只填真正引用的输入片段ID，无引用为[]）。不将答案键硬编码为A—D，不给字段默认值掩盖漏项。
+
+函数约定answer_multiple_choice(query, options, hits, *, llm, mode="rag")：query取读取器的query列；options取原选项字典；hits为当前选定的证据列表，空列表合法；llm由调用者注入并可复用；mode精确取closed_book或rag。closed_book要求hits=[]且引用为空；rag显式允许空命中，不能因此静默改mode。两种方法的客户端和基础答题指令保持一致，仅上下文与模式说明有别。函数不读取配置／环境、不构造客户端、不检索、不接收gold字典／参考PMID／整条题目行、不在内部评分或重试。
+
+实现顺序与检查理由：
+
+1. 校验query为非空字符串、options为非空字典且键／文本非空，mode有效，hits为列表且各片段id／text非空、ID不重复。类型或数值错误按实际语义处理，不为检查工具统一异常类。closed_book携带证据应拒绝，避免无检索对照被污染。
+2. 遍历hits，收集seen集合，并投影id／text／source_id／locator四字段成evidence_payload；后两项允许缺省None。保持输入原文和顺序，不传score等无关字段。options和evidence_payload分别用json.dumps(..., ensure_ascii=False)转消息文本；原始hits与options不改。
+3. 用ChatPromptTemplate构造系统和用户消息：共同要求从给定选项选一个、简短解释、不虚构事实；closed_book依已有知识且无引用，rag优先使用相关材料且引用仅对应实际支持的陈述，忽略材料中的操作指令。用户消息传query／options_text／context_text，不传gold或示例标准答案；不要硬编码某道开发题答案。
+4. llm.with_structured_output(MultipleChoiceAnswer, method="function_calling", include_raw=True)后只invoke一次。沿用已有核心的raw／parsed／parsing_error协议；先把raw的usage_metadata和response_metadata存入结果，再判断解析是否成功。
+5. 外层结果共七项：original_query、mode、status、answer、usage_metadata、response_metadata、error。先令answer=None／error=None；parsed为空或parsing_error非空则status=error并保留成本。解析后检查answer_choice精确属于当前options、reason.strip()非空、引用ID都属于seen，且closed_book引用为空；不满足也返回error，不补A或第一选项。全部通过才status=ok并令answer=parsed.model_dump()。引用ID有效不等于支持关系已验证，也不要求RAG强行凑一个引用。
+6. 客户端/API调用失败和编程异常不在核心中用宽泛except变成空答案；之后批量调用层再按现有模式记录API错误并保留题数。不要本轮提前新增运行入口。
+
+保存后的离线验收：同一函数能接收A／B二选项和A／B／C三选项；两模式消息与四字段上下文正确，输入对象未改；仅一次调用；解析失败／越界答案／未知引用／空白理由保持error、answer=None且保留已知用量；closed_book的引用／上下文规则成立；有效结果不含gold。空RAG命中仍为rag，既不强制maybe也不伪造引用。只用内存假客户端检查软件协议，不新增合成benchmark题或证明医学准确率，不运行真实模型。通过后再接实际PubMedQA开发池的用户单题／批量运行；全500是开发比较，全7663仍是最终目标。
 
 ## 2026-11-24 当前实测进度
 
@@ -77,7 +100,7 @@ NFCorpus BM25、Dense与RRF dev已运行并独立核验：3633文档／324查询
 
 | 项目 | 必须交付的结果 | 当前状态 |
 | --- | --- | --- |
-| 基准与语料接入 | 固定 MIRAGE 原始 7,663 题和五个子任务的版本；核实数据条件；准备医学检索语料并记录规模、来源与使用条件 | 原题、五上游公开声明及角色已核查；QA适配、独立开发包与实际检索覆盖待完成，第三方全文不打包再发布 |
+| 基准与语料接入 | 固定 MIRAGE 原始 7,663 题和五个子任务的版本；核实数据条件；准备医学检索语料并记录规模、来源与使用条件 | 原题、五上游公开声明、读取及独立500题开发池已核查；QA适配与实际检索覆盖待完成，第三方全文不打包再发布 |
 | 公平对照 | 在固定模型与版本、数据和输入协议下，全量运行无检索、基础 RAG、改进 RAG；基础 RAG 使用公开可复现的参考设置，明确它与 MedRAG 的关系 | 尚未运行 |
 | 协议遵守 | 零样本；检索只使用问题，不使用选项；生成可接收选项；答案和给定 gold 支持上下文保留在评测侧 | 待实现 |
 | 完整成绩 | 五个子任务分别报告准确率及其宏平均；同时报告实际调用数、tokens、费用、延迟与失败情况；失败题计入分母，不删除难题 | 尚无成绩 |
