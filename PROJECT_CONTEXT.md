@@ -6,11 +6,15 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26最新：CT可选评估回调已通过合成联结验收，保留用户命名retrieve_latency_ms；保存辅助随核心接口更新。** 用户再次强调测试不能反过来规范核心代码。助手此前要求因保存器读取latency_ms而保留旧名，此要求过于绝对，已撤回；原依赖来自正式保存模块而非测试，接口命名合理时应同步真实调用链，而不是让旧辅助约束核心。当前CT逐题与摘要统一retrieve_latency_ms，评估另存review_latency_ms，不新增latency_ms兼容别名；BEIR仍使用自身未变的latency_ms协议，旧实验原件不改写。
+
+用户已将eval_rows.append移回每题公共路径。retrieve_evalution.py SHA-256=681db488cd05e613e0971131ea92e68059130de0a3405c2c8a191d9113b83468；助手未修改用户核心，只调整retrieval_results_io.py的CT字段读取／汇总与既有I/O检查输入。真实evaluate_retrieval→partial(review_evidence,llm=假客户端)→真实save_retrieval_results联结通过：关闭／开启均保留2题，每题一次检索／评估，正常不足与解析失败均保留用量和整题，完整嵌套字典往返不丢；原始Report+Question及5条证据传递，无gold入模型。除明确接受的计时字段改名外，关闭评估的题目信息／排名／指标与提交版相同。CT保存6项、BEIR保存6项既有检查通过，记录results/ct_optional_review_validation_01.json。没有真实模型／API／GPU调用，不称医学判断能力已验证。下一步仍在原run_retrieval_eval.py按需接入客户端，不新增脚本。
+
 **2026-11-26最新验收：用户的单轮证据评估核心通过18项假响应检查；下一步增量扩展原CT评测链路，不新建独立运行脚本。** evidence_review.py源码SHA-256=bf2d2b96a8c54e2d56d5defc07d8095e205279967d75563b9f4bd1ab1c56eeeb，助手未修改核心。18项涵盖充分、两类正常不足、空证据充分／不足、未知ID、两类缺项与充分性矛盾、空白reason／缺项／ID、无法定位具体缺口、解析失败／无parsed、输入重复ID／空query及调用异常自然传播；另核对单次invoke、六字段、保留原问题与metadata、输入不变和不把score传入证据提示。记录results/evidence_review_core_validation_01.json；这是数据流与分支验收，不是医学准确率、证据支持率或真实模型成绩。已有未使用导入与注释用词不作为核心返工门槛。
 
 用户指出“又新建脚本，先看看能不能增量开发”，助手已撤回run_evidence_review.py／独立--input入口方案，未创建或删除该脚本。已只读检查run_retrieval_eval.py、retrieve_evalution.py、run_benchmark_eval.py、两个改写入口和保存辅助。临床evaluate_retrieval已有原始Report+Question与完整retrieved_results，是可选核验的合适扩展点；BEIR的qrels与nDCG继续负责检索排序，改写入口保持专职，不为减少文件而把无关任务塞进同一main。先复用再决定新文件，且检查保存和后续图接入，不只凭“入口很薄”新增脚本。
 
-当前用户任务只改retrieve_evalution.py中的evaluate_retrieval：签名增加仅关键字参数review_fn=None，旧三参数及默认输出保持；沿用每题一次retrieve_fn(query,max(ks))与原检索计时、评分。在eval_rows.append前，若review_fn非None，单次调用review_fn(query,retrieved_results)，将完整六字段返回字典存入eval_case["evidence_review"]，另用perf_counter计review_latency_ms。一次传整题证据列表，不按证据逐条请求；不传case、eval_case或gold给模型。不在评测核心创建客户端、读配置或凭证，不直接依赖ChatDeepSeek；未开启时不增加核验列，不改变旧检索结果／指标，status=error也保留该题，不过滤。回调本身抛出的异常暂自然传播，API失败记录／续跑策略在真实批量接入前明确处理，不让程序错误伪装成证据不足。
+已验收的retrieve_evalution.py增量：evaluate_retrieval签名增加仅关键字参数review_fn=None，旧三参数继续有效；沿用每题一次retrieve_fn(query,max(ks))与原检索计时、评分，检索耗时按用户选择命名retrieve_latency_ms。在eval_rows.append前，开启时单次调用review_fn(query,retrieved_results)，将完整六字段返回字典存入eval_case["evidence_review"]，另用perf_counter计review_latency_ms。一次传整题证据列表，不按证据逐条请求；不传case、eval_case或gold给模型。不在评测核心创建客户端、读配置或凭证，不直接依赖ChatDeepSeek；未开启时不增加核验列，不改变检索排名／指标，status=error也保留该题，不过滤。回调本身抛出的异常暂自然传播，API失败记录／续跑策略在真实批量接入前明确处理，不让程序错误伪装成证据不足。
 
 后续在原run_retrieval_eval.py按需接入--review、既有风格--config／--profile，默认review关闭。只开启时构造一个客户端，通过partial(review_evidence,llm=llm)绑定后传给review_fn；同一回调支持原BM25／Dense／RRF，保留原方法、缓存、路径与run-name约定。保存辅助已读取：整张结果表copy后to_json，能保留新增嵌套核验列；后续补核验摘要／实际LLM配置、明确计时范围，并在付费调用前保护已有输出。正式批量前处理API失败不丢费用／题目、限制联调题数与全量分母；不把当前保存器整集ID校验强塞给抽样运行，也不在本轮无需求改用户核心。后续LangGraph节点调用review_evidence同一函数，产品服务不能通过读取gold并评分的main运行。本轮只交上述评测回调增量，由用户写核心，助手不运行模型／API／GPU。
 
@@ -1025,6 +1029,8 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 旧共享缓存可能供其他项目使用，不清空整个全局缓存；本次只移动已确认的Qwen及其本次日志，复制BGE维持本项目离线加载。只改变模型文件存储位置不意味着模型或编码参数改变，已验证BGE文档向量身份仍一致。当前迁移已完成，下载等待用户在可见终端继续，不由助手后台启动长下载。
 
 ### 13.12 先审代码语义，测试不能反过来定义需求
+
+用户于2026-11-26就retrieve_latency_ms再次重申此原则。正式保存辅助读取旧字段造成的接口不一致是实际联结问题，但旧辅助同样无权决定核心命名。用户选择合理、含义明确的新接口时，检查全部真实消费者并同步保存／汇总／相应检查，不要求核心迁就旧测试，也不为旧测试添加无业务必要的兼容字段。分清真正的行为错误（如漏保存题目）与允许调整的接口选择，不混为验收失败。
 
 用户于2026-11-25明确指出：多次因为助手自己写、用户没有阅读的测试脚本，要求核心代码变得冗杂，甚至把合理的TypeError反复改为ValueError。此反馈优先于此前“统一ValueError”的条款。
 

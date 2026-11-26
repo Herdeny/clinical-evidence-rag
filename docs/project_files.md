@@ -2,7 +2,7 @@
 
 整理日期：2026-11-19，进度更新2026-11-26。根目录本次纳入evidence_review.py后共21个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法02，助手只读核验1944条指标通过：改写收益很小且不一致，保留原查询默认及改写可选。单轮证据评估核心已通过18项假响应检查，真实评估、有限补查与图编排待完成。此前助手误代跑01及权限纠正保留于PROJECT_CONTEXT.md，8题只验流程；既有实测、负结果及历史异常保留。
 
-当前用户下一任务改为原retrieve_evalution.py的evaluate_retrieval增量：增加review_fn=None可选回调，开启时每题传原始query及完整retrieved_results，保存完整evidence_review字典与单独review_latency_ms；关闭时旧输出保持。独立run_evidence_review.py方案已撤回且未创建。随后原run_retrieval_eval.py按需配置一个客户端并以partial绑定，三方法共同复用；保存辅助已能保留附加列，核验摘要和真实批量的API失败记录／预算／输出保护在付费运行前完成。三份既有本地控制输入仍位于data/evaluation/evidence_review/smoke_01，保留不冒充实际检索结果。完整任务见PROJECT_CONTEXT.md第1节与10.5.1。助手不代写核心或代跑，后续LangGraph直接复用review_evidence，不依赖含gold的评测main。
+原retrieve_evalution.py的可选review_fn增量已通过合成联结验收：关闭／开启均保留题目，完整核验字典及独立review_latency_ms可保存；CT检索耗时采用用户命名retrieve_latency_ms，保存辅助及其既有检查随核心更新，不要求旧名或添加兼容别名。下一步原run_retrieval_eval.py按需配置一个客户端并以partial绑定，三方法共同复用；不新增run_evidence_review.py。核验摘要和真实批量的API失败记录／预算／输出保护在付费运行前完成。三份既有本地控制输入仍位于data/evaluation/evidence_review/smoke_01，保留不冒充实际检索结果。完整任务见PROJECT_CONTEXT.md第1节与10.5.1。助手不代写核心或代跑，后续LangGraph直接复用review_evidence，不依赖含gold的评测main。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -16,13 +16,13 @@
 | run_query_rewrite_batch.py | 指定划分／limit、共享客户端、保存结果；用户真实8题已核验，1变化有语义观察，尚无检索收益 | 用户；助手未修改实现 |
 | query_rewrite_io.py | save_rewrite_results保存逐题JSONL、状态／已知token摘要及公开运行配置，防覆盖；实际单题已无损归档 | 助手辅助，每行中文注释；不调用模型或读取环境 |
 | frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
-| retrieve_evalution.py | 两类 Recall 与逐题批量评测，沿用实际文件名 | 用户 |
+| retrieve_evalution.py | 两类Recall、逐题批量评测及可选review_fn；合成联结通过，CT分阶段计时为retrieve_latency_ms／review_latency_ms | 用户；助手未改核心 |
 | run_retrieval_eval.py | CLI、方法选择与评测入口 | 用户 |
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
 | embedding_adapter.py | 共享模型构造与显式FP32输出归一化；6项无权重验证通过，预检和正式入口已共用，真实GPU预检03通过 | 助手辅助，逐行中文注释 |
 | reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B及BGE真实完整运行均已核对 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
-| retrieval_results_io.py | 验证并保存CT及BEIR既有结果；支持原方法／frozen_rerank及显式query_subset_ids，未声明仍严格检查整划分 | 助手辅助，逐行中文注释 |
+| retrieval_results_io.py | CT保存随核心采用retrieve_latency_ms并保留核验列；BEIR协议不变，支持原方法／frozen_rerank及显式query_subset_ids | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR读取及apply_query_rewrites已完成；原题／状态／来源保留，失败原样回退，实际8条适配通过，原loader AST未改 | 用户；助手未改核心 |
 | benchmark_eval.py | 公共评分、冻结重排及evaluate_query_rewrite_retrieval已实现；同题两组共享标签／检索器，CPU假检索核对通过，非真实改写收益 | 用户；助手未改核心 |
 | run_benchmark_eval.py | 三方法可选改写及防覆盖已验收；用户324题三方法02已实测核验，无需重写；改写收益与退化均归档 | 用户；助手未改核心 |

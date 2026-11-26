@@ -83,6 +83,8 @@ def save_retrieval_results(result_df, config, *, run_name=None, result_dir="resu
     rrf. Legacy flat metadata remains accepted; the original layout is saved
     unchanged. Add actual encoding parameters as needed.
     Metric columns must be computed by the learner before calling this function.
+    CT retrieval timing uses retrieve_latency_ms, matching the evaluator output.
+    Additional review fields are preserved without being folded into retrieval timing.
     retrieval_method defaults to dense for existing callers. When run_name is
     omitted, output names use <corpus_name>_<retrieval_method>_dev, with
     corpus_name defaulting to ct_v2 for compatibility with saved callers.
@@ -90,7 +92,7 @@ def save_retrieval_results(result_df, config, *, run_name=None, result_dir="resu
     # 设置required：集合。
     required = {"case_id", "split", "group", "report", "question", "gold_evidence_ids",
                 # 继续声明 save_retrieval_results 的输入参数或返回类型约定。
-                "gold_evidence_groups", "retrieved_ids", "scores", "latency_ms"}
+                "gold_evidence_groups", "retrieved_ids", "scores", "retrieve_latency_ms"}
     # 设置metrics：按遍历顺序筛选并整理 ('canonical_recall', 'group_recall') 中的数据。
     metrics = [f"{name}_at_{k}" for name in ("canonical_recall", "group_recall") for k in (1, 3, 5)]
     # 设置missing：required.union(metrics) - set(result_df.columns)。
@@ -171,8 +173,8 @@ def save_retrieval_results(result_df, config, *, run_name=None, result_dir="resu
     if not result_df[metrics].ge(0).all().all() or not result_df[metrics].le(1).all().all():
         # 抛出 ValueError 并停止当前操作：Recall 应为 0 到 1 之间的有效数值。
         raise ValueError("Recall 应为 0 到 1 之间的有效数值")
-    # 当 not result_df['latency_ms'].ge(0).all() 成立时，执行下面的分支。
-    if not result_df["latency_ms"].ge(0).all():
+    # 验证核心输出的检索阶段耗时，不将评估耗时混入其中。
+    if not result_df["retrieve_latency_ms"].ge(0).all():
         # 抛出 ValueError 并停止当前操作：检索耗时必须是非负数。
         raise ValueError("检索耗时必须是非负数")
     # 当 Path(run_name).name != run_name or not run_name 成立时，执行下面的分支。
@@ -199,8 +201,8 @@ def save_retrieval_results(result_df, config, *, run_name=None, result_dir="resu
         "input_sha256": {str(path): _sha256_file(path) for path in (evidence_path, cases_path)},
         # 写入字段 metrics（用户或验证器计算的指标汇总）。
         "metrics": exported[metrics].mean().to_dict(),
-        # 写入字段 latency_ms（计时范围内的毫秒延迟）；字段 mean（逐题数值的算术平均值）；字段 median（逐题数值的中位数）。
-        "latency_ms": {"mean": float(exported["latency_ms"].mean()), "median": float(exported["latency_ms"].median()),
+        # 按核心字段名汇总检索阶段耗时，评估阶段仍保留独立字段。
+        "retrieve_latency_ms": {"mean": float(exported["retrieve_latency_ms"].mean()), "median": float(exported["retrieve_latency_ms"].median()),
                        # 写入字段 scope（本项统计或来源的适用范围）。
                        "scope": "retrieve only, including first query; excludes model loading, document encoding, index building, printing and metric calculation"},
         # 写入字段 annotation_note（标注仍需独立临床复核的说明）。

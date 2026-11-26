@@ -48,7 +48,7 @@ class RetrievalResultsIOTests(unittest.TestCase):
         # 评测结果中的题号字段名与原题不同。
         row = {key: value for key, value in case.items() if key != 'id'}
         # 给出已经计算好的合成命中和计时，不在I/O测试中重新评分。
-        row.update(case_id='CASE-1', retrieved_ids=self.identifiers, scores=[.9, .8, .7, .6, .5], latency_ms=1.0)
+        row.update(case_id='CASE-1', retrieved_ids=self.identifiers, scores=[.9, .8, .7, .6, .5], retrieve_latency_ms=1.0)
         # 六个合成指标均为一，A始终位于第一条。
         row.update({f'{kind}_at_{k}': 1.0 for kind in ('canonical_recall', 'group_recall') for k in (1, 3, 5)})
         # 转换为保存接口所需的结果表。
@@ -91,6 +91,10 @@ class RetrievalResultsIOTests(unittest.TestCase):
         self.assertEqual(saved['config'], original)
         # 证据与题目计数仍应正确。
         self.assertEqual((saved['evidence_count'], saved['case_count']), (5, 1))
+        # 保存辅助遵循核心的检索阶段字段名。
+        self.assertEqual(saved['retrieve_latency_ms']['mean'], 1.0)
+        # 不为旧测试额外生成含糊的兼容字段。
+        self.assertNotIn('latency_ms', saved)
 
     # 验证既有的三种平铺配置仍可保存。
     def test_legacy_flat_layout(self):
