@@ -1,8 +1,8 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-26。根目录已有20个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法02，助手只读核验1944条指标通过：改写收益很小且不一致，保留原查询默认及改写可选，下一阶段证据核验／有限补查尚未实现。此前助手误代跑01及权限纠正保留于PROJECT_CONTEXT.md，8题只验流程；既有实测、负结果及历史异常保留。
+整理日期：2026-11-19，进度更新2026-11-26。根目录本次纳入evidence_review.py后共21个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法02，助手只读核验1944条指标通过：改写收益很小且不一致，保留原查询默认及改写可选。单轮证据评估核心已通过18项假响应检查，真实评估、有限补查与图编排待完成。此前助手误代跑01及权限纠正保留于PROJECT_CONTEXT.md，8题只验流程；既有实测、负结果及历史异常保留。
 
-当前由用户编写evidence_review.py（本地已新建，尚未验收或纳入版本管理，不计入上面20模块），实现EvidenceReview与review_evidence(query,hits,*,llm)，只做一轮生成前的充分性评估，区分missing_case_facts和missing_evidence。后续LangGraph节点复用同一函数；逐条生成结论的引用支持核验另接，不混称已完成。完整字段、参数、流程及验收见PROJECT_CONTEXT.md的10.5.1，本轮不安装依赖、不运行API，助手不代写核心。README已按参考项目结构整理为展示入口，完整职责及历史进度仍保留在本文与交接记录。
+当前用户下一任务为run_evidence_review.py薄入口，按已有run_query_rewrite.py的方式加载配置及客户端，读取只含query／hits的JSON，调用已完成的review_evidence并打印结果。CLI为--config／--profile／--input；不新增run-name或时间戳。三份本地控制输入位于data/evaluation/evidence_review/smoke_01；来源与任务详见PROJECT_CONTEXT.md第1节和10.5.1。保存入口后先用假客户端验证，再由用户运行真实API；助手不代写核心或代跑。后续LangGraph节点直接复用review_evidence；逐条生成结论的引用支持核验另接。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -11,6 +11,7 @@
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
 | rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | query_rewrite.py | 单题真实CT通过；批量rewrite_queries已通过4题混合假响应及编程异常传播检查，失败记录／用量保留；无批量API或改写检索收益 | 用户；助手未修改核心 |
+| evidence_review.py | EvidenceReview五字段与单轮review_evidence已通过18项假响应检查；保留费用、区分有效不足与评估失败，无真实模型成绩 | 用户；助手只读审查，未改核心 |
 | run_query_rewrite.py | 独立读取LLM配置、加载项目环境并单次调用核心；用户真实CT单题通过，422／96／518 tokens，CLI已统一--config | 用户；助手只纠正CLI参数，业务函数未改 |
 | run_query_rewrite_batch.py | 指定划分／limit、共享客户端、保存结果；用户真实8题已核验，1变化有语义观察，尚无检索收益 | 用户；助手未修改实现 |
 | query_rewrite_io.py | save_rewrite_results保存逐题JSONL、状态／已知token摘要及公开运行配置，防覆盖；实际单题已无损归档 | 助手辅助，每行中文注释；不调用模型或读取环境 |

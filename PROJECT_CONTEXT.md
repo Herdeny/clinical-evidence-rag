@@ -6,9 +6,15 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26最新验收：用户的单轮证据评估核心通过18项假响应检查，下一步用户写run_evidence_review.py；尚无真实API评估结果。** evidence_review.py源码SHA-256=bf2d2b96a8c54e2d56d5defc07d8095e205279967d75563b9f4bd1ab1c56eeeb，助手未修改核心。18项涵盖充分、两类正常不足、空证据充分／不足、未知ID、两类缺项与充分性矛盾、空白reason／缺项／ID、无法定位具体缺口、解析失败／无parsed、输入重复ID／空query及调用异常自然传播；另核对单次invoke、六字段、保留原问题与metadata、输入不变和不把score传入证据提示。记录results/evidence_review_core_validation_01.json；这是数据流与分支验收，不是医学准确率、证据支持率或真实模型成绩。已有未使用导入与注释用词不作为核心返工门槛。
+
+当前下一任务是薄入口run_evidence_review.py，不复制检索或评估业务：main(config_dir,input_path,*,profile_name)先读取输入JSON和configs/llm_profiles.json的选定profile，再按run_query_rewrite.py已有方式load_dotenv(root/".env",override=False)、构造一个ChatDeepSeek，调用review_evidence(payload["query"],payload["hits"],llm=llm)并原样返回六字段结果。入口可读取凭证；助手不读取.env。CLI沿用--config默认root/configs、--profile默认deepseek_flash，新增--input为必填Path（本轮不能推断用户要评哪份证据），打印ensure_ascii=False／indent=2的JSON；不新增run-name、时间戳或另套命名，不在core读文件／建模型。文件核心由用户写，保存后助手检查main／CLI并用假客户端验证，届时才给真实API命令由用户亲自运行；不能把“好了／继续”当代跑授权。
+
+三份本地控制输入已准备在data/evaluation/evidence_review/smoke_01，文件仅含query与hits，不含gold／预期动作／答案。screening_missing_evidence.json为已知筛查目的但只给偶发范围材料；unknown_purpose.json为目的缺失且两类场景材料都有；screening_scope_available.json为已知筛查目的且有筛查范围材料、尺寸缺失但只问框架。证据原样取自医学v3的acr-lungrads-scope::b0001与acr-incidental-2023::b0011，保留id／text／source_id／locator，不下载、不改主库、不重跑检索。这三组仅用于真实调用联调和缺口行为观察，不能替代正式CT开发题／独立复核或成品规模评测。输入和验证报告处于Git忽略目录，仅本地可见；文档记录复现来源。
+
 **2026-11-26 README 展示改版：** 用户要求仿照此前提供的Adaptive-rag项目排版。助手读取固定版本README，将本项目首页整理为居中标题／徽章／导航、能力表、当前架构图、CLI快速开始、实测结果、数据、文档导航、折叠目录、路线图与来源说明；历史阶段细节转由已有文档链接承接，没有删除历史记录。仅展示本项目实际成绩，明确LangGraph／多模态／服务尚未完成，不借用参考仓库指标、UI截图、CI或许可证徽章。文档链接只指向已跟踪文件，说明data／cache／results为本地忽略目录；命令按实际--config及现有参数核对。本轮不运行模型、API、数据下载或评测；用户未跟踪核心文件、Notebook删除与其他本地改动保持原样。证据评估任务继续保留；本地evidence_review.py已出现，尚未审查验收，不作为已实现能力。
 
-**2026-11-26当前核心任务：用户编写evidence_review.py，实现一轮证据充分性评估；本地已新建，尚未审查验收。** 已核对Self-RAG论文／官方项目（训练reflection tokens，不宣称本项目复现或训练该模型）、LangGraph官方agentic RAG示例（文档相关性路由）、ALCE引用评测论文及此前固定Adaptive-rag的GradeResult／SelfRAGLoop。原B1仅Notebook内build_context和自然语言生成，尚无可直接调用的逐条结构化回答模块。先做生成前的充分性评估，之后再接逐条结论支持核验与图控制，不将两者混称已完成。新函数接原始完整query（可为Report+Question）与本轮hits，通过现有LangChain结构化输出判断能否回答当前问题，缺病例事实还是缺证据；后续作为LangGraph review节点调用的业务函数，不依赖Notebook或另复制检索器。
+**2026-11-26核心任务约定（已通过上方18项分支验收）：用户编写evidence_review.py，实现一轮证据充分性评估。** 已核对Self-RAG论文／官方项目（训练reflection tokens，不宣称本项目复现或训练该模型）、LangGraph官方agentic RAG示例（文档相关性路由）、ALCE引用评测论文及此前固定Adaptive-rag的GradeResult／SelfRAGLoop。原B1仅Notebook内build_context和自然语言生成，尚无可直接调用的逐条结构化回答模块。先做生成前的充分性评估，之后再接逐条结论支持核验与图控制，不将两者混称已完成。新函数接原始完整query（可为Report+Question）与本轮hits，通过现有LangChain结构化输出判断能否回答当前问题，缺病例事实还是缺证据；后续作为LangGraph review节点调用的业务函数，不依赖Notebook或另复制检索器。
 
 固定本轮接口review_evidence(query,hits,*,llm)，schema EvidenceReview五个必填字段：relevant_evidence_ids:list[str]、sufficient:bool、missing_case_facts:list[str]、missing_evidence:list[str]、reason:str。列表允许显式空列表，不设缺省空列表以免模型漏字段被静默补齐；reason用Field(min_length=1)并在函数内检查全空白。相关IDs指hits的id而非source_id；相关性不等于该材料适用于当前病例，sufficient须看问题范围和来源条件。两个missing列表仅记录阻碍当前问题的必要缺项，不能把后续分级／随访所需条件提前设为框架选择前提。query须是原问题，不能仅传改写表达；不传qrels、gold或expected_behavior给模型。
 
@@ -787,7 +793,7 @@ Agentic RAG 的预期价值是根据问题和证据缺口选择下一步，而�
 
 #### 10.5.1 当前用户编写任务：单轮证据充分性评估
 
-任务提出日2026-11-26，核心尚未实现。新建根目录evidence_review.py，提供EvidenceReview和review_evidence(query,hits,*,llm)。这是生成前评估函数，后续供LangGraph节点直接调用；不依赖Notebook，不在内部创建客户端、检索、生成答案、重试或循环。本轮用户先写核心，助手检查实际保存文件并用CPU假响应核对；真实API及所有模型运行继续由用户执行。
+任务提出日2026-11-26；用户现已实现根目录evidence_review.py，并通过18项假响应检查，尚无真实API成绩。提供EvidenceReview和review_evidence(query,hits,*,llm)。这是生成前评估函数，后续供LangGraph节点直接调用；不依赖Notebook，不在内部创建客户端、检索、生成答案、重试或循环。助手检查实际保存文件并用CPU假响应核对；真实API及所有模型运行继续由用户执行。下一步薄入口与三份本地控制输入见第1节最新记录。
 
 参考边界：
 
