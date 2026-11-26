@@ -6,6 +6,14 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27当前：用户公开PubMedQA单题真实联调已通过只读核查，下一项在已有benchmark_eval.py增量实现离线QA评分。** pubmedqa_closed_book_smoke_1_01保存1条有效结构化响应，模型标识deepseek-flash，closed_book且引用为空；481输入＋125输出＝606 tokens、cache_read=0，核心调用947.077ms，整进程1.71s、RSS179624KiB、退出0。日志JSON与逐题文件一致，开发材料／公开配置／读取器SHA均相符。当前核心SHA=a4aa6725fd2311d8d5c7abab21fb59048925e0675a8f99bc8a51b7d75ad1718d；相对14项验收版本只删除两条无用导入，全部类／函数AST相同，无须重跑模型或原14项。助手仅核对本地原件并新建results/pubmedqa_closed_book_smoke_1_01_validation.json，三份原件及原未执行准备记录未改，没有新的API调用。这里只确认真实接口和记账，不验证reason中的医学断言、不计算单题准确率或评价模型效果；完整500开发及7663最终对标未运行。
+
+下一用户任务：在原benchmark_eval.py添加evaluate_multiple_choice(questions_df, gold_answers, answer_records)，不新增脚本或改原BEIR函数。纯离线、只接收已保存回答，不检索／加载模型／读取.env。questions_df仍四列id／task／query／options，gold为全局id到答案键；answer_records复用实际JSONL外层query_id及result，其中result为核心七字段返回。建立record_map时拒绝重复，参评题号／gold／记录题号集合要求完全一致，题目表非空且ID唯一；不将未完成文件当完整成绩。按题目表顺序处理，核对result.original_query匹配，状态只能ok／error；ok取answer_choice且要求属于本题选项，error保留predicted_answer=None、correct=0，不丢失败题。逐题表六列query_id／task／gold_answer／predicted_answer／status／correct；返回eval_df及summary。
+
+summary包含query_count／ok_count／error_count／accuracy／per_task／macro_accuracy；accuracy是全部题目平均，macro_accuracy是参评子任务准确率的等权平均，全MIRAGE时需五部分齐全。per_task保存题数／准确率；pubmedqa另按原作者报告macro_f1。使用已安装scikit-learn 1.9.1的f1_score，按该任务options键集合建立合法类别到非负整数的映射，失败预测用-1，labels只列合法类别编号，average="macro"、zero_division=0；失败造成真实类别漏判，不添加第四个类别。原作者evaluation.py报告Accuracy／Macro-F1且要求完整题号集合，MIRAGE原evaluate.py按子任务准确率等权平均，本轮已浏览核实；本项目的失败输出政策需明确报告，不能声称原样复现解析回退行为。数值软件例：真值0／1／2、预测0／0／-1时Accuracy=1/3、Macro-F1=2/9；不是新增医学评测题。聊天需具体说明循环变量、字段赋值、分组与F1参数，用户写核心；尚无该函数或批量QA成绩。
+
+以下单题“待用户运行”和旧核心SHA属于此前准备检查点，原记录保留；当前以上方真实联调验收及离线评分任务为准。
+
 **2026-11-27当前：用户qa_core.py已完成响应处理，14项本地软件行为检查通过；下一项由用户亲自运行公开开发池单题真实联调。** 当前源码SHA=5029c01bde71ccf4426ee18014a2958e46709a816711455303a0a9f5873c97ca。有效RAG／无检索／空命中RAG／动态选项键成功，解析失败／缺parsed／同时有parsed和解析异常／越界答案／纯空白理由／未知引用／无检索引用均返回error且answer=None；已知用量和原始元数据保留，未知用量保持None。两种本地调用异常对象原样上抛，输入和原响应未改，每场景只调用一次替身。results/qa_core_validation_01.json记录实际14项及源码身份，仅软件验收，无模型／API调用或医学成绩。首次辅助检查误将异常对象深拷贝后比较导致误报，已改检查方式，未为检查工具修改核心；不是新的工程常见问题条目。文件顶部两条未用导入仅属可清理项，不阻塞行为验收。
 
 下一项使用既有deepseek_flash配置及公开PubMedQA开发池的第一道题，仅closed_book、一次核心调用，确认真实结构化回答／用量／响应模型标识。标准答案和题号不进入模型，MIRAGE最终测试不动，不据单题给模型排名或准确率。命令在聊天给出，不新增项目入口，直接从终端调用现有读取器与核心；运行名pubmedqa_closed_book_smoke_1_01，保护_results.jsonl／_run.log／_resources.txt三件。结果内保存题号、选项、公开profile、输入／源码指纹、qa_latency_ms和完整七字段返回，不保存密钥；沿用项目环境与dotenv／ChatDeepSeek构造，max_retries=0。准备记录results/pubmedqa_closed_book_smoke_1_01_preparation.json保留完整命令／Python源码及指纹，状态prepared_not_executed，仅bash -n和AST检查，助手没有执行其中API代码。用户运行后再读真实日志与结果，不提前写成已通过真实联调。后续正式批量及RAG仍复用当前核心，完整500开发比较与7663最终对标未运行。

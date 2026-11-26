@@ -41,7 +41,7 @@
 
 文件benchmark_data.py，新增load_mirage_dataset(benchmark_path, *, task=None)，已有两个函数保持。使用标准库json、已有Path与pandas，不增加脚本或依赖。benchmark_path显式指向固定raw/sha256-snapshot/benchmark.json；task为None读取全部，或精确选择五个任务键之一；这是原始评测集合读取，不伪造split=dev。
 
-输入结构是外层任务字典→任务内原题号字典→题目记录，不是JSONL。用json.load读一次；task为None选原任务顺序，否则只选该任务。每任务按sorted(任务内字典)遍历字符串题号，不能先转int；全局id取“任务名:原题号”，例如medqa:0000。每行只选id／task／query／options，query保持原question字符串、options保持原字典，不拼成检索表达；标准答案另存gold_answers[id]=原answer。PMID和其他gold材料不进入题目表，原始文件保持完整。
+输入结构是外层任务字典→任务内原题号字典→题目记录，不是JSONL。当前实现用json.loads(benchmark_path.read_text(encoding="utf-8"))读取；task为None选原任务顺序，否则只选该任务。每任务按sorted(任务内字典)遍历字符串题号，不能先转int；全局id取“任务名:原题号”，例如medqa:0000。每行只选id／task／query／options，query保持原question字符串、options保持原字典，不拼成检索表达；标准答案另存gold_answers[id]=原answer。PMID和其他gold材料不进入题目表，原始文件保持完整。
 
 返回questions_df与gold_answers两个对象。前者四列按id、task、query、options排列，后者为id到选项键的字典，双方ID集合相同且唯一；它不是检索qrels，没有文档相关性分数。检查任务存在、问题非空、options为非空字典且键／文本有效、answer属于options；空白检查不改写原问题或选项。不强制某种异常名称，不把题数硬编码进业务读取器。原模型／凭证／缓存／检索与评分均不在本函数中。
 
@@ -59,13 +59,13 @@
 
 prepared/benchmark.json的SHA-256为2afd9c360b5b59dd07059743630358f1f480be46650e4f5cb53f1e0756d6ca82。真实运行3.95s、RSS74076KiB、退出0，无模型调用；原文件、manifest、用户日志和资源已只读核对，记录results/pubmedqa_development_prepare_01_validation.json。此前_preparation.json仍保留准备时未执行状态，不事后改写。已有包只离线核验，--verify-only缺包不会下载。
 
-### 当前用户任务：实现选择题生成核心
+### 选择题生成核心：已完成单题联调
 
-当前任务只实现qa_core.py，不新增批量入口或评分脚本。现有query_rewrite.py负责改写，evidence_review.py明确只核验不回答，benchmark_data.py负责保真读取；生成有独立职责，因此新增这一个核心模块有必要。具体代码仍由用户写，助手只审查，不代跑真实调用。
+本单元的生成核心为qa_core.py，不新增单题项目入口。现有query_rewrite.py负责改写，evidence_review.py明确只核验不回答，benchmark_data.py负责保真读取；生成有独立职责，因此新增这一个核心模块有必要。具体代码由用户写，助手只审查，不代跑真实调用。
 
 2026-11-27当前实现检查点：用户已完成输出类、输入整理、两模式消息和响应处理，源码SHA=5029c01bde71ccf4426ee18014a2958e46709a816711455303a0a9f5873c97ca。results/qa_core_validation_01.json记录14项本地检查：四类有效回答成功、七类无效输出拒绝、未知用量保留None、两种调用层异常原样传播；输入与原响应未改、已知用量与元数据保留，每次只调用一次替身。首次辅助比较对异常深拷贝产生误报，修正辅助方法后通过，核心未改。此前消息构造SHA=f68582d7f34250fee61dd970ed02c6eded21ebd74c82e57c7bfc78830e1d4dea和输入整理SHA=591b4e8bf03bb0e3f9e0b67fbf9ff2796d7212c082ff44d0ef8fb20c27653d97作为历史记录。没有真实API调用、永久新测试脚本或助手核心修改，软件验收不代表医学效果。
 
-下一项由用户运行pubmedqa_closed_book_smoke_1_01：既有deepseek_flash、公开开发池第一题、closed_book一次核心调用，标准答案和题号不进入模型。聊天给终端命令，不新增项目入口；沿用项目环境、公开configs、dotenv与客户端构造，max_retries=0，保护_results.jsonl／_run.log／_resources.txt。逐题保存配置／输入／源码身份、单次qa_latency_ms及完整核心返回，不据单题计算准确率。准备记录results/pubmedqa_closed_book_smoke_1_01_preparation.json状态未执行，助手只作bash -n／AST检查；实际API仍由用户运行并贴出。全500开发及MIRAGE7663最终对标仍待完成。
+用户已运行pubmedqa_closed_book_smoke_1_01并通过只读核查：现有deepseek_flash、公开开发池第一题、closed_book；返回一条有效结构化回答、无引用，481＋125＝606 tokens，调用947.077ms、整进程1.71s、RSS179624KiB、退出0，实际模型标识与profile一致。日志与逐题JSON相同，材料／配置／读取器指纹一致；核心只删除两条无用导入，SHA=a4aa6725fd2311d8d5c7abab21fb59048925e0675a8f99bc8a51b7d75ad1718d，函数／类AST与14项软件验收版本相同。results/pubmedqa_closed_book_smoke_1_01_validation.json保留原三文件SHA及核查边界，原件和准备记录不覆盖，助手未重跑API。不验证回答中的医学断言，不计算单题准确率；全500开发及MIRAGE7663最终对标仍待完成。
 
 **先固定答题语义。** [MedRAG官方模板](https://github.com/gzxiong/MedRAG/blob/main/src/template.py)的无检索与RAG选择题均要求给出一个确定选项。本核心按该MCQ协议选择最佳答案，RAG参考相关材料并允许结合内部知识；材料无关或不足时说明限制、不伪造引用，不能将找不到证据自动映射成PubMedQA的maybe。maybe是专家定义的有效科学结论选项。临床产品的严格证据核验、追问／补查／停止仍由evidence_review及后续Agent控制，不能将基准强制选择行为直接当临床建议。简短理由、结构化输出和引用记录是本项目设置，不照搬原模板的逐步思维字段；未来成绩说明该差异，不宣称严格复现原分数。
 
@@ -83,6 +83,18 @@ prepared/benchmark.json的SHA-256为2afd9c360b5b59dd07059743630358f1f480be46650e
 6. 客户端/API调用失败和编程异常不在核心中用宽泛except变成空答案；之后批量调用层再按现有模式记录API错误并保留题数。不要本轮提前新增运行入口。
 
 保存后的离线验收：同一函数能接收A／B二选项和A／B／C三选项；两模式消息与四字段上下文正确，输入对象未改；仅一次调用；解析失败／越界答案／未知引用／空白理由保持error、answer=None且保留已知用量；closed_book的引用／上下文规则成立；有效结果不含gold。空RAG命中仍为rag，既不强制maybe也不伪造引用。只用内存假客户端检查软件协议，不新增合成benchmark题或证明医学准确率，不运行真实模型。通过后再接实际PubMedQA开发池的用户单题／批量运行；全500是开发比较，全7663仍是最终目标。
+
+### 当前用户任务：离线QA评分
+
+在已有benchmark_eval.py增量添加evaluate_multiple_choice(questions_df, gold_answers, answer_records)，不新增脚本、不改变原BEIR评分。只读取调用者传入的内存对象，不检索或调用模型。questions_df四列id／task／query／options；gold_answers为id到标准答案键；answer_records直接采用本次保存结构，外层query_id、内层result.status与result.answer.answer_choice。返回逐题eval_df和summary，后续无检索／BM25／Dense／RRF共用。
+
+先检查题目表非空、ID唯一、gold键集合一致；逐条建立record_map并拒绝重复，最后要求记录题号集合与本次参评表完全一致。只保存一题的联调文件不能拿去当500题完整结果，API失败也需批量层保存错误行后计错。按questions_df.iterrows()遍历，核对result.original_query与该题query相同，状态只允许ok／error。ok取实际answer_choice并检查属于本题options，error的predicted_answer=None、correct=0；不删除失败行，不改成默认A，不重复检查reason或引用支持。逐题表六列query_id／task／gold_answer／predicted_answer／status／correct，其中correct是0或1。
+
+summary为query_count、ok_count、error_count、accuracy、per_task、macro_accuracy。全局accuracy对所有行的correct求均值；按task分组保存每组题数和准确率，macro_accuracy对参评子任务准确率等权平均。全MIRAGE正式报告必须包含五个任务，不能将只包含一个任务的平均称全量成绩。
+
+PubMedQA另报告macro_f1，依据[原作者评分脚本](https://github.com/pubmedqa/pubmedqa/blob/master/evaluation.py)；MIRAGE任务间准确率等权平均依据[作者评测代码](https://github.com/gzxiong/MIRAGE/blob/main/src/evaluate.py)，本轮于2026-11-27重核。使用已安装scikit-learn 1.9.1的f1_score，按该任务options键并集排序生成label_to_index；gold用映射转整数、失败预测用-1，labels显式只列合法非负编号，average="macro"、zero_division=0。失败仍记入相应真实类漏判，不把错误符号当第四类。此失败政策与结构化解析差异须说明，不能称原脚本原样复现。数学验收例真值0／1／2、预测0／0／-1：Accuracy=1/3、Macro-F1=2/9，仅软件算术例而非新增医学benchmark。
+
+当前函数尚未实现，核心仍由用户写；聊天具体说明record_map构造、逐题字段／失败分支、groupby与F1参数。保存后先离线检查，再接用户批量生成，不提前运行500次API。
 
 ## 2026-11-24 当前实测进度
 

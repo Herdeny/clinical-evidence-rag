@@ -1,12 +1,12 @@
 # 现在应该看哪些文件
 
-**当前用户任务：亲自执行公开开发池单题真实问答联调。** 用户qa_core.py已完成响应处理及统一七字段返回，2026-11-27的14项本地假响应检查通过，有效／无效回答、用量保留及异常传播符合约定。尚无真实QA API结果或医学成绩；下一项用已有deepseek_flash、官方PubMedQA开发池第一题、closed_book调用一次，从终端复用读取器与核心，不新增项目入口。完整命令／边界在聊天说明，准备记录pubmedqa_closed_book_smoke_1_01_preparation.json未执行；完整任务见[对标记录](benchmark_scope.md#当前用户任务实现选择题生成核心)。助手未修改核心或运行真实API。
+**当前用户任务：在已有benchmark_eval.py增量实现离线QA评分。** 用户已完成真实PubMedQA单题联调：deepseek-flash、closed_book、有效结构化回答及空引用，481＋125＝606 tokens、调用947.077ms。原三文件、输入／代码身份和元数据只读核对通过；核心仅删除两条无用导入，函数／类结构未改，不重复运行模型。下一项添加evaluate_multiple_choice(questions_df, gold_answers, answer_records)，返回六列逐题表与完整分母下的准确率／子任务宏平均及PubMedQA macro-F1，不新增脚本；详细任务在[离线评分](benchmark_scope.md#当前用户任务离线qa评分)。函数尚未实现，没有批量QA成绩，助手未代跑API。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 
 **最新验收：load_mirage_dataset已通过离线读取验证。** 全量(7663,4)与7663项答案字典、五任务数量／顺序、原文／选项／答案保真、唯一ID和独立gold均通过；空与未知任务名正确拒绝，三份原件及旧函数AST未变。既有BEIR的9项测试通过；没有模型／API调用。验证保存在本地results/mirage_loader_validation_01.json，先前review_01／02保留。按用户仅本次要求通过codex/mirage-dataset-loader分支创建PR后直接合并；后续恢复原提交同步方式。
 
-**已实现：benchmark_data.py中的load_mirage_dataset(benchmark_path, *, task=None)。** MIRAGE五上游公开声明与任务角色已核查；五部分都作最终评测，上游dev不等于本项目调参集。函数返回四列questions_df（id／task／query／options）和单独gold_answers；不传answer／参考PMID给检索或生成。按官方sorted字符串题号，保留前导零和原文本，None读取全量7663，单任务可选。完整约定与验收见[读取适配记录](benchmark_scope.md#mirage读取函数已验收)；无新脚本、无模型运行。独立官方开发池现已准备，QA生成尚待用户实现。
+**已实现：benchmark_data.py中的load_mirage_dataset(benchmark_path, *, task=None)。** MIRAGE五上游公开声明与任务角色已核查；五部分都作最终评测，上游dev不等于本项目调参集。函数返回四列questions_df（id／task／query／options）和单独gold_answers；不传answer／参考PMID给检索或生成。按官方sorted字符串题号，保留前导零和原文本，None读取全量7663，单任务可选。完整约定与验收见[读取适配记录](benchmark_scope.md#mirage读取函数已验收)。独立官方开发池及QA单题已完成，批量生成和正式QA评分待完成。
 
 **2026-11-26最新要求：评测只用可核查的公开benchmark。** 324题来自NFCorpus官方dev，120题来自助手自建CT初稿，二者不能混称。刚提出的120题运行计划已撤回，未执行；自建题及成绩仅保留历史，不继续扩题、调参或作效果依据。当前公开主线为已完成dev对照的NFCorpus及待QA适配的MIRAGE7663；下一项先核查MIRAGE上游条件与开发／测试协议，再复用既有模块增量接入。专项追问／引用／多模态需另选覆盖相应标注的公开benchmark。详见[当前评测范围](benchmark_scope.md#2026-11-26仅使用可核查的公开benchmark)，以下CT待运行安排按历史理解。
 
@@ -27,7 +27,7 @@ PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
 | rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | query_rewrite.py | 单题真实CT通过；批量rewrite_queries已通过4题混合假响应及编程异常传播检查，失败记录／用量保留；无批量API或改写检索收益 | 用户；助手未修改核心 |
-| qa_core.py | 输出类、输入整理、两模式消息及响应校验／七字段返回通过14项本地检查；待用户真实单题联调，无问答成绩 | 用户；助手只读检查，未修改核心 |
+| qa_core.py | 14项软件检查及用户公开开发池真实单题联调通过；用量／模型标识可回查，无批量准确率成绩 | 用户；助手只读检查，未修改核心 |
 | evidence_review.py | 五字段与单轮评估通过18项假响应检查；用户完成提示词增量及Flash／V4 Pro三题对照，仍有任务边界与报告事实混淆，待正式开发验证 | 用户；助手只读审查，未改核心 |
 | run_query_rewrite.py | 独立读取LLM配置、加载项目环境并单次调用核心；用户真实CT单题通过，422／96／518 tokens，CLI已统一--config | 用户；助手只纠正CLI参数，业务函数未改 |
 | run_query_rewrite_batch.py | 指定划分／limit、共享客户端、保存结果；用户真实8题已核验，1变化有语义观察，尚无检索收益 | 用户；助手未修改实现 |
