@@ -6,9 +6,13 @@
 
 ## 1. 当前应从哪里继续
 
-**2026-11-26最新验收：用户的单轮证据评估核心通过18项假响应检查，下一步用户写run_evidence_review.py；尚无真实API评估结果。** evidence_review.py源码SHA-256=bf2d2b96a8c54e2d56d5defc07d8095e205279967d75563b9f4bd1ab1c56eeeb，助手未修改核心。18项涵盖充分、两类正常不足、空证据充分／不足、未知ID、两类缺项与充分性矛盾、空白reason／缺项／ID、无法定位具体缺口、解析失败／无parsed、输入重复ID／空query及调用异常自然传播；另核对单次invoke、六字段、保留原问题与metadata、输入不变和不把score传入证据提示。记录results/evidence_review_core_validation_01.json；这是数据流与分支验收，不是医学准确率、证据支持率或真实模型成绩。已有未使用导入与注释用词不作为核心返工门槛。
+**2026-11-26最新验收：用户的单轮证据评估核心通过18项假响应检查；下一步增量扩展原CT评测链路，不新建独立运行脚本。** evidence_review.py源码SHA-256=bf2d2b96a8c54e2d56d5defc07d8095e205279967d75563b9f4bd1ab1c56eeeb，助手未修改核心。18项涵盖充分、两类正常不足、空证据充分／不足、未知ID、两类缺项与充分性矛盾、空白reason／缺项／ID、无法定位具体缺口、解析失败／无parsed、输入重复ID／空query及调用异常自然传播；另核对单次invoke、六字段、保留原问题与metadata、输入不变和不把score传入证据提示。记录results/evidence_review_core_validation_01.json；这是数据流与分支验收，不是医学准确率、证据支持率或真实模型成绩。已有未使用导入与注释用词不作为核心返工门槛。
 
-当前下一任务是薄入口run_evidence_review.py，不复制检索或评估业务：main(config_dir,input_path,*,profile_name)先读取输入JSON和configs/llm_profiles.json的选定profile，再按run_query_rewrite.py已有方式load_dotenv(root/".env",override=False)、构造一个ChatDeepSeek，调用review_evidence(payload["query"],payload["hits"],llm=llm)并原样返回六字段结果。入口可读取凭证；助手不读取.env。CLI沿用--config默认root/configs、--profile默认deepseek_flash，新增--input为必填Path（本轮不能推断用户要评哪份证据），打印ensure_ascii=False／indent=2的JSON；不新增run-name、时间戳或另套命名，不在core读文件／建模型。文件核心由用户写，保存后助手检查main／CLI并用假客户端验证，届时才给真实API命令由用户亲自运行；不能把“好了／继续”当代跑授权。
+用户指出“又新建脚本，先看看能不能增量开发”，助手已撤回run_evidence_review.py／独立--input入口方案，未创建或删除该脚本。已只读检查run_retrieval_eval.py、retrieve_evalution.py、run_benchmark_eval.py、两个改写入口和保存辅助。临床evaluate_retrieval已有原始Report+Question与完整retrieved_results，是可选核验的合适扩展点；BEIR的qrels与nDCG继续负责检索排序，改写入口保持专职，不为减少文件而把无关任务塞进同一main。先复用再决定新文件，且检查保存和后续图接入，不只凭“入口很薄”新增脚本。
+
+当前用户任务只改retrieve_evalution.py中的evaluate_retrieval：签名增加仅关键字参数review_fn=None，旧三参数及默认输出保持；沿用每题一次retrieve_fn(query,max(ks))与原检索计时、评分。在eval_rows.append前，若review_fn非None，单次调用review_fn(query,retrieved_results)，将完整六字段返回字典存入eval_case["evidence_review"]，另用perf_counter计review_latency_ms。一次传整题证据列表，不按证据逐条请求；不传case、eval_case或gold给模型。不在评测核心创建客户端、读配置或凭证，不直接依赖ChatDeepSeek；未开启时不增加核验列，不改变旧检索结果／指标，status=error也保留该题，不过滤。回调本身抛出的异常暂自然传播，API失败记录／续跑策略在真实批量接入前明确处理，不让程序错误伪装成证据不足。
+
+后续在原run_retrieval_eval.py按需接入--review、既有风格--config／--profile，默认review关闭。只开启时构造一个客户端，通过partial(review_evidence,llm=llm)绑定后传给review_fn；同一回调支持原BM25／Dense／RRF，保留原方法、缓存、路径与run-name约定。保存辅助已读取：整张结果表copy后to_json，能保留新增嵌套核验列；后续补核验摘要／实际LLM配置、明确计时范围，并在付费调用前保护已有输出。正式批量前处理API失败不丢费用／题目、限制联调题数与全量分母；不把当前保存器整集ID校验强塞给抽样运行，也不在本轮无需求改用户核心。后续LangGraph节点调用review_evidence同一函数，产品服务不能通过读取gold并评分的main运行。本轮只交上述评测回调增量，由用户写核心，助手不运行模型／API／GPU。
 
 三份本地控制输入已准备在data/evaluation/evidence_review/smoke_01，文件仅含query与hits，不含gold／预期动作／答案。screening_missing_evidence.json为已知筛查目的但只给偶发范围材料；unknown_purpose.json为目的缺失且两类场景材料都有；screening_scope_available.json为已知筛查目的且有筛查范围材料、尺寸缺失但只问框架。证据原样取自医学v3的acr-lungrads-scope::b0001与acr-incidental-2023::b0011，保留id／text／source_id／locator，不下载、不改主库、不重跑检索。这三组仅用于真实调用联调和缺口行为观察，不能替代正式CT开发题／独立复核或成品规模评测。输入和验证报告处于Git忽略目录，仅本地可见；文档记录复现来源。
 
@@ -793,7 +797,7 @@ Agentic RAG 的预期价值是根据问题和证据缺口选择下一步，而�
 
 #### 10.5.1 当前用户编写任务：单轮证据充分性评估
 
-任务提出日2026-11-26；用户现已实现根目录evidence_review.py，并通过18项假响应检查，尚无真实API成绩。提供EvidenceReview和review_evidence(query,hits,*,llm)。这是生成前评估函数，后续供LangGraph节点直接调用；不依赖Notebook，不在内部创建客户端、检索、生成答案、重试或循环。助手检查实际保存文件并用CPU假响应核对；真实API及所有模型运行继续由用户执行。下一步薄入口与三份本地控制输入见第1节最新记录。
+任务提出日2026-11-26；用户现已实现根目录evidence_review.py，并通过18项假响应检查，尚无真实API成绩。提供EvidenceReview和review_evidence(query,hits,*,llm)。这是生成前评估函数，后续供LangGraph节点直接调用；不依赖Notebook，不在内部创建客户端、检索、生成答案、重试或循环。助手检查实际保存文件并用CPU假响应核对；真实API及所有模型运行继续由用户执行。独立薄入口方案已撤回，下一步原CT评测可选review_fn增量与三份本地控制输入见第1节最新记录。
 
 参考边界：
 
@@ -974,6 +978,8 @@ B0 直接调用 SentenceTransformer 是已完成的历史实现；新代码从�
 教学任务要形成可复用的产物，例如带来源和位置的章节记录，而不是停留在打印结果。提前设计范围以支撑已确定的后续步骤为限，不为假想需求扩建大框架，也不跳过必要的学习和验收。
 
 ### 13.8 全部任务按成品方向增量开发，保持标准连续
+
+用户于2026-11-26再次要求在新建脚本前检查能否增量接入。证据评估核心验收后，助手未经充分检查就要求新增run_evidence_review.py，此安排已撤回，改为原evaluate_retrieval的可选回调及原run_retrieval_eval.py按需开启。新增业务核心模块与为同一流程重复增加运行脚本应分别判断；不能为减少文件机械合并无关职责，也不能以新脚本行数少替代已有扩展点审查。
 
 用户于2026-11-26进一步指出：查询改写应复用原多方法入口，通过可选参数改变检索表达，不能因为当前先做Dense就复制一个仅Dense的完整入口，导致BM25／RRF以后重复接入。新增功能先检查已有函数参数和扩展位置；已接受的通用评测函数保留，方法构建与查询表达选择分别处理。实验先后顺序不等于代码能力限制；撤回方案及时替换当前任务记录，用户已写草稿保留供迁移，不擅自删除。
 

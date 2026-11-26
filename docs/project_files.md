@@ -2,7 +2,7 @@
 
 整理日期：2026-11-19，进度更新2026-11-26。根目录本次纳入evidence_review.py后共21个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法02，助手只读核验1944条指标通过：改写收益很小且不一致，保留原查询默认及改写可选。单轮证据评估核心已通过18项假响应检查，真实评估、有限补查与图编排待完成。此前助手误代跑01及权限纠正保留于PROJECT_CONTEXT.md，8题只验流程；既有实测、负结果及历史异常保留。
 
-当前用户下一任务为run_evidence_review.py薄入口，按已有run_query_rewrite.py的方式加载配置及客户端，读取只含query／hits的JSON，调用已完成的review_evidence并打印结果。CLI为--config／--profile／--input；不新增run-name或时间戳。三份本地控制输入位于data/evaluation/evidence_review/smoke_01；来源与任务详见PROJECT_CONTEXT.md第1节和10.5.1。保存入口后先用假客户端验证，再由用户运行真实API；助手不代写核心或代跑。后续LangGraph节点直接复用review_evidence；逐条生成结论的引用支持核验另接。
+当前用户下一任务改为原retrieve_evalution.py的evaluate_retrieval增量：增加review_fn=None可选回调，开启时每题传原始query及完整retrieved_results，保存完整evidence_review字典与单独review_latency_ms；关闭时旧输出保持。独立run_evidence_review.py方案已撤回且未创建。随后原run_retrieval_eval.py按需配置一个客户端并以partial绑定，三方法共同复用；保存辅助已能保留附加列，核验摘要和真实批量的API失败记录／预算／输出保护在付费运行前完成。三份既有本地控制输入仍位于data/evaluation/evidence_review/smoke_01，保留不冒充实际检索结果。完整任务见PROJECT_CONTEXT.md第1节与10.5.1。助手不代写核心或代跑，后续LangGraph直接复用review_evidence，不依赖含gold的评测main。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
