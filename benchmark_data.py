@@ -1,5 +1,7 @@
+import json
 import pandas as pd
 from pathlib import Path
+
 def load_beir_dataset(data_dir, *, split="dev"):    
     data_dir_path = Path(data_dir).resolve()
     qrels_dir_path = data_dir_path / "qrels" / f"{split}.tsv"
@@ -122,4 +124,43 @@ def apply_query_rewrites(queries_df, rewrite_records):
         result_df.at[index, "rewrite_status"] = rewrite_status
     
     return result_df
-        
+    
+def load_mirage_dataset(benchmark_path, *, task=None):
+    benchmark = json.loads(benchmark_path.read_text(encoding="utf-8"))
+    questions = list()
+    gold_answers = dict()
+    
+    if task is None:
+        selected_tasks = list(benchmark)
+    else:
+        if task not in benchmark:
+            raise ValueError(f"Unknown task: {task}")
+        selected_tasks = [task]
+    
+    for task in selected_tasks:
+        for quest in sorted(benchmark[task]):
+            global_id = f"{task}:{quest}"
+            query = benchmark[task][quest]["question"]
+            options = benchmark[task][quest]["options"]
+            answer = benchmark[task][quest]["answer"]
+            
+            if not type(query) == str or not query.strip(): raise ValueError("Invalid query")
+            if not type(options) == dict or not options: raise ValueError("Invalid options")
+            for key, value in options.items():
+                if not type(key) == str or not key.strip(): raise ValueError("Invalid option key")
+                if not type(value) == str or not value.strip(): raise ValueError("Invalid option value")
+            if answer not in options: raise ValueError("Invalid answer")
+            
+            question = {
+                "id": global_id,
+                "task": task,
+                "query": query,
+                "options": options
+            }
+            
+            questions.append(question)
+            gold_answers[global_id] = answer
+
+    questions_df = pd.DataFrame(questions)
+
+    return questions_df, gold_answers

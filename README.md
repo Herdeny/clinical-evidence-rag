@@ -212,7 +212,7 @@ Qwen3 8B 重排相对原 Dense 的 nDCG@10 提升 **6.22%（相对值）**；4B 
 | 材料 | 规模 | 用途与状态 |
 |:---|:---|:---|
 | NFCorpus | 3,633 文档；324 dev 查询 | 已完成检索、重排与改写对照；官方 test 未运行 |
-| MIRAGE | 7,663 道公开医学问答题 | 原始快照及五上游公开发布声明已核查；问答适配和全量模型对标待完成，是最终验收项 |
+| MIRAGE | 7,663 道公开医学问答题 | 快照、五上游公开声明及全量／单任务读取已核验；完整问答链路和全量模型对标待完成 |
 
 NFCorpus 使用其配套文档和 qrels；医学主语料用于项目业务验证；MIRAGE 保持独立，不把标准答案或给定支持上下文塞入检索。数据来源、许可筛选和处理边界见[语料调研](docs/medical_corpus_v3_research.md)、[采集处理](docs/data_acquisition_and_processing.md)与[对标要求](docs/benchmark_scope.md)。
 
@@ -246,7 +246,7 @@ clinical-evidence-rag/
 ├── embedding_index.py            # 分批编码与缓存恢复
 ├── embedding_cache_io.py         # 向量缓存持久化
 ├── frozen_candidates_io.py       # 固定候选及来源核对
-├── benchmark_data.py             # BEIR 数据读取与查询适配
+├── benchmark_data.py             # BEIR／MIRAGE 数据读取与查询适配
 ├── benchmark_eval.py             # 共同评测与配对对照
 ├── run_benchmark_eval.py         # BM25／Dense／RRF 评测入口
 ├── run_reranking_eval.py         # 固定候选重排入口
