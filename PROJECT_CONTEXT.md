@@ -6,6 +6,16 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26最新：用户3题真实联调完成，接口通过但观察到核验语义错误；下一步用户运行受控上下文对照。** medical_v3_bm25_ct_review_smoke_3_01四份原件、输入身份、六项Recall、用量及分阶段均值／中位数已只读复核，原件未改。3题／783847片段，三次结构化结果ok且均自评不足；6333输入＋1194输出=7527 tokens，缓存读取768已计入输入，不另加。检索均值4428.608ms、评估2900.038ms；整进程56.91s，RSS18115052KiB（17.276GiB），退出0。三题Top-5 ID与分数同旧BM25对应结果，精确ID六项Recall均为0；不能据3题对整体方法定性，也不能将ok=3当医学判断正确。验证results/medical_v3_bm25_ct_review_smoke_3_01_validation.json；助手未重跑检索／模型／API／GPU。
+
+逐题问题：CT2-001把尺寸列为框架选择的必需事实；CT2-002混同筛查资格与已完成筛查的框架命名，要求补吸烟暴露；CT2-003虽识别检查目的未知，却重复追问已知年龄／引入随访阶段条件，并在目的未知时倾向偶发路径。保持ENG-002未解决，新增观察写回既有工程复盘与docs/medical_v3_bm25_baseline.md，不新建同类问题条目。另有标签口径问题：实际ACR b0029包含标注b0021的范围句，精确ID未计入部分等价证据；不改冻结标签，不据此判整题充分。官方ACR范围与USPSTF2021说明已浏览复核；ACR Narrative当前web工具403，细节依据既有本地固定快照，不覆盖原版本或使用条件。
+
+下一步保持同3题／模型profile／提示词／核心／每题5条上下文，只换原--evidences到data/evaluation/evidence_review/scope_context_control_5.jsonl，复用已实现入口，无需新脚本或核心修改。该5条由助手从v3原样选定：ACR筛查范围b0001、USPSTF报告标准化b0020、ACR偶发>=6mm范围b0021、<6mm范围b0011、USPSTF筛查资格b0015作为干扰。选定范围证据确保每题Top-5都有明确场景依据，供核验器诊断；不是新的全库检索成绩，不能把其Recall变化当方法收益。summary.corpus_name=medical_v3表示原始来源，实际索引仅5条，由evidence_path／evidence_count及明确运行名区分。原783847片段库与正式评测目标不变，后续仍需正式开发题／用药／多模态／MIRAGE全量。
+
+控制运行名medical_v3_bm25_ct_review_scope_control_3_01；准备记录results/medical_v3_bm25_ct_review_scope_control_3_01_preparation.json绑定5条来源、输入SHA、原运行与核心身份，状态prepared_not_executed。只准备数据与命令，不修改prompt、不启动付费调用。先归档同步当前实测后给用户命令，外层保护_results.jsonl／_summary.json／_resources.txt／_run.log四件，禁止覆盖。观察前两题在范围依据齐全后是否仍追问尺寸／吸烟史、第三题是否保持目的未知且不把63岁列缺失。无论结果如何不据3题宣布修好；若仍错再以一般任务范围／已知事实约束改现有提示，并进入完整开发验证。
+
+以下为真实联调前的入口验收与准备记录，prepared状态按当时理解；当前任务以上方受控对照为准。
+
 **2026-11-26当前：原run_retrieval_eval.py可选评估入口已通过验收，等待用户亲自运行3题真实联调。** 主入口当前SHA-256=8b905a775b093a1d2ef3a4472719f9da77ae61dd2f439752c27ebbb98572b217；9组联结执行时为51daf15bbd433126ae7f1b92bdcc3942c7df0f216b202d8faa13c21bfe322eb2，随后用户仅删除未使用的from math import e，补回该行可逐字恢复原SHA，业务与CLI未变，当前版本5项入口检查再次通过。验证报告保留executed_source_sha256及清理说明，不冒称对旧字节执行过新版本。evidence_review.py仅删无用导入，当前SHA=031fc811edf1067a0665e08e758b1460d112b687fd1c6871f0f1b4aa2f5ef2ff；retrieve_evalution.py保持681db488cd05e613e0971131ea92e68059130de0a3405c2c8a191d9113b83468。助手未改这三个核心文件，仅让既有入口检查跟随真实config_dir／result_dir参数及CLI更新，取消测试对保存目录的替代重定向。
 
 本轮检查：既有5项入口／CLI检查全部通过，关闭时BM25／Dense／RRF均无LLM或dotenv调用；临时2题／7条证据下，三方法各正常／API超时／解析失败共9组联结通过，使用真实缓存、检索、评测与保存，只有模型和凭证读取被替换。每组一个客户端、两次评估；API失败和解析失败后仍保留2题并继续，已知用量不丢、未知用量明确None；报告阶段耗时分开、gold不进入提示。两份输出冲突分别在读输入和建客户端前拒绝，程序TypeError自然传播。记录results/ct_review_entry_validation_01.json，CPU合成检查不等于医学效果；没有真实模型／API／GPU、未读.env。Notebook两处删除与未跟踪草稿保留，不提交。

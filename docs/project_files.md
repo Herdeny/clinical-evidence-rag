@@ -1,10 +1,10 @@
 # 现在应该看哪些文件
 
-整理日期：2026-11-19，进度更新2026-11-26。根目录本次纳入evidence_review.py后共21个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法02，助手只读核验1944条指标通过：改写收益很小且不一致，保留原查询默认及改写可选。单轮证据评估核心已通过18项假响应检查，真实评估、有限补查与图编排待完成。此前助手误代跑01及权限纠正保留于PROJECT_CONTEXT.md，8题只验流程；既有实测、负结果及历史异常保留。
+整理日期：2026-11-19，进度更新2026-11-26。根目录共21个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法改写对照，并完成CT单轮评估3题真实联调。结构化响应均有效，但观察到过度追问、已知事实误列缺项和适用条件推断错误，待受控上下文诊断。有限补查与图编排待完成。此前误代跑及权限纠正、负结果和历史异常继续保留。
 
 原retrieve_evalution.py的可选review_fn增量已通过合成联结验收：关闭／开启均保留题目，完整核验字典及独立review_latency_ms可保存；CT检索耗时采用用户命名retrieve_latency_ms，保存辅助及其既有检查随核心更新，不要求旧名或添加兼容别名。下一步仍在原run_retrieval_eval.py按需开启，三方法共同复用，不新增运行脚本。三份既有本地控制输入位于data/evaluation/evidence_review/smoke_01，保留不冒充实际检索结果。完整任务见下段与PROJECT_CONTEXT.md第1节／10.5.1；助手不代写核心或代跑，后续LangGraph直接复用review_evidence，不依赖含gold的评测main。
 
-原run_retrieval_eval.py可选评估现已验收：5项入口／CLI及三方法正常／API超时／解析失败9组完整假模型联结通过，检查两份输出提前保护和程序错误传播。CLI为--review／--config／--profile／--result-dir，默认关闭；一个客户端服务整批、API失败保留题目及未知用量，正常响应解析失败保留已知用量。没有真实API结果。下一步由用户执行medical_v3_bm25_ct_review_smoke_3_01，原--cases选择独立3题JSONL，仍检索全v3语料；助手只给命令、核对结果，不代跑。源代码与3输入指纹、准备状态见results/ct_review_entry_validation_01.json（本地忽略目录）及PROJECT_CONTEXT.md第1节。
+原run_retrieval_eval.py可选评估已通过5项入口／CLI与9组假模型联结，并完成medical_v3_bm25_ct_review_smoke_3_01真实3题。三次有效结构化响应共7527 tokens，语义问题见[联调记录](medical_v3_bm25_baseline.md)。当前复用同入口和原--evidences参数，以scope_context_control_5.jsonl给同三题提供明确范围依据，只做评估器诊断；索引实际仅5条，不计作全库检索改进。准备记录在本地results/medical_v3_bm25_ct_review_scope_control_3_01_preparation.json；助手不改核心或prompt、不代跑，真实调用由用户执行。完整进度见PROJECT_CONTEXT.md第1节。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -13,13 +13,13 @@
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
 | rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | query_rewrite.py | 单题真实CT通过；批量rewrite_queries已通过4题混合假响应及编程异常传播检查，失败记录／用量保留；无批量API或改写检索收益 | 用户；助手未修改核心 |
-| evidence_review.py | EvidenceReview五字段与单轮review_evidence已通过18项假响应检查；保留费用、区分有效不足与评估失败，无真实模型成绩 | 用户；助手只读审查，未改核心 |
+| evidence_review.py | 五字段与单轮评估通过18项假响应检查；3题真实返回有效但出现范围／缺项语义错误，待控制对照 | 用户；助手只读审查，未改核心 |
 | run_query_rewrite.py | 独立读取LLM配置、加载项目环境并单次调用核心；用户真实CT单题通过，422／96／518 tokens，CLI已统一--config | 用户；助手只纠正CLI参数，业务函数未改 |
 | run_query_rewrite_batch.py | 指定划分／limit、共享客户端、保存结果；用户真实8题已核验，1变化有语义观察，尚无检索收益 | 用户；助手未修改实现 |
 | query_rewrite_io.py | save_rewrite_results保存逐题JSONL、状态／已知token摘要及公开运行配置，防覆盖；实际单题已无损归档 | 助手辅助，每行中文注释；不调用模型或读取环境 |
 | frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
 | retrieve_evalution.py | 两类Recall、逐题批量评测及可选review_fn；合成联结通过，CT分阶段计时为retrieve_latency_ms／review_latency_ms | 用户；助手未改核心 |
-| run_retrieval_eval.py | 原三方法入口增量接入可选评估；5项入口／CLI与9组假模型联结通过，等待用户真实3题联调 | 用户；助手未改核心 |
+| run_retrieval_eval.py | 三方法可选评估入口；假模型联结及3题真实链路完成，复用--evidences做固定问题的上下文诊断 | 用户；助手未改核心 |
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
 | embedding_adapter.py | 共享模型构造与显式FP32输出归一化；6项无权重验证通过，预检和正式入口已共用，真实GPU预检03通过 | 助手辅助，逐行中文注释 |
 | reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B及BGE真实完整运行均已核对 | 助手辅助，逐行中文注释 |

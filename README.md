@@ -21,7 +21,7 @@
 
 ---
 
-> **当前阶段 · 2026-11-26**：已完成医学语料构建、检索基线、固定候选重排及全量开发集查询改写对照；单轮证据评估函数已通过 18 项假响应检查，真实模型验证待完成。LangGraph 编排、报告 OCR、多模态对照和服务化仍待完成。
+> **当前阶段 · 2026-11-26**：已完成医学语料构建、检索基线、固定候选重排及全量开发集查询改写对照；证据评估完成 3 题真实联调，发现任务范围与缺项判断错误，正在验证。LangGraph 编排、报告 OCR、多模态对照和服务化仍待完成。
 
 <a id="overview"></a>
 
@@ -48,7 +48,7 @@
 | **可比较的检索策略** | 自行实现 Dense 相似度与 Top-K、BM25 检索封装、RRF 融合 | [Dense](retrieve_core.py) · [BM25](retrieve_bm25.py) · [RRF](retrieve_rrf.py) |
 | **固定候选重排** | 在相同 Dense Top-100 上比较 Qwen3 4B／8B 与 BGE，保留原排名和候选身份 | [重排核心](rerank_core.py) · [候选加载](frozen_candidates_io.py) |
 | **可选查询改写** | LangChain＋DeepSeek 结构化输出；BM25、Dense、RRF 共用原问题／改写对照入口 | [改写核心](query_rewrite.py) · [统一评测入口](run_benchmark_eval.py) |
-| **单轮证据评估** | 结构化区分病例缺条件与证据缺口；18 项假响应检查通过，尚无真实模型判断成绩 | [评估核心](evidence_review.py) |
+| **单轮证据评估** | 结构化记录病例与证据缺口；18 项假响应检查及 3 题真实联调完成，语义错误继续保留与诊断 | [评估核心](evidence_review.py) · [联调记录](docs/medical_v3_bm25_baseline.md) |
 | **向量缓存与恢复** | 按数据及模型配置识别缓存，分批提交，支持中断后继续编码 | [编码编排](embedding_index.py) · [缓存 I/O](embedding_cache_io.py) |
 | **可回查的离线实验** | 保存逐题排名、原始问题、配置、指标、用量及运行记录，分别分析漏检与排序变化 | [评测核心](benchmark_eval.py) · [实测报告](docs/nfcorpus_retrieval_baselines.md) |
 
@@ -137,7 +137,7 @@ Dense 与 RRF 需要先准备配置中固定版本的模型快照。当前 Qwen3
 
 改写对照复用保存记录，不会在检索过程中重新请求 API。生成改写记录的入口是 [run_query_rewrite_batch.py](run_query_rewrite_batch.py)，需要可用的 DeepSeek 配置与凭证。固定候选重排使用 [run_reranking_eval.py](run_reranking_eval.py)，完整准备与运行步骤见[重排说明](docs/reranking_runtime_task.md)。
 
-CT 任务使用原 [run_retrieval_eval.py](run_retrieval_eval.py)，已增量支持 `--review`、`--config`、`--profile` 与 `--result-dir`。开启后逐题评估检索证据，分别保存检索／评估耗时、失败记录及已知用量；关闭时运行纯检索。入口已通过假客户端联结检查，真实模型判断与业务效果仍待验证。
+CT 任务使用原 [run_retrieval_eval.py](run_retrieval_eval.py)，已增量支持 `--review`、`--config`、`--profile` 与 `--result-dir`。开启后逐题评估检索证据，分别保存检索／评估耗时、失败记录及已知用量；关闭时运行纯检索。已完成 3 题真实联调，结构化返回成功，仍观察到过度追问和适用条件判断问题；业务效果尚未通过验证。
 
 <a id="evaluation"></a>
 
@@ -279,7 +279,7 @@ clinical-evidence-rag/
 |:---:|:---|:---|
 | ✅ | 数据与检索基线 | 医学 v3 语料、Dense／BM25／RRF、向量缓存与共同评测接口 |
 | ✅ | 重排与查询改写对照 | NFCorpus 完整 324 dev、固定候选模型比较、三方法改写对照与错误分析 |
-| 🚧 | 证据充分性评估 | 单轮函数通过 18 项假响应检查，分别记录两类缺口；待真实模型与开发题验证 |
+| 🚧 | 证据充分性评估 | 18 项假响应检查与 3 题真实联调完成；任务范围／缺项判断错误待诊断与完整开发验证 |
 | ⬜ | LangGraph 有限补查 | 根据缺口追问或定向检索，限制预算，保存停止原因 |
 | ⬜ | 回答与引用支持核验 | 逐条医学结论关联证据，核对原文支持和适用条件 |
 | ⬜ | 用药与跨来源任务 | 正确产品章节、指南适用条件与论文证据类型共同核对 |
