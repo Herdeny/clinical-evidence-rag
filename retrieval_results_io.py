@@ -101,6 +101,12 @@ def save_retrieval_results(result_df, config, *, run_name=None, result_dir="resu
     if missing:
         # 抛出 ValueError 并停止当前操作。
         raise ValueError(f"结果表缺少字段：{sorted(missing)}")
+    # 评估结果和评估耗时应当成对出现，纯检索结果无需提供它们。
+    review_columns = {"evidence_review", "review_latency_ms"}
+    # 只在已出现评估字段时检查同阶段信息是否完整。
+    if review_columns.intersection(result_df.columns) and not review_columns.issubset(result_df.columns):
+        # 缺少任一字段时无法完整记录评估阶段。
+        raise ValueError("评估结果需要同时提供evidence_review和review_latency_ms")
     # 设置config_keys：集合。
     config_keys = {"evidence_path", "cases_path", "query_template"}
     # 当 config_keys - config.keys() 成立时，执行下面的分支。
@@ -187,6 +193,12 @@ def save_retrieval_results(result_df, config, *, run_name=None, result_dir="resu
     output.mkdir(parents=True, exist_ok=True)
     # 设置(rows_path, summary_path)：元组。
     rows_path, summary_path = output / f"{run_name}_results.jsonl", output / f"{run_name}_summary.json"
+    # 保存层也保护原件，入口仍须在模型调用前提前检查同样两个路径。
+    for path in (rows_path, summary_path):
+        # 任一输出已存在时，不覆盖或只更新另一半。
+        if path.exists():
+            # 保留原有文件并提示调用方使用新的运行编号。
+            raise FileExistsError(path)
     # 设置exported：调用 result_df.copy，取得该步骤的处理结果。
     exported = result_df.copy()
     # 设置exported['scores']：取得并发任务返回的处理结果。
@@ -211,6 +223,48 @@ def save_retrieval_results(result_df, config, *, run_name=None, result_dir="resu
         "provenance": "learner-computed result table; helper only validates and saves",
     # 结束上方的字典或集合。
     }
+    # 开启评估时，在同一份摘要中附加统计，不增加独立结果文件。
+    if "evidence_review" in exported.columns:
+        # 取出逐题完整评估记录，后续原样保留到JSONL。
+        reviews = exported["evidence_review"].tolist()
+        # 状态用于区分正常判断与评估失败，不把失败当作证据不足。
+        if any(not isinstance(record, dict) or record.get("status") not in ("ok", "error") for record in reviews):
+            # 无法识别的状态不能进入成功／失败统计。
+            raise ValueError("evidence_review应包含ok或error状态")
+        # 评估耗时单独检查，不影响检索阶段计时。
+        if not exported["review_latency_ms"].ge(0).all():
+            # 拒绝负数或缺失的耗时记录。
+            raise ValueError("评估耗时必须是非负数")
+        # 与已有改写记录一致，只汇总完整的实际用量。
+        token_fields = ("input_tokens", "output_tokens", "total_tokens")
+        # 成功与失败响应都可能已有可计费的用量信息。
+        known_usage = []
+        # 检查每题的原始SDK用量，不从模型解释中估计费用。
+        for record in reviews:
+            # 没有收到可用响应时，该值可以为None。
+            usage = record.get("usage_metadata")
+            # 三项用量均完整有效时才参与完整用量求和。
+            if isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in token_fields):
+                # 解析失败但已取得用量的响应也会计入。
+                known_usage.append(usage)
+        # 这些数量是模型评估的状态统计，不代表医学准确率。
+        summary["evidence_review"] = {
+            "query_count": len(reviews),  # 全部参评题都计入总数。
+            "ok_count": sum(record["status"] == "ok" for record in reviews),  # 成功完成评估的题数。
+            "error_count": sum(record["status"] == "error" for record in reviews),  # 包含API和解析失败。
+            "sufficient_count": sum(record["status"] == "ok" and isinstance(record.get("review"), dict) and record["review"].get("sufficient") is True for record in reviews),  # 模型自评充分的题数。
+            "insufficient_count": sum(record["status"] == "ok" and isinstance(record.get("review"), dict) and record["review"].get("sufficient") is False for record in reviews),  # 正常判断不足的题数。
+            "usage_known_count": len(known_usage),  # 可以完整统计用量的响应数。
+            "usage_unknown_count": len(reviews) - len(known_usage),  # 未知用量不视为免费。
+            "known_token_totals": {key: sum(usage[key] for usage in known_usage) if known_usage else None for key in token_fields},  # 全未知时保留None。
+            "usage_scope": "Complete usage records only; includes errors with known usage; excludes unknown or partial usage.",  # 明示成本统计范围。
+        }
+        # 评估阶段耗时采用与逐题表一致的字段名。
+        summary["review_latency_ms"] = {
+            "mean": float(exported["review_latency_ms"].mean()),  # 只汇总评估回调的耗时。
+            "median": float(exported["review_latency_ms"].median()),  # 保留中位数便于比较。
+            "scope": "review_fn call only; excludes retrieval, model loading and metric computation",  # 不宣称端到端延迟。
+        }
     # Validate JSON serializability before writing either artifact.
     # 设置summary_text：json.dumps(summary, ensure_ascii=False, indent=2, allow_nan=False) + '\n'。
     summary_text = json.dumps(summary, ensure_ascii=False, indent=2, allow_nan=False) + "\n"

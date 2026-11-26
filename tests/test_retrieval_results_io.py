@@ -179,3 +179,62 @@ class RetrievalResultsIOTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'cases_path'):
             # 新结构仍须具有公共输入来源。
             self.save_and_check(config, 'missing_cases')
+
+    # 验证正常判断、解析失败和API失败均保留，用量只累加已知部分。
+    def test_review_summary_preserves_errors_and_usage(self):
+        # 读取一条临时题，作为四类评估结果的基础输入。
+        original_case = pd.read_json(self.cases_path, lines=True).to_dict('records')[0]
+        # 复制合成题字段，但保持每道题ID不同。
+        cases = [{**original_case, 'id': f'CASE-{number}'} for number in range(1, 5)]
+        # 输入文件与实际参评的四题一致，不调整保存器的题号检查。
+        pd.DataFrame(cases).to_json(self.cases_path, orient='records', lines=True)
+        # 完整用量来自模拟SDK响应，不代表真实API消耗。
+        usage = {'input_tokens': 10, 'output_tokens': 5, 'total_tokens': 15}
+        # 每道题都使用核心返回的六字段结构。
+        base = {'original_query': 'synthetic report and question', 'usage_metadata': usage, 'response_metadata': {}, 'error': None}
+        # 同时覆盖充分、正常不足、已知用量的解析失败、未知用量的API失败。
+        reviews = [
+            {**base, 'status': 'ok', 'review': {'sufficient': True}},
+            {**base, 'status': 'ok', 'review': {'sufficient': False}},
+            {**base, 'status': 'error', 'review': None, 'error': 'synthetic parse failure'},
+            {**base, 'status': 'error', 'review': None, 'usage_metadata': None, 'response_metadata': None, 'error': 'synthetic API failure'},
+        ]
+        # 原检索结果字段保持不变，只扩充题号、评估结果与评估耗时。
+        rows = [{**self.frame.iloc[0].to_dict(), 'case_id': case['id'], 'evidence_review': review, 'review_latency_ms': 7.0} for case, review in zip(cases, reviews)]
+        # 使用已有BM25元数据结构，不构造真实模型。
+        config = self.common('bm25')
+        # 保存方法身份，不向辅助层补充虚构LLM信息。
+        config['bm25'] = self.metadata('synthetic-bm25')
+        # 捕获临时文件路径输出。
+        with redirect_stdout(StringIO()):
+            # 真实执行保存与统计，不调用模型或重新评分。
+            summary = save_retrieval_results(pd.DataFrame(rows), config, run_name='review', result_dir=self.root / 'results')
+        # 全部四题保留，API失败不归入正常不足。
+        self.assertEqual((summary['evidence_review']['query_count'], summary['evidence_review']['ok_count'], summary['evidence_review']['error_count']), (4, 2, 2))
+        # 充分性计数只统计成功完成评估的两题。
+        self.assertEqual((summary['evidence_review']['sufficient_count'], summary['evidence_review']['insufficient_count']), (1, 1))
+        # 解析失败仍有费用记录，API失败的未知用量不填零。
+        self.assertEqual((summary['evidence_review']['usage_known_count'], summary['evidence_review']['usage_unknown_count']), (3, 1))
+        # 三份已知响应共45个模拟tokens，不重复累加输入缓存明细。
+        self.assertEqual(summary['evidence_review']['known_token_totals'], {'input_tokens': 30, 'output_tokens': 15, 'total_tokens': 45})
+        # 检索与评估的耗时分别汇总。
+        self.assertEqual((summary['retrieve_latency_ms']['mean'], summary['review_latency_ms']['mean']), (1.0, 7.0))
+        # 回读原始JSONL，核对失败信息和原始用量均未丢失。
+        loaded = [json.loads(line) for line in (self.root / 'results' / 'review_results.jsonl').read_text().splitlines()]
+        # 嵌套字典应与调用方提供的内容完全相同。
+        self.assertEqual([row['evidence_review'] for row in loaded], reviews)
+
+    # 验证同名结果存在时不会覆盖历史文件。
+    def test_existing_outputs_not_overwritten(self):
+        # 使用已有分组配置准备一份完整输出。
+        config = self.grouped_rrf()
+        # 复用原保存检查，先产生合法的临时文件。
+        self.save_and_check(config, 'existing')
+        # 记录原件字节，用于核对二次保存后的状态。
+        originals = {path: path.read_bytes() for path in (self.root / 'results').glob('existing_*')}
+        # 同名写入应显式失败。
+        with self.assertRaises(FileExistsError):
+            # 不更改数据或名称来绕过输出保护。
+            self.save_and_check(config, 'existing')
+        # 两份原件均应保持不变。
+        self.assertTrue(all(path.read_bytes() == content for path, content in originals.items()))

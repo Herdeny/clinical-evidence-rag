@@ -6,6 +6,14 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-26当前用户任务：只增量修改run_retrieval_eval.py，按需开启证据评估；尚未修改入口或运行真实API。** 保留前五个main参数，在后面增加config_dir、profile_name（默认deepseek_flash）与review（默认False）；config_dir显式传入，CLI为--config默认root/configs、--profile默认deepseek_flash、--review使用action="store_true"。原method／cases／evidences／cache／run-name及命名公式继续沿用，不新增脚本、独立input模式或limit参数。联调用独立3题的cases文件，通过原--cases选择，保存器核对的就是该文件，无需为了抽样放宽全量ID检查；完整开发题以后仍通过同一个参数选择。
+
+入口顺序：按原公式确定最终run_name，最前检查results/{run_name}_results.jsonl与_summary.json，冲突在读大语料／建模型／调用API前停止；review_fn先为None。仅review开启时读取config_dir/llm_profiles.json的profile，按run_query_rewrite.py原方式load_dotenv(root/".env",override=False)、创建一个ChatDeepSeek。入口内定义两参数review_fn(query,hits)，调用已完成review_evidence(query,hits,llm=llm)并原样返回；只捕获openai.APIError（当前SDK连接／超时异常也属于它）转成六字段失败记录：original_query原值、status=error、review=None、两类metadata=None、error包含异常类型与信息。没有有效响应时用量未知，不能填0；正常响应的解析失败及其已知用量由核心原样返回。TypeError等程序错误继续传播，不宽泛捕获。此处因批量失败记录需求增加入口包装，不改变已验收核心的异常行为，也不再要求只能用partial。
+
+原检索器／缓存／参数与选择分支保持，调用evaluate_retrieval时追加review_fn。config["review"]始终记录enabled；开启时另存profile_name与公开llm_profile，不记录凭证。关闭时不读取LLM配置、不load_dotenv、不创建LLM；只增量接入评估，不借此换Embedding配置。CLI传新增参数给main，run-name仍可选无时间戳。开启时可打印完整summary以看到新统计，关闭时保留原metrics输出。核心由用户编写，保存后先语义审查与假客户端联结，再给用户真实运行命令；“继续”不授权助手代跑。
+
+本轮助手已在现有retrieval_results_io.py增量完成辅助：可选评估列成对检查，汇总ok／error与模型自评充分／不足数量、单独review_latency_ms及完整已知用量，解析失败的用量计入、API失败未知不填零；原始嵌套记录仍全量写JSONL。保存层拒绝同名两产物覆盖，入口仍必须在付费调用前检查。没有新脚本或模块，CT保存8项及BEIR保存6项检查通过，未修改用户入口／评估核心。准备data/evaluation/evidence_review/ct_dev_smoke_3.jsonl，逐字复制CT-v3开发题前三行CT2-001／002／003，source SHA=83e8d45af1afebfa19562225526e87972373ec41c4a060271b6085d23cc2f24d、子集SHA=9f43855fe1e210c5386208938bce64f56717edaf31ce5b0a141125d1721c9413。仅联调数据流，不作效果结论；原120dev／60留出和主库未改，没有真实检索／LLM／GPU运行。
+
 **2026-11-26最新：CT可选评估回调已通过合成联结验收，保留用户命名retrieve_latency_ms；保存辅助随核心接口更新。** 用户再次强调测试不能反过来规范核心代码。助手此前要求因保存器读取latency_ms而保留旧名，此要求过于绝对，已撤回；原依赖来自正式保存模块而非测试，接口命名合理时应同步真实调用链，而不是让旧辅助约束核心。当前CT逐题与摘要统一retrieve_latency_ms，评估另存review_latency_ms，不新增latency_ms兼容别名；BEIR仍使用自身未变的latency_ms协议，旧实验原件不改写。
 
 用户已将eval_rows.append移回每题公共路径。retrieve_evalution.py SHA-256=681db488cd05e613e0971131ea92e68059130de0a3405c2c8a191d9113b83468；助手未修改用户核心，只调整retrieval_results_io.py的CT字段读取／汇总与既有I/O检查输入。真实evaluate_retrieval→partial(review_evidence,llm=假客户端)→真实save_retrieval_results联结通过：关闭／开启均保留2题，每题一次检索／评估，正常不足与解析失败均保留用量和整题，完整嵌套字典往返不丢；原始Report+Question及5条证据传递，无gold入模型。除明确接受的计时字段改名外，关闭评估的题目信息／排名／指标与提交版相同。CT保存6项、BEIR保存6项既有检查通过，记录results/ct_optional_review_validation_01.json。没有真实模型／API／GPU调用，不称医学判断能力已验证。下一步仍在原run_retrieval_eval.py按需接入客户端，不新增脚本。
@@ -16,7 +24,7 @@
 
 已验收的retrieve_evalution.py增量：evaluate_retrieval签名增加仅关键字参数review_fn=None，旧三参数继续有效；沿用每题一次retrieve_fn(query,max(ks))与原检索计时、评分，检索耗时按用户选择命名retrieve_latency_ms。在eval_rows.append前，开启时单次调用review_fn(query,retrieved_results)，将完整六字段返回字典存入eval_case["evidence_review"]，另用perf_counter计review_latency_ms。一次传整题证据列表，不按证据逐条请求；不传case、eval_case或gold给模型。不在评测核心创建客户端、读配置或凭证，不直接依赖ChatDeepSeek；未开启时不增加核验列，不改变检索排名／指标，status=error也保留该题，不过滤。回调本身抛出的异常暂自然传播，API失败记录／续跑策略在真实批量接入前明确处理，不让程序错误伪装成证据不足。
 
-后续在原run_retrieval_eval.py按需接入--review、既有风格--config／--profile，默认review关闭。只开启时构造一个客户端，通过partial(review_evidence,llm=llm)绑定后传给review_fn；同一回调支持原BM25／Dense／RRF，保留原方法、缓存、路径与run-name约定。保存辅助已读取：整张结果表copy后to_json，能保留新增嵌套核验列；后续补核验摘要／实际LLM配置、明确计时范围，并在付费调用前保护已有输出。正式批量前处理API失败不丢费用／题目、限制联调题数与全量分母；不把当前保存器整集ID校验强塞给抽样运行，也不在本轮无需求改用户核心。后续LangGraph节点调用review_evidence同一函数，产品服务不能通过读取gold并评分的main运行。本轮只交上述评测回调增量，由用户写核心，助手不运行模型／API／GPU。
+入口接入要求已细化为第1节最上方任务：--review默认关闭，--config／--profile沿用既有风格，开启时共用一个客户端。早期仅partial绑定的设想由入口内APIError记录包装补足，同一回调仍支持原BM25／Dense／RRF，方法、缓存、路径与run-name约定保持。保存辅助的核验摘要／已知用量／单独计时及输出保护现已完成，入口的提前保护与API失败记录由用户接入。独立联调cases文件保留其全部ID，不为抽样放宽保存器核对。后续LangGraph节点调用review_evidence同一函数，产品服务不能通过读取gold并评分的main运行；助手不运行模型／API／GPU。
 
 三份本地控制输入已准备在data/evaluation/evidence_review/smoke_01，文件仅含query与hits，不含gold／预期动作／答案。screening_missing_evidence.json为已知筛查目的但只给偶发范围材料；unknown_purpose.json为目的缺失且两类场景材料都有；screening_scope_available.json为已知筛查目的且有筛查范围材料、尺寸缺失但只问框架。证据原样取自医学v3的acr-lungrads-scope::b0001与acr-incidental-2023::b0011，保留id／text／source_id／locator，不下载、不改主库、不重跑检索。这三组仅用于真实调用联调和缺口行为观察，不能替代正式CT开发题／独立复核或成品规模评测。输入和验证报告处于Git忽略目录，仅本地可见；文档记录复现来源。
 
