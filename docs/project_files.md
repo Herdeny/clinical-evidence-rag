@@ -4,7 +4,7 @@
 
 原retrieve_evalution.py的可选review_fn增量已通过合成联结验收：关闭／开启均保留题目，完整核验字典及独立review_latency_ms可保存；CT检索耗时采用用户命名retrieve_latency_ms，保存辅助及其既有检查随核心更新，不要求旧名或添加兼容别名。下一步仍在原run_retrieval_eval.py按需开启，三方法共同复用，不新增运行脚本。三份既有本地控制输入位于data/evaluation/evidence_review/smoke_01，保留不冒充实际检索结果。完整任务见下段与PROJECT_CONTEXT.md第1节／10.5.1；助手不代写核心或代跑，后续LangGraph直接复用review_evidence，不依赖含gold的评测main。
 
-当前具体任务为用户修改原run_retrieval_eval.py：增加--review／--config／--profile，只开启时配置一个LLM；入口内的两参数review_fn调用已有评估函数，并只将APIError转成保留题目的六字段失败记录，程序错误仍传播。因需要逐题API失败记录，入口包装替代仅partial绑定的初步设想，核心不变。助手已完成原保存辅助的评估状态／已知用量／单独耗时摘要及同名输出保护，CT 8项、BEIR 6项通过；入口必须在API前做同样两文件检查。已准备独立3题JSONL，通过原--cases联调，不新增limit或放宽题号核对。关闭时旧检索路径与缓存继续复用；命名和参数保持原约定。完整接口与验收在PROJECT_CONTEXT.md第1节。
+原run_retrieval_eval.py可选评估现已验收：5项入口／CLI及三方法正常／API超时／解析失败9组完整假模型联结通过，检查两份输出提前保护和程序错误传播。CLI为--review／--config／--profile／--result-dir，默认关闭；一个客户端服务整批、API失败保留题目及未知用量，正常响应解析失败保留已知用量。没有真实API结果。下一步由用户执行medical_v3_bm25_ct_review_smoke_3_01，原--cases选择独立3题JSONL，仍检索全v3语料；助手只给命令、核对结果，不代跑。源代码与3输入指纹、准备状态见results/ct_review_entry_validation_01.json（本地忽略目录）及PROJECT_CONTEXT.md第1节。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |
@@ -19,7 +19,7 @@
 | query_rewrite_io.py | save_rewrite_results保存逐题JSONL、状态／已知token摘要及公开运行配置，防覆盖；实际单题已无损归档 | 助手辅助，每行中文注释；不调用模型或读取环境 |
 | frozen_candidates_io.py | 核对冻结产物和数据身份，按query_id恢复候选原文／分数／来源；6项检查及真实324题加载通过，不加载模型或向量 | 助手辅助，逐行中文注释 |
 | retrieve_evalution.py | 两类Recall、逐题批量评测及可选review_fn；合成联结通过，CT分阶段计时为retrieve_latency_ms／review_latency_ms | 用户；助手未改核心 |
-| run_retrieval_eval.py | CLI、方法选择与评测入口 | 用户 |
+| run_retrieval_eval.py | 原三方法入口增量接入可选评估；5项入口／CLI与9组假模型联结通过，等待用户真实3题联调 | 用户；助手未改核心 |
 | embedding_index.py | 分批模型编码、缓存复用和恢复；已完成全库及用户终端续跑验证 | 用户 |
 | embedding_adapter.py | 共享模型构造与显式FP32输出归一化；6项无权重验证通过，预检和正式入口已共用，真实GPU预检03通过 | 助手辅助，逐行中文注释 |
 | reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B及BGE真实完整运行均已核对 | 助手辅助，逐行中文注释 |

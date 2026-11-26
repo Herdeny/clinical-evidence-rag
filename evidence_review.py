@@ -1,6 +1,4 @@
 import json
-from unittest import result
-from openai import responses
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 

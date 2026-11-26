@@ -137,6 +137,8 @@ Dense 与 RRF 需要先准备配置中固定版本的模型快照。当前 Qwen3
 
 改写对照复用保存记录，不会在检索过程中重新请求 API。生成改写记录的入口是 [run_query_rewrite_batch.py](run_query_rewrite_batch.py)，需要可用的 DeepSeek 配置与凭证。固定候选重排使用 [run_reranking_eval.py](run_reranking_eval.py)，完整准备与运行步骤见[重排说明](docs/reranking_runtime_task.md)。
 
+CT 任务使用原 [run_retrieval_eval.py](run_retrieval_eval.py)，已增量支持 `--review`、`--config`、`--profile` 与 `--result-dir`。开启后逐题评估检索证据，分别保存检索／评估耗时、失败记录及已知用量；关闭时运行纯检索。入口已通过假客户端联结检查，真实模型判断与业务效果仍待验证。
+
 <a id="evaluation"></a>
 
 ## 📊 实测结果与口径

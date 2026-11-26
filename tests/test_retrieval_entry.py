@@ -88,24 +88,20 @@ class RetrievalEntryTests(unittest.TestCase):
         cases = pd.DataFrame([{'id': f'TEST-{i}', 'split': 'dev', 'group': 'synthetic', 'report': reports[i], 'question': 'synthetic question', 'gold_evidence_ids': ['T0'], 'gold_evidence_groups': [['T0']]} for i in range(2)])
         # 保存合成题目。
         cases.to_json(self.cases_path, orient='records', lines=True)
-        # 保留真实保存函数，只重定向输出目录。
-        real_save = entry.save_retrieval_results
-        # 将临时输出目录保存在闭包中。
-        output = self.root / 'results'
-        # 不修正配置内容，让真实保存契约检查用户传入的数据。
-        def save_temporary(result_df, config, *, run_name=None, result_dir=None):
-            # 真实验证并保存到临时目录，禁止覆盖正式成绩。
-            return real_save(result_df, config, run_name=run_name, result_dir=output)
         # 仅替换真实模型工厂，其他主要实现均保留。
         self.model = self.start_patch('HuggingFaceEmbeddings', side_effect=SyntheticModel)
+        # 默认关闭评估时禁止读取真实凭证。
+        self.environment = self.start_patch('load_dotenv', side_effect=AssertionError('Unexpected credential read'))
+        # 默认关闭评估时禁止构造真实LLM客户端。
+        self.chat_model = self.start_patch('ChatDeepSeek', side_effect=AssertionError('Unexpected real LLM client'))
         # 保留真实缓存I/O，同时统计入口调用次数。
         self.prepare = self.start_patch('prepare_document_embeddings', wraps=entry.prepare_document_embeddings)
         # 保留小语料真实BM25，同时统计建索引次数。
         self.build = self.start_patch('build_bm25', wraps=entry.build_bm25)
         # 使用真实评分函数，并核对仅执行一次。
         self.evaluate = self.start_patch('evaluate_retrieval', wraps=entry.evaluate_retrieval)
-        # 使用真实保存校验，只改变输出位置。
-        self.save = self.start_patch('save_retrieval_results', side_effect=save_temporary)
+        # 使用真实保存函数，输出目录由核心实际参数传入，不用测试替它重定向。
+        self.save = self.start_patch('save_retrieval_results', wraps=entry.save_retrieval_results)
 
     # 统一启动测试替换，并确保结束后恢复原对象。
     def start_patch(self, name, **kwargs):
@@ -127,7 +123,7 @@ class RetrievalEntryTests(unittest.TestCase):
             # 捕获进度与临时路径输出。
             with redirect_stdout(StringIO()):
                 # 按名称传参，接受用户自洽的main参数顺序。
-                summary = entry.main(method=method, cache_dir=self.root / 'cache', cases_path=self.cases_path, evidence_path=self.evidence_path, run_name=run_name)
+                summary = entry.main(method=method, cache_dir=self.root / 'cache', cases_path=self.cases_path, evidence_path=self.evidence_path, run_name=run_name, config_dir=self.root / 'configs', result_dir=self.root / 'results')
         # 记录事实不吞掉异常，测试框架仍会报告失败。
         finally:
             # 读取实际传给保存函数的配置；未到保存阶段时记为空。
@@ -146,6 +142,8 @@ class RetrievalEntryTests(unittest.TestCase):
         self.assertEqual(self.evaluate.call_count, 1)
         # 每轮只保存一次。
         self.assertEqual(self.save.call_count, 1)
+        # 关闭评估的三条检索路径都不读取凭证或创建LLM。
+        self.assertEqual((self.environment.call_count, self.chat_model.call_count), (0, 0))
         # 实际题目与证据数量应来自临时输入。
         self.assertEqual((summary['case_count'], summary['evidence_count']), (2, 7))
         # 三种方法都应保留真实方法标识。
@@ -195,7 +193,7 @@ class RetrievalEntryTests(unittest.TestCase):
         # 假main返回CLI所需的最小摘要。
         fake_main = Mock(return_value={'metrics': {'synthetic': 0}})
         # 提供CLI实际使用的名称。
-        namespace = {'__file__': str(ROOT / 'run_retrieval_eval.py'), 'argparse': argparse, 'Path': Path, 'main': fake_main}
+        namespace = {'__file__': str(ROOT / 'run_retrieval_eval.py'), 'argparse': argparse, 'json': json, 'Path': Path, 'main': fake_main}
         # 替换参数并捕获最后的打印。
         with patch('sys.argv', ['run_retrieval_eval.py', *arguments]), redirect_stdout(StringIO()):
             # 执行原始CLI参数解析与传递。
@@ -219,17 +217,19 @@ class RetrievalEntryTests(unittest.TestCase):
         self.assertEqual(bound['cache_dir'], ROOT / 'cache/embeddings')
         # 默认结果名延续已约定格式。
         self.assertEqual(bound['run_name'], 'medical_v3_dense_ct_dev')
+        # 新参数按用户已实现的接口传入，默认评估保持关闭。
+        self.assertEqual((bound['config_dir'], bound['result_dir'], bound['profile_name'], bound['review']), (ROOT / 'configs', ROOT / 'results', 'deepseek_flash', False))
 
     # 检验自定义评测路径和RRF运行名传递。
     def test_cli_custom_paths_and_name(self):
         # 这些路径只用于参数解析，不会读取正式数据。
         cache = self.root / 'custom-cache'
         # 指定用户实现的全部可配置路径。
-        arguments = ['--method', 'rrf', '--cache', str(cache), '--cases', str(self.cases_path), '--evidences', str(self.evidence_path), '--run-name', 'synthetic_cli']
+        arguments = ['--method', 'rrf', '--cache', str(cache), '--cases', str(self.cases_path), '--evidences', str(self.evidence_path), '--run-name', 'synthetic_cli', '--review', '--config', str(self.root / 'configs'), '--result-dir', str(self.root / 'results'), '--profile', 'synthetic']
         # 解析并还原真实main参数映射。
         bound = self.run_cli(arguments)
         # 检查方法、路径类型与运行名全部一致。
-        self.assertEqual(dict(bound), {'method': 'rrf', 'cache_dir': cache, 'cases_path': self.cases_path, 'evidence_path': self.evidence_path, 'run_name': 'synthetic_cli'})
+        self.assertEqual(dict(bound), {'method': 'rrf', 'cache_dir': cache, 'cases_path': self.cases_path, 'evidence_path': self.evidence_path, 'run_name': 'synthetic_cli', 'config_dir': self.root / 'configs', 'result_dir': self.root / 'results', 'profile_name': 'synthetic', 'review': True})
 
 
 # 直接运行时保存验收结果，普通测试发现模式不额外写文件。
