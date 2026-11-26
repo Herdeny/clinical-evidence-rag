@@ -1,5 +1,7 @@
 # 现在应该看哪些文件
 
+**2026-11-26最新要求：评测只用可核查的公开benchmark。** 324题来自NFCorpus官方dev，120题来自助手自建CT初稿，二者不能混称。刚提出的120题运行计划已撤回，未执行；自建题及成绩仅保留历史，不继续扩题、调参或作效果依据。当前公开主线为已完成dev对照的NFCorpus及待QA适配的MIRAGE7663；下一项先核查MIRAGE上游条件与开发／测试协议，再复用既有模块增量接入。专项追问／引用／多模态需另选覆盖相应标注的公开benchmark。详见[当前评测范围](benchmark_scope.md#2026-11-26仅使用可核查的公开benchmark)，以下CT待运行安排按历史理解。
+
 整理日期：2026-11-19，进度更新2026-11-26。根目录共21个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法改写对照，并完成CT单轮评估3题真实联调。结构化响应均有效，但观察到过度追问、已知事实误列缺项和适用条件推断错误，待受控上下文诊断。有限补查与图编排待完成。此前误代跑及权限纠正、负结果和历史异常继续保留。
 
 原retrieve_evalution.py的可选review_fn增量已通过合成联结验收：关闭／开启均保留题目，完整核验字典及独立review_latency_ms可保存；CT检索耗时采用用户命名retrieve_latency_ms，保存辅助及其既有检查随核心更新，不要求旧名或添加兼容别名。下一步仍在原run_retrieval_eval.py按需开启，三方法共同复用，不新增运行脚本。三份既有本地控制输入位于data/evaluation/evidence_review/smoke_01，保留不冒充实际检索结果。完整任务见下段与PROJECT_CONTEXT.md第1节／10.5.1；助手不代写核心或代跑，后续LangGraph直接复用review_evidence，不依赖含gold的评测main。
