@@ -2,7 +2,7 @@
 
 整理日期：2026-11-19，进度更新2026-11-26。根目录已有20个受版本管理的Python模块，另有用户未完成／未跟踪的run_query_rewrite_retrieval_eval.py草稿，保留待整理；14个数据维护工具集中到scripts/data。用户已亲自完成324题三方法02，助手只读核验1944条指标通过：改写收益很小且不一致，保留原查询默认及改写可选，下一阶段证据核验／有限补查尚未实现。此前助手误代跑01及权限纠正保留于PROJECT_CONTEXT.md，8题只验流程；既有实测、负结果及历史异常保留。
 
-当前由用户新建evidence_review.py（尚不存在，不计入上面20模块），实现EvidenceReview与review_evidence(query,hits,*,llm)，只做一轮生成前的充分性评估，区分missing_case_facts和missing_evidence。后续LangGraph节点复用同一函数；逐条生成结论的引用支持核验另接，不混称已完成。完整字段、参数、流程及验收见PROJECT_CONTEXT.md的10.5.1，本轮不安装依赖、不运行API，助手不代写核心。
+当前由用户编写evidence_review.py（本地已新建，尚未验收或纳入版本管理，不计入上面20模块），实现EvidenceReview与review_evidence(query,hits,*,llm)，只做一轮生成前的充分性评估，区分missing_case_facts和missing_evidence。后续LangGraph节点复用同一函数；逐条生成结论的引用支持核验另接，不混称已完成。完整字段、参数、流程及验收见PROJECT_CONTEXT.md的10.5.1，本轮不安装依赖、不运行API，助手不代写核心。README已按参考项目结构整理为展示入口，完整职责及历史进度仍保留在本文与交接记录。
 
 | 根目录文件 | 职责 | 代码来源 |
 | --- | --- | --- |

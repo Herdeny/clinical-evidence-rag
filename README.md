@@ -1,49 +1,303 @@
-# 医疗证据检索项目 · 医学主语料 v3 已冻结
+<h1 align="center">Clinical Evidence RAG</h1>
 
-项目完整背景、当前进度、后续路线与合作约定见 [项目交接总记录](PROJECT_CONTEXT.md)。继续开发或切换对话时先读该文件，再核对最新代码和输出。
+<p align="center"><strong>基于多源循证检索与多模态报告解析的医疗辅助决策系统</strong></p>
+<p align="center">面向临床证据查询：找到依据、核对适用条件、定位原文，并说明还缺什么。</p>
 
-代码目录已整理：根目录已有20个受版本管理的Python模块，14个可复现数据工具集中在scripts/data。参见[文件导航](docs/project_files.md)与[数据下载和处理过程](docs/data_acquisition_and_processing.md)。
+<p align="center">
+  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="LangChain" src="https://img.shields.io/badge/LLM-LangChain-1C3C3C">
+  <img alt="Qwen3 Embedding and Reranker" src="https://img.shields.io/badge/Retrieval-Qwen3-7C3AED">
+  <img alt="Development in progress" src="https://img.shields.io/badge/Status-In%20Development-F59E0B">
+</p>
 
-**2026-11-26当前：用户已完成324题三方法查询改写对照并核验。** 同一NFCorpus324dev，BM25、Qwen8B Dense及Qwen8B RRF各比较原问题／保存表达。仅12条表达变化、312条原样；Dense nDCG@10为0.392196→0.392264、Recall@100为0.397097→0.397362，Recall@10略降，原32道零召回题全部未被改写且仍零召回。BM25及RRF的Recall@100略降。当前保留原查询默认与改写可选，不宣称通用改写必然改善召回。完整四指标、逐题差异和成本范围见[全量归档](docs/nfcorpus_retrieval_baselines.md#用户324题查询改写三方法02收益很小且不一致)。下一阶段按原计划开展证据核验与有限补查，尚未实现；真实模型／API／GPU由用户执行。
+<p align="center">
+  <a href="#overview">项目概览</a> ·
+  <a href="#architecture">系统架构</a> ·
+  <a href="#quickstart">快速开始</a> ·
+  <a href="#evaluation">实测结果</a> ·
+  <a href="#docs">文档导航</a> ·
+  <a href="#roadmap">开发路线</a>
+</p>
 
-**重排阶段归档：既定候选对照完成。** 同一324题／原Qwen Dense Top100，4B batch1的nDCG@10／Recall@10为0.409974／0.206984、重排均值3.258秒/题；4B batch4为0.407701／0.205120、3.236秒/题；8B batch4为0.416582／0.202992、5.430秒/题。BGE-v2-m3 batch4为0.329419／0.147297、267.758ms/题，对原Dense两指标下降16.01%／23.36%，保留负向结果，不因快而启用。全部Recall@100保持0.397097。BGE本周期的逐题指标、候选、源码／配置及86个文件身份通过核验，旧资源异常继续继承披露，详见[完整实测与边界](docs/nfcorpus_retrieval_baselines.md#bge-v2-m3重排负向结果与阶段结论)。Qwen8B保留效果对照、4B保留成本对照；后续固定Qwen Dense的改写全量结果见上方。医学专项与MIRAGE全量问答仍待完成。
+---
 
-**2026-11-21：CT专项评测扩充草稿已完成。** 新增132题，加原48题，共120开发／60留出、30规则家族，每族6个相关变体。4项构建器检查及独立结构复验通过，主库、完整向量与旧成绩未变；所有标签仍待独立人工复核。下一步在固定120道开发草稿上做三方法探索性对照，明确披露AI初标；不要求用户先逐题填写复核表，正式结论另行核查标签质量。详见[题集说明](data/evaluation/ct_v3/DATA_CARD.md)。
+> **当前阶段 · 2026-11-26**：已完成医学语料构建、检索基线、固定候选重排及全量开发集查询改写对照；正在开发证据充分性评估。LangGraph 编排、报告 OCR、多模态对照和服务化仍待完成。
 
-**2026-11-20：医学v3全库BM25和Dense基线均已完成并核验。** 783,847片段／32开发题，BM25的Group Recall@1／3／5为0.28125／0.34375／0.453125，Dense为0.1875／0.359375／0.421875；平均查询分别4332.917ms与330.062ms。完整Dense矩阵可复用。见[BM25归档](docs/medical_v3_bm25_baseline.md)与[Dense归档及分段资源](docs/medical_v3_dense_baseline.md)。RRF功能现已接入，等待新题复核后做正式对照，不重编码。
+<a id="overview"></a>
 
-医学主语料 v3 已完成扩充与完整性验证：**10,840 来源、783,847 个片段、594,483 条不同正文**。其中 9,836 篇 PMC 论文、998 份产品说明书和原 CT 238 条。见 [v3 数据说明](data/v3/DATA_CARD.md)、[调研与使用条件](docs/medical_corpus_v3_research.md)和[核验记录](results/medical_corpus_v3_validation.json)。两种单独基线已完成本库实测，接下来按同一输入做RRF，已有接口与辅助继续复用。
+## ✨ 项目概览
 
-[数据扩充节点](docs/data_expansion_milestones.md)现已提前：先核验并批量接入主要医学检索语料、固定新版本，再做正式方法对照。现有 CT 小库用于回归，不要求再在其上完成一轮 BM25／RRF 正式实验。
+临床证据查询需要同时判断“材料说了什么”和“材料是否适用于当前问题”。同样是一份发现肺结节的胸部 CT 报告，筛查、偶发发现和检查目的缺失，会影响应该查阅的框架与需要确认的条件。
 
-当前RRF功能接入已完成：融合／编排12项、入口5项、保存辅助6项相应检查通过。model_name等信息保留在各自方法层，保存辅助原样支持该结构并兼容旧平铺配置。专项评测已扩题，下一步[运行开发集探索性对照](docs/data_expansion_milestones.md)，原32题保留为回归；目前没有真实全库RRF成绩。此前[Dense完整缓存](docs/dense_cache_task.md)继续复用。
+本项目从**报告与指南匹配**切入，逐步扩展到**药品说明书与医学文献核对**。目标是让每条判断对应可回查的证据，并区分三种情况：已有材料能够回答、病例条件需要确认、来源证据需要补查。
 
-开发方式已确定：所有任务按成品方向增量建设，核心代码由用户实现，阶段推进复用同一套模块与接口；不为教学便利先写临时版本再重做。详细约定见 [合作方式](PROJECT_CONTEXT.md#138-全部任务按成品方向增量开发保持标准连续)。
+| 验证任务 | 重点检查 | 当前进度 |
+|:---|:---|:---|
+| **CT 报告与指南匹配** | 筛查／偶发场景、适用条件、必要澄清和证据位置 | 已有合成题、来源快照与检索基线；标签待独立复核 |
+| **用药证据核对** | 正确产品、说明书章节、特殊人群与合并用药条件 | 已接入产品说明书；专项题与完整核验流程待完成 |
+| **三类来源共同查证** | 区分指南推荐、产品说明和论文研究发现 | 已有多类语料；跨来源任务与补查流程待完成 |
+| **报告多模态输入** | PDF／扫描件／截图的字段、数字、单位、否定词与原文位置 | 已有来源文档 HTML／电子 PDF 解析；报告 OCR 与配对评测待完成 |
 
-最终验收必须完成 **MIRAGE 全量 7,663 题的公开基准对标**，并交付报告／用药／多模态的专项证据链验证。要求与当前未完成项见 [对标范围与验收](docs/benchmark_scope.md)。当前 CT 数据包为阶段成果，尚无 MIRAGE 成绩。
+<a id="features"></a>
 
-当前 CT v2 数据准备已整批完成：**238 条本地检索输入、48 道 AI 初标题、24 个场景家族，32 开发／16 留出**。先看 [数据说明与复现](data/v2/DATA_CARD.md) 和 [批量交付记录](docs/ct_v2_delivery.md)。12 项测试及数据指纹复现通过；题目未独立人工或医生复核，已有 CT v2 开发集纯向量检索实测，尚无新增生成回答或临床有效性成绩。
+## 🎯 核心设计与实现
 
-[CT v2 纯向量基线](docs/ct_v2_dense_baseline.md)已完成 32 道开发题实测与独立复算核验，Group Recall@1／3／5 为 0.21875／0.421875／0.484375；正式入口为 `run_retrieval_eval.py`。医学v3主语料的BM25和Dense正式对照也已完成，接下来做RRF；新旧语料规模不同，不将其分数差直接归因于算法。MIRAGE 原始7,663题已下载并核验快照，全量模型对标仍待完成。
+| 设计重点 | 已有实现或实验 | 代码与记录 |
+|:---|:---|:---|
+| **多源数据与统一证据格式** | HTML、PDF、JATS、SPL 分别解析，统一保存证据 ID、来源身份及位置 | [数据处理流程](docs/data_acquisition_and_processing.md) · [解析模块](scripts/data/medical_corpus_parsing.py) |
+| **可比较的检索策略** | 自行实现 Dense 相似度与 Top-K、BM25 检索封装、RRF 融合 | [Dense](retrieve_core.py) · [BM25](retrieve_bm25.py) · [RRF](retrieve_rrf.py) |
+| **固定候选重排** | 在相同 Dense Top-100 上比较 Qwen3 4B／8B 与 BGE，保留原排名和候选身份 | [重排核心](rerank_core.py) · [候选加载](frozen_candidates_io.py) |
+| **可选查询改写** | LangChain＋DeepSeek 结构化输出；BM25、Dense、RRF 共用原问题／改写对照入口 | [改写核心](query_rewrite.py) · [统一评测入口](run_benchmark_eval.py) |
+| **向量缓存与恢复** | 按数据及模型配置识别缓存，分批提交，支持中断后继续编码 | [编码编排](embedding_index.py) · [缓存 I/O](embedding_cache_io.py) |
+| **可回查的离线实验** | 保存逐题排名、原始问题、配置、指标、用量及运行记录，分别分析漏检与排序变化 | [评测核心](benchmark_eval.py) · [实测报告](docs/nfcorpus_retrieval_baselines.md) |
 
-下面保留原 B0 起始练习与 v1 资料说明。继续开发使用 v3 主语料及原 CT 开发题做新库对照，不从本页“第一步”重新开始。
+当前实验表明，**模型更大、增加 RRF 或增加改写，都需要在固定条件下验证**。例如，当前 BGE 重排降低了强 Dense 基线的排序指标，通用查询改写的收益也很小；这些负向结果与有效结果一起保留。
 
-实际开发中遇到的问题、处理状态和面试复盘见 [工程问题与面试复盘](docs/engineering_issues.md)。记录区分已修正、待复测和后续计划，并保留可回查的实验快照。
+<a id="architecture"></a>
 
-当前扩充与待补项见 [数据扩充节点](docs/data_expansion_milestones.md)。原 [CT 数据集 v2 来源核验与计划](docs/data_v2_plan.md)及[v2 候选来源清单](data/v2/source_candidates.json)保留作历史记录。
+## 🏗️ 系统架构
 
-| 文件 | 内容 |
-| --- | --- |
-| `data/sources.json` | 5 个可回查的原始来源，含发布机构、标题和链接 |
-| `data/evidence.jsonl` | 15 张英文证据卡，每张有原文定位。正文为供本项目使用的转述 |
-| `data/cases.jsonl` | 12 道合成报告题，8 道开发题、4 道留出题，带人工初标的证据 ID |
+下面是**当前已实现的离线检索与评测流程**。检索策略共用数据和评测接口，重排使用已固定的候选，查询改写可以独立开启。
 
-两个核心来源是 [ACR Lung-RADS](https://www.acr.org/clinical-resources/clinical-tools-and-reference/reporting-and-data-systems/lung-rads) 和 [Fleischner 2017](https://pubs.rsna.org/doi/full/10.1148/radiol.2017161659)。ACR 偶发结节影像适宜性标准和 USPSTF 筛查建议提供与主任务接近但用途不同的证据。使用时通过卡片的来源链接核对原文。开发集和留出集按场景组分开，标签用于教学，尚未经过医生复核。
+```mermaid
+flowchart TD
+    Q["原始问题／报告＋问题"] --> V["原查询或已保存的改写表达"]
+    W["DeepSeek 结构化查询改写"] --> V
+    C["统一语料：id · text · source_id · locator"] --> B["BM25"]
+    C --> D["Dense：Embedding＋NumPy Top-K"]
+    V --> B
+    V --> D
+    B --> F["可选 RRF 融合"]
+    D --> F
+    B --> E["共同评测接口"]
+    D --> E
+    F --> E
+    D --> S["固定 Dense Top-100 候选"]
+    S --> R["Cross-Encoder 重排"]
+    R --> E
+    E --> O["逐题结果＋指标＋配置与来源记录"]
+```
 
-## 第一步：读取证据卡
+**后续业务链路**：报告解析 → 证据检索 → 充分性与适用条件评估 → 必要追问／有限补查 → 回答生成 → 逐条结论与引用支持核验。LangGraph 将负责条件路由、调用预算和停止状态；当前正在实现可供节点复用的单轮评估函数。
 
-打开 `data/evidence.jsonl` 看前两行。每一行是一张独立的证据卡，`text` 是证据正文，`id` 是卡片编号，`source_id` 和 `locator` 用于定位原始来源。
+| 层次 | 当前使用 | 计划接入 |
+|:---|:---|:---|
+| 数据解析 | requests、BeautifulSoup、pypdf、XML 解析、JSONL | 报告 OCR／视觉模型，工具经样本对比后确定 |
+| 检索与排序 | NumPy、rank-bm25、Sentence Transformers；LangChain HuggingFaceEmbeddings 接入 BGE／Qwen3 | Qdrant 索引与来源、地区、场景等元数据过滤 |
+| LLM | LangChain、DeepSeek、Pydantic 结构化输出 | LangGraph 证据评估、追问、定向补查与停止 |
+| 运行与交付 | Python CLI、文件缓存、逐题 JSONL／JSON 记录 | FastAPI、SQLite 评测记录、Docker 单实例 |
 
-新建 `b0_practice.py`，把每一行非空内容解析成字典，存进同一个列表。用 Python 标准库里的 `json` 模块就够了。
+<a id="quickstart"></a>
 
-验收时打印卡片总数、第一张卡片的 `id` 和 `text`。总数应为 15，第一张卡片的内容应和原文件第一行一致。
+## 🚀 快速开始
+
+当前交付入口是 **CLI 检索评测**。以下命令用于已配置依赖的 Python 3.12 开发环境；本地已验证的环境名为 `all-in-rag`。主要依赖包括 pandas、NumPy、rank-bm25、pytrec-eval、PyTorch、Sentence Transformers、langchain-huggingface、langchain-deepseek 和 tqdm。完整依赖锁定与开箱部署属于后续交付项。
+
+### 1. 获取代码与准备数据
+
+```bash
+# 获取项目代码。
+git clone https://github.com/Herdeny/clinical-evidence-rag.git
+# 进入项目目录。
+cd clinical-evidence-rag
+# 在本机已有该开发环境时激活它。
+conda activate all-in-rag
+# 从 BEIR 官方 Hugging Face 镜像准备 NFCorpus，并保存来源记录。
+python -m scripts.data.prepare_nfcorpus --source huggingface
+```
+
+规范数据目录为 `data/external/nfcorpus/prepared/nfcorpus/`，包含 `corpus.jsonl`、`queries.jsonl` 和 `qrels/`。已有完整数据时，可用 `python -m scripts.data.prepare_nfcorpus --verify-only` 只做复验。
+
+医学主语料的采集、解析、许可筛选与失败记录见[数据处理说明](docs/data_acquisition_and_processing.md)。`data/`、`cache/` 和 `results/` 默认不进入 Git，克隆代码不会自动取得本机语料、模型权重或实验原件。
+
+### 2. 运行 BM25 开发集
+
+```bash
+# 使用项目缓存目录运行 BM25，结果保存到 results/。
+bash scripts/project_env.sh python -u run_benchmark_eval.py \
+  --method bm25 \
+  --config configs \
+  --data-dir data/external/nfcorpus/prepared/nfcorpus \
+  --split dev \
+  --run-name nfcorpus_bm25_dev_readme_01
+```
+
+该模式不调用生成 API，也不加载 Embedding 权重。每轮保存三份文件：`*_results.jsonl`（逐题结果）、`*_run.json`（文档排名）和 `*_summary.json`（汇总与配置）。同名输出存在时会拒绝覆盖，重跑请使用新的运行编号。
+
+### 3. 切换 Dense、RRF 或改写对照
+
+Dense 与 RRF 需要先准备配置中固定版本的模型快照。当前 Qwen3 配置使用 CUDA；模型与运行设置见 [Embedding 配置](configs/embedding_profiles.json)。包装脚本将 Hugging Face、Torch 等缓存放在项目 `cache/` 下。
+
+| 目的 | 在 BM25 命令基础上调整 |
+|:---|:---|
+| Qwen3-Embedding-8B Dense | `--method dense --config-embedding-model qwen3_8b`，并更换 `--run-name` |
+| BM25＋Qwen3 Dense RRF | `--method rrf --config-embedding-model qwen3_8b`，并更换 `--run-name` |
+| 比较原问题和保存的改写 | 追加 `--rewrite-results <已保存的改写JSONL路径>`；同一入口输出两组结果 |
+
+改写对照复用保存记录，不会在检索过程中重新请求 API。生成改写记录的入口是 [run_query_rewrite_batch.py](run_query_rewrite_batch.py)，需要可用的 DeepSeek 配置与凭证。固定候选重排使用 [run_reranking_eval.py](run_reranking_eval.py)，完整准备与运行步骤见[重排说明](docs/reranking_runtime_task.md)。
+
+<a id="evaluation"></a>
+
+## 📊 实测结果与口径
+
+以下结果均来自本项目实际运行与离线复核。**NFCorpus 检索排序、CT 证据覆盖和 MIRAGE 问答准确率是不同任务，分别报告。**
+
+### NFCorpus：检索与模型对照
+
+固定 **3,633 篇文档、324 条 dev 查询**，使用配套 qrels；全部查询计入均值，未运行官方 test。下表 RRF 使用两路各 Top-100、融合常量 60。
+
+| 方法 | nDCG@10 | Recall@10 | nDCG@100 | Recall@100 |
+|:---|---:|---:|---:|---:|
+| BM25 | 0.265738 | 0.110192 | 0.217934 | 0.205678 |
+| BGE-small Dense | 0.327186 | 0.149011 | 0.297283 | 0.315082 |
+| BM25＋BGE-small RRF | 0.312468 | 0.140675 | 0.281379 | 0.300335 |
+| **Qwen3-Embedding-8B Dense** | **0.392196** | **0.192203** | **0.370125** | **0.397097** |
+| BM25＋Qwen3 Dense RRF | 0.327825 | 0.160792 | 0.318641 | 0.364271 |
+
+当前两组 RRF 均未超过各自的 Dense 基线，保留融合能力与负向结果。
+
+### NFCorpus：固定候选重排
+
+统一使用原 Qwen3 Dense Top-100，保持问题、文档和候选集合一致。模型在 RTX 4090 上运行，使用 BF16；下表时间只包含**候选读取与新增重排阶段**，不代表端到端延迟。
+
+| 重排配置 | nDCG@10 | Recall@10 | Recall@100 | 平均每题新增耗时 |
+|:---|---:|---:|---:|---:|
+| Qwen3-Reranker-4B，batch=1 | 0.409974 | **0.206984** | 0.397097 | 3.258 s |
+| Qwen3-Reranker-4B，batch=4 | 0.407701 | 0.205120 | 0.397097 | 3.236 s |
+| Qwen3-Reranker-8B，batch=4 | **0.416582** | 0.202992 | 0.397097 | 5.430 s |
+| BGE-reranker-v2-m3，batch=4 | 0.329419 | 0.147297 | 0.397097 | 0.268 s |
+
+Qwen3 8B 重排相对原 Dense 的 nDCG@10 提升 **6.22%（相对值）**；4B batch=1 的 Recall@10 更高。BGE 重排在当前候选与配置下使两项头部指标下降。重排没有增加候选，因此所有配置的 Recall@100 保持不变。
+
+### NFCorpus：全量查询改写对照
+
+同一批 324 道开发题、同一份保存的改写记录，分别运行三种检索方法。仅 **12 条表达发生变化，312 条原样保留**。
+
+| 方法 | nDCG@10：原问题 → 改写 | Recall@100：原问题 → 改写 |
+|:---|---:|---:|
+| BM25 | 0.265738 → 0.267019 | 0.205678 → 0.205261 |
+| Qwen3 Dense | 0.392196 → 0.392264 | 0.397097 → 0.397362 |
+| BM25＋Qwen3 RRF | 0.327825 → 0.328678 | 0.364271 → 0.364148 |
+
+当前通用改写的收益很小且不一致。Dense 原有 32 道零召回题均未被改写，改写后仍为零召回；保留原查询默认与改写可选路径，下一步研究针对证据缺口的补查。
+
+完整四指标、逐题变化、资源范围及原始运行标识见 **[NFCorpus 实测报告](docs/nfcorpus_retrieval_baselines.md)**。报告保留了一份历史预检资源文件被覆盖的异常与调查范围，不声称全部历史原件持续完整。
+
+### 医学主语料：CT 开发题检索
+
+固定 v3 的 **783,847 个片段**与原 **32 道 CT 开发题**，查询为报告＋问题。标签为 AI 初标，以下只衡量现有标注下的证据组覆盖。
+
+| 方法 | Group Recall@1 | Group Recall@3 | Group Recall@5 | 平均每题检索耗时 |
+|:---|---:|---:|---:|---:|
+| BM25 | 0.281250 | 0.343750 | 0.453125 | 4,332.917 ms |
+| BGE-small Dense | 0.187500 | 0.359375 | 0.421875 | 330.062 ms |
+
+详见 [BM25 归档](docs/medical_v3_bm25_baseline.md)与 [Dense 归档](docs/medical_v3_dense_baseline.md)。这些结果不代表回答正确率或临床有效性；Qwen3 在 NFCorpus 上的成绩也不能视为已在全部医学主语料上验证。
+
+<a id="data"></a>
+
+## 🗂️ 数据与证据溯源
+
+### 医学主语料 v3
+
+| 来源 | 来源数 | 检索片段数 |
+|:---|---:|---:|
+| PMC 论文正文 | 9,836 | 480,538 |
+| DailyMed 产品说明书 | 998 | 303,071 |
+| CT 相关指南、推荐及证据摘要来源 | 6 | 238 |
+| **合计** | **10,840** | **783,847** |
+
+正文精确去重后为 **594,483 条不同内容**。同一成分的不同产品说明书保留产品身份，来源数、片段数、不同正文数和评测题数分别统计。
+
+证据以 `id / text / source_id / locator` 为共同接口；来源记录进一步保存论文 PMCID／PMID／DOI、说明书 setID／版本，以及章节、页码、XPath 或字符范围。位置存在说明材料可回查，仍需检查是否支持具体结论。
+
+### 三类评测材料
+
+| 材料 | 规模 | 用途与状态 |
+|:---|:---|:---|
+| NFCorpus | 3,633 文档；324 dev 查询 | 已完成检索、重排与改写对照；官方 test 未运行 |
+| CT 专项题草稿 | 180 题；120 开发／60 留出；30 规则家族 | 验证场景、澄清与引用；相关变体不视为独立临床场景，标签待独立复核 |
+| MIRAGE | 7,663 道公开医学问答题 | 原始快照已准备；完整问答适配和全量模型对标待完成，是最终验收项 |
+
+NFCorpus 使用其配套文档和 qrels；医学主语料用于项目业务验证；MIRAGE 保持独立，不把标准答案或给定支持上下文塞入检索。数据来源、许可筛选和处理边界见[语料调研](docs/medical_corpus_v3_research.md)、[采集处理](docs/data_acquisition_and_processing.md)与[对标要求](docs/benchmark_scope.md)。
+
+<a id="docs"></a>
+
+## 🗺️ 从哪里继续阅读
+
+| 目标 | 推荐入口 |
+|:---|:---|
+| 理解文件职责与当前模块 | [文件导航](docs/project_files.md) |
+| 查看数据如何下载、解析和定位原文 | [采集与处理过程](docs/data_acquisition_and_processing.md) · [来源调研](docs/medical_corpus_v3_research.md) |
+| 核对模型、检索与重排实测 | [NFCorpus 报告](docs/nfcorpus_retrieval_baselines.md) · [重排配置与运行](docs/reranking_runtime_task.md) |
+| 理解查询改写及对照方法 | [改写任务与实现约定](docs/query_rewrite_task.md) · [统一评测入口](run_benchmark_eval.py) |
+| 查看真实工程问题与面试复盘 | [工程问题记录](docs/engineering_issues.md) |
+| 确认最终交付与基准要求 | [对标范围与验收](docs/benchmark_scope.md) |
+| 接续开发、了解背景与合作约定 | [项目交接总记录](PROJECT_CONTEXT.md) |
+
+<details>
+<summary><strong>📁 展开项目目录</strong></summary>
+
+```text
+clinical-evidence-rag/
+├── retrieve_core.py              # Dense 相似度与 Top-K
+├── retrieve_bm25.py               # BM25 分词、构建与检索
+├── retrieve_rrf.py                # RRF 融合及检索编排
+├── rerank_core.py                 # 固定候选重排
+├── query_rewrite.py               # 单题与批量结构化查询改写
+├── embedding_adapter.py          # Embedding 模型构造与输出归一化
+├── embedding_index.py            # 分批编码与缓存恢复
+├── embedding_cache_io.py         # 向量缓存持久化
+├── frozen_candidates_io.py       # 固定候选及来源核对
+├── benchmark_data.py             # BEIR 数据读取与查询适配
+├── benchmark_eval.py             # 共同评测与配对对照
+├── run_benchmark_eval.py         # BM25／Dense／RRF 评测入口
+├── run_reranking_eval.py         # 固定候选重排入口
+├── run_query_rewrite_batch.py    # 批量改写入口
+├── configs/                      # 固定模型版本与运行配置
+├── scripts/data/                 # 数据采集、解析、构建与核验
+├── scripts/evaluation/           # 预检及离线结果核验
+├── tests/                        # 模块与辅助 I/O 检查
+├── docs/                         # 技术说明、实测和工程复盘
+├── data/                         # 本地语料与评测数据，Git 忽略
+├── cache/                        # 本地模型及向量缓存，Git 忽略
+└── results/                      # 本地实验原件与运行记录，Git 忽略
+```
+
+根目录其余模块与职责见[文件导航](docs/project_files.md)。早期 Notebook 保留作学习记录，正式评测入口通过 Python 模块运行，不依赖 Notebook 状态。
+
+</details>
+
+<a id="roadmap"></a>
+
+## 🧭 开发路线
+
+| 状态 | 阶段 | 交付目标 |
+|:---:|:---|:---|
+| ✅ | 数据与检索基线 | 医学 v3 语料、Dense／BM25／RRF、向量缓存与共同评测接口 |
+| ✅ | 重排与查询改写对照 | NFCorpus 完整 324 dev、固定候选模型比较、三方法改写对照与错误分析 |
+| 🚧 | 证据充分性评估 | 单轮结构化判断，分别记录缺病例事实与缺来源证据 |
+| ⬜ | LangGraph 有限补查 | 根据缺口追问或定向检索，限制预算，保存停止原因 |
+| ⬜ | 回答与引用支持核验 | 逐条医学结论关联证据，核对原文支持和适用条件 |
+| ⬜ | 用药与跨来源任务 | 正确产品章节、指南适用条件与论文证据类型共同核对 |
+| ⬜ | 报告多模态对照 | 文本／电子 PDF／扫描件／截图配对，验证字段与下游判断 |
+| ⬜ | MIRAGE 全量对标 | 完成 7,663 题，比较无检索、基础 RAG 与改进 RAG，报告质量和成本 |
+| ⬜ | 服务与可复现交付 | Qdrant、FastAPI、SQLite、Docker 单实例及完整运行说明 |
+
+<a id="limitations"></a>
+
+## 📌 当前边界
+
+项目目前使用公开资料与合成病例做离线开发，尚无医生复核后的临床有效性结论。CT 专项标签为 AI 初标；通用检索排序成绩不能替代医学判断、引用支持率或临床评估。
+
+已接入说明书与论文，不表示用药、跨来源核对已完成；电子 PDF 来源解析不表示报告 OCR 已完成。基础 RAG 曾在 Notebook 中联调，完整 Agent 回答链路、Web／API 服务和一键部署仍在路线图中。
+
+第三方文本按各自来源条件使用。PMC 按既定许可筛选；DailyMed 产品标签与 ACR 等资料的获取、使用和再分发条件分别核查。代码可见、页面可访问和材料可公开分发是不同事项，详见[数据使用条件记录](docs/medical_corpus_v3_research.md)。
+
+<a id="acknowledgements"></a>
+
+## 🤝 参考与致谢
+
+项目参考 [JEen-wang/Adaptive-rag 的固定版本](https://github.com/JEen-wang/Adaptive-rag/tree/2a12a62382a8c3ec033fa9a5b19b9b23b8780ab8)的检索分层、工作流、评测与交付组织方式；本 README 也借鉴其展示结构。当前核心检索、评测与改写逻辑在独立目录实现，具体代码分工见[文件导航](docs/project_files.md)。后续如复用源码，单独记录来源与改造。
+
+感谢 [BEIR](https://github.com/beir-cellar/beir)、[NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/)、[MIRAGE](https://github.com/gzxiong/MIRAGE)、[PMC](https://pmc.ncbi.nlm.nih.gov/) 与 [DailyMed](https://dailymed.nlm.nih.gov/) 提供研究工具和数据入口；各自代码、模型与数据的许可分别适用。

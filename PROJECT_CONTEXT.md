@@ -6,7 +6,9 @@
 
 ## 1. 当前应从哪里继续
 
-**2026-11-26当前用户任务：新建evidence_review.py，实现一轮证据充分性评估；尚未写核心或运行API。** 已核对Self-RAG论文／官方项目（训练reflection tokens，不宣称本项目复现或训练该模型）、LangGraph官方agentic RAG示例（文档相关性路由）、ALCE引用评测论文及此前固定Adaptive-rag的GradeResult／SelfRAGLoop。原B1仅Notebook内build_context和自然语言生成，尚无可直接调用的逐条结构化回答模块。先做生成前的充分性评估，之后再接逐条结论支持核验与图控制，不将两者混称已完成。新函数接原始完整query（可为Report+Question）与本轮hits，通过现有LangChain结构化输出判断能否回答当前问题，缺病例事实还是缺证据；后续作为LangGraph review节点调用的业务函数，不依赖Notebook或另复制检索器。
+**2026-11-26 README 展示改版：** 用户要求仿照此前提供的Adaptive-rag项目排版。助手读取固定版本README，将本项目首页整理为居中标题／徽章／导航、能力表、当前架构图、CLI快速开始、实测结果、数据、文档导航、折叠目录、路线图与来源说明；历史阶段细节转由已有文档链接承接，没有删除历史记录。仅展示本项目实际成绩，明确LangGraph／多模态／服务尚未完成，不借用参考仓库指标、UI截图、CI或许可证徽章。文档链接只指向已跟踪文件，说明data／cache／results为本地忽略目录；命令按实际--config及现有参数核对。本轮不运行模型、API、数据下载或评测；用户未跟踪核心文件、Notebook删除与其他本地改动保持原样。证据评估任务继续保留；本地evidence_review.py已出现，尚未审查验收，不作为已实现能力。
+
+**2026-11-26当前核心任务：用户编写evidence_review.py，实现一轮证据充分性评估；本地已新建，尚未审查验收。** 已核对Self-RAG论文／官方项目（训练reflection tokens，不宣称本项目复现或训练该模型）、LangGraph官方agentic RAG示例（文档相关性路由）、ALCE引用评测论文及此前固定Adaptive-rag的GradeResult／SelfRAGLoop。原B1仅Notebook内build_context和自然语言生成，尚无可直接调用的逐条结构化回答模块。先做生成前的充分性评估，之后再接逐条结论支持核验与图控制，不将两者混称已完成。新函数接原始完整query（可为Report+Question）与本轮hits，通过现有LangChain结构化输出判断能否回答当前问题，缺病例事实还是缺证据；后续作为LangGraph review节点调用的业务函数，不依赖Notebook或另复制检索器。
 
 固定本轮接口review_evidence(query,hits,*,llm)，schema EvidenceReview五个必填字段：relevant_evidence_ids:list[str]、sufficient:bool、missing_case_facts:list[str]、missing_evidence:list[str]、reason:str。列表允许显式空列表，不设缺省空列表以免模型漏字段被静默补齐；reason用Field(min_length=1)并在函数内检查全空白。相关IDs指hits的id而非source_id；相关性不等于该材料适用于当前病例，sufficient须看问题范围和来源条件。两个missing列表仅记录阻碍当前问题的必要缺项，不能把后续分级／随访所需条件提前设为框架选择前提。query须是原问题，不能仅传改写表达；不传qrels、gold或expected_behavior给模型。
 
