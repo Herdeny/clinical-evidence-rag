@@ -2,18 +2,21 @@ import argparse
 import json
 import hashlib
 
+from dotenv import load_dotenv  # 沿用项目环境加载方式。
 from pathlib import Path
 from functools import partial
+from langchain_deepseek import ChatDeepSeek  # 创建整批共用的客户端。
 
-from benchmark_data import load_beir_dataset
-from benchmark_eval import evaluate_beir_retrieval, evaluate_query_rewrite_retrieval
+from benchmark_data import load_beir_dataset, load_mirage_dataset
+from benchmark_eval import evaluate_beir_retrieval, evaluate_query_rewrite_retrieval, evaluate_multiple_choice
 from embedding_index import prepare_document_embeddings
 from embedding_adapter import build_embedding_model
-from retrieval_results_io import save_beir_results
+from retrieval_results_io import save_beir_results, save_qa_results
 from retrieve_bm25 import build_bm25
 from retrieve_bm25 import retrieve_bm25
 from retrieve_core import retrieve
 from retrieve_rrf import retrieve_rrf
+from qa_core import iter_question_answers  # 逐题产生回答记录。
 
 def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_embedding_model="bge_small", rewrite_path=None):
     if not method in ("bm25", "dense", "rrf"): raise ValueError("Unknown method: " + method)
@@ -165,7 +168,82 @@ def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_emb
             )
             summaries[key]=summary
         return summaries
-        
+
+def main_qa(config_dir, benchmark_path,
+            *, 
+            profile_name, 
+            mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32):
+    
+    root = Path(__file__).resolve().parent
+    run_name = run_name if run_name else f"qa_{task or 'all'}_{mode}_{profile_name}"
+    for suffix in ("results.jsonl", "summary.json", "run.json"):  # 检查本轮三份输出。
+        output_path = root / "results" / f"{run_name}_{suffix}"  # 先生成文件名字符串，再与目录连接。
+        if output_path.exists(): raise FileExistsError(output_path)  # 已有文件时明确指出冲突位置。
+    
+    questions_df, gold_answers = load_mirage_dataset(benchmark_path, task=task)
+    available_count = len(questions_df)
+    if limit is not None:  # None才表示没有设置上限，0也需要进入检查。
+        if type(limit) != int: raise TypeError("limit must be an integer")  # 题数应为整数，不是字符串。
+        if limit <= 0: raise ValueError("limit must be positive")  # 整数类型正确后再检查范围。
+        questions_df = questions_df.iloc[:limit].copy()  # 必须赋回变量，后面的生成才会使用截取后的表。
+    gold_answers = {query_id: gold_answers[query_id] for query_id in questions_df["id"]}  # 与实际选中的题目同步。
+            
+    llm_profile = json.loads((config_dir / "llm_profiles.json").read_text(encoding="utf-8"))[profile_name]
+    
+    load_dotenv(root / ".env", override=False)
+    llm = ChatDeepSeek(**llm_profile)
+    
+    records = iter_question_answers(questions_df, llm=llm, mode=mode, retrieve_fn=retrieve_fn, k=k)
+    
+    score_fn = partial(evaluate_multiple_choice, questions_df, gold_answers)
+    
+    profile_path = config_dir / "llm_profiles.json"  # 定位本次实际使用的公开模型配置文件。
+    source_files = (  # 保存影响本次生成、评分和落盘行为的源码身份。
+        "benchmark_data.py",  # 题目读取与标准答案分离。
+        "qa_core.py",  # 单题生成及批量迭代。
+        "benchmark_eval.py",  # 离线评分规则。
+        "run_benchmark_eval.py",  # 本次运行入口。
+        "retrieval_results_io.py",  # 流式保存和用量汇总。
+    )  # 源码均位于项目根目录。
+
+    config = {  # 只记录公开配置和实际运行身份。
+        "benchmark_path": str(benchmark_path.resolve()),  # 题库文件绝对路径，转字符串供JSON保存。
+        "benchmark_sha256": hashlib.sha256(benchmark_path.read_bytes()).hexdigest(),  # 固定本次题库内容。
+        "config_dir": str(config_dir.resolve()),  # 实际使用的配置目录。
+        "profile_name": profile_name,  # 用户选择的模型配置名称。
+        "llm_profile": llm_profile,  # 已读取的公开模型参数，不包含环境密钥。
+        "llm_profile_path": str(profile_path.resolve()),  # 模型配置文件的实际位置。
+        "llm_profile_sha256": hashlib.sha256(profile_path.read_bytes()).hexdigest(),  # 固定整份模型配置文件内容。
+        "task": task,  # 指定的子任务；None表示读取所选文件中的全部任务。
+        "limit": limit,  # 用户请求的题数上限；None表示不限制。
+        "available_count": available_count,  # 应用limit之前的可用题数。
+        "selected_count": len(questions_df),  # 实际选中的题数，不直接使用limit。
+        "query_subset_ids": questions_df["id"].tolist(),  # 保存实际参评题号及顺序。
+        "mode": mode,  # 本轮为无检索还是RAG。
+        "k": k if mode == "rag" else None,  # 无检索模式不记录虚假的检索预算。
+        "retrieval_config": retrieval_config if mode == "rag" else None,  # 保存检索器公开配置，不保存检索函数对象。
+        "source_sha256": {  # 按文件名保存各模块的内容指纹。
+            filename: hashlib.sha256((root / filename).read_bytes()).hexdigest()  # 计算当前源码文件的SHA-256。
+            for filename in source_files  # 依次处理上面列出的五个模块。
+        },  # 以后可以核对本次使用的具体实现。
+    }  # 随后将此配置交给save_qa_results。
+    
+    summary = save_qa_results(  # 保存层开始迭代records时，才会逐题触发生成。
+    records,  # 直接传生成器。
+    score_fn=score_fn,  # 全部记录保存后，再调用你的评分函数。
+    config=config,  # 保存公开配置和输入身份。
+    run_name=run_name,  # 使用前面确定的名称。
+    result_dir=root / "results",  # 沿用项目结果目录。
+)  # 返回包含metrics、generation、latency和per_query的摘要。
+    
+    return summary
+    
+    
+    
+    
+    
+    
+    
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent

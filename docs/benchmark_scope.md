@@ -110,7 +110,11 @@ PubMedQA另报告macro_f1，依据[原作者评分脚本](https://github.com/pub
 
 用户在现有run_benchmark_eval.py新增main_qa(config_dir, benchmark_path, *, profile_name, mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32)。原BEIR main及CLI先保持，新增函数验收后再增量切换CLI。用现有读取器、可选task／limit筛选题目，gold按实际id取子集；保留可用／选中数量和完整题号，run_name显式优先或qa_{task or 'all'}_{mode}_{profile_name}，无时间戳。公开profile来自config_dir，沿现有dotenv和客户端构造，每批一个客户端；检索器及公开配置从参数传入，避免重写三种算法。
 
-records直接保留iter_question_answers返回的生成器；score_fn用partial(evaluate_multiple_choice, questions_df, gold_answers)绑定前两个参数，交给save_qa_results在完整记录后评分。不要提前list(records)，文件保护与逐题保存要先于迭代。config记录输入／源码／公开profile指纹、实际选择及模式／k／检索配置，不保存对象或密钥；三输出先防覆盖，返回完整保存摘要。当前main_qa尚未实现，后续正式RAG装配与批量CLI仍待接入；用户保存后只用本地替身验证，真实500题仍由用户运行。
+records直接保留iter_question_answers返回的生成器；score_fn用partial(evaluate_multiple_choice, questions_df, gold_answers)绑定前两个参数，交给save_qa_results在完整记录后评分。不要提前list(records)，文件保护与逐题保存要先于迭代。config记录输入／源码／公开profile指纹、实际选择及模式／k／检索配置，不保存对象或密钥；三输出先防覆盖，返回完整保存摘要。
+
+2026-11-27用户已实现main_qa并通过8组本地联结检查，入口源码SHA=ff9d253d13b882b4479713a721289973d1cb4d7358a132d46400b652e1fd7777。覆盖有限子集、完整500题假响应遍历、默认名、task=None、API失败保留并继续、RAG空结果注入、三文件防覆盖及非法limit；使用真实核心／读取／评分／保存，dotenv和客户端边界被替换，未读取密钥或调用真实API。原BEIR main及CLI未变，助手未改核心；报告results/qa_entry_validation_01.json没有模拟医学成绩，真实500题仍未运行。
+
+当前由用户在原CLI增加--benchmark（Path，默认None）、--profile（默认deepseek_flash）、--task（默认None）、--limit（int，默认None）。提供benchmark时调用main_qa，mode=closed_book，直接传args.run_name，让QA函数决定其默认名；只打印metrics、generation、latency。未提供benchmark时，原BEIR调用与默认命名放到else保留。--config沿用且不加别名，不新增脚本；正式RAG命令行及检索器装配下一步在同文件复用现有实现。保存后只做假客户端检查，真实批量由用户运行。
 
 ## 2026-11-24 当前实测进度
 

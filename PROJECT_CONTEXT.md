@@ -6,6 +6,12 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27当前：用户的main_qa已通过8组本地调用链检查，下一项在同一文件接入无检索QA命令行。** run_benchmark_eval.py源码SHA=ff9d253d13b882b4479713a721289973d1cb4d7358a132d46400b652e1fd7777。真实读取器→main_qa→逐题核心／迭代器→流式保存→用户离线评分接线通过；仅将dotenv替换为空操作、客户端替换为假响应，并将临时输出放到results下隔离目录后清理。选取2题、完整500题假响应遍历、默认命名、不指定task、API异常后继续、RAG空结果回调、三产物分别防覆盖、非法limit拒绝共8组通过。500次假响应遍历不是500题模型实测；没有读取.env、网络请求、模型／GPU运行或医学成绩。原BEIR main及模块级CLI的AST与提交版相同，助手未改核心；报告results/qa_entry_validation_01.json仅记录软件检查与实际源码身份，不保存模拟准确率。
+
+下一用户任务仍在run_benchmark_eval.py原__main__增量修改，不新增入口：增加--benchmark（Path，默认None）作为QA题库及分支信号、--profile（默认deepseek_flash）、--task（默认None）、--limit（int，默认None）。parser.parse_args后先判断args.benchmark；提供题库时调用已验收main_qa，mode明确为closed_book，传args.config／benchmark／profile／task／limit／run_name，返回后只打印metrics／generation／latency；未提供时原BEIR变量赋值、默认名称及main调用／输出整块放入else，行为保持。QA的args.run_name直接传入main_qa，不先套BEIR命名公式。--config保持唯一名称，run-name仍可选且无时间戳。当前不暴露尚未装配的RAG命令行；后续在同文件复用既有检索构造并增加模式选择，不复制算法或另建QA运行脚本。用户保存后先进行无真实调用的CLI联结检查，再由用户亲自运行公开500题开发基线；助手不得代跑。
+
+以下19＋11项验收和main_qa待实现描述是上一检查点，当前以上方入口验收及CLI任务为准。
+
 **2026-11-27当前：用户批量迭代器通过19项本地检查，流式保存辅助通过11项检查；下一项在既有run_benchmark_eval.py增量添加main_qa入口函数。** qa_core.py源码SHA=5d023db042f06898d3f56ec6b141494a13e8fddb07d331c2739fe3e435ff1870；惰性执行／每次next一题、共享客户端、question-only检索、空命中RAG、结构化失败保留用量、API异常记录后继续、检索和编程异常原样传播、参数拒绝、评分联结与输入不变均通过。单题输出类及answer_multiple_choice的AST未改；结果results/qa_batch_validation_01.json，不是模型成绩，无API调用。
 
 助手在已有retrieval_results_io.py增量提供save_qa_results(records, *, score_fn, config, run_name, result_dir)，源码SHA=1743d719e46618955958c954fbdcb05986907d2a8cc11c54ea1d34f0325154bf。先保护三份输出／独占创建_run.json，再for消费用户迭代器，每题原样写_results.jsonl并flush。生成结束才score_fn(saved)，复用用户evaluate_multiple_choice，不自写评分规则；完整_summary.json包含metrics／generation／latency／per_query。已知用量含结构化失败、未知或全未知不补0，未执行检索耗时保留None；只有完整生成评分后_run.status=completed。生成／评分失败或KeyboardInterrupt保留已写JSONL，不产生虚假完整成绩，状态记录后原异常继续上抛；状态文件用项目结果目录临时文件原子更新。11项临时软件IO检查通过，旧四个辅助函数AST未改，记录results/qa_stream_io_validation_01.json，未新增项目入口或测试脚本、未调用API。注意保存函数消费生成器会触发其业务执行，不能说传入真实生成器后仍只是无调用的文件操作。
