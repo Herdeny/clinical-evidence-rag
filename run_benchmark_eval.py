@@ -1,6 +1,8 @@
 import argparse
 import json
 import hashlib
+from pyexpat import model
+from urllib import parse
 
 from dotenv import load_dotenv  # 沿用项目环境加载方式。
 from pathlib import Path
@@ -20,6 +22,8 @@ from qa_core import iter_question_answers  # 逐题产生回答记录。
 
 def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_embedding_model="bge_small", rewrite_path=None):
     if not method in ("bm25", "dense", "rrf"): raise ValueError("Unknown method: " + method)
+    
+    run_name = run_name if run_name else f"{data_dir.name}_{method}_{config_embedding_model}_{split}"
 
     result_dir = Path(__file__).resolve().parent / "results"  # 沿用项目原来的输出目录。
     prefixes = (run_name,) if rewrite_path is None else (f"{run_name}_original", f"{run_name}_rewritten")  # 根据模式确定一个或两个输出前缀。
@@ -171,11 +175,11 @@ def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_emb
 
 def main_qa(config_dir, benchmark_path,
             *, 
-            profile_name, 
+            model_name, 
             mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32):
     
     root = Path(__file__).resolve().parent
-    run_name = run_name if run_name else f"qa_{task or 'all'}_{mode}_{profile_name}"
+    run_name = run_name if run_name else f"qa_{task or 'all'}_{mode}_{model_name}"
     for suffix in ("results.jsonl", "summary.json", "run.json"):  # 检查本轮三份输出。
         output_path = root / "results" / f"{run_name}_{suffix}"  # 先生成文件名字符串，再与目录连接。
         if output_path.exists(): raise FileExistsError(output_path)  # 已有文件时明确指出冲突位置。
@@ -188,7 +192,7 @@ def main_qa(config_dir, benchmark_path,
         questions_df = questions_df.iloc[:limit].copy()  # 必须赋回变量，后面的生成才会使用截取后的表。
     gold_answers = {query_id: gold_answers[query_id] for query_id in questions_df["id"]}  # 与实际选中的题目同步。
             
-    llm_profile = json.loads((config_dir / "llm_profiles.json").read_text(encoding="utf-8"))[profile_name]
+    llm_profile = json.loads((config_dir / "llm_profiles.json").read_text(encoding="utf-8"))[model_name]
     
     load_dotenv(root / ".env", override=False)
     llm = ChatDeepSeek(**llm_profile)
@@ -210,7 +214,7 @@ def main_qa(config_dir, benchmark_path,
         "benchmark_path": str(benchmark_path.resolve()),  # 题库文件绝对路径，转字符串供JSON保存。
         "benchmark_sha256": hashlib.sha256(benchmark_path.read_bytes()).hexdigest(),  # 固定本次题库内容。
         "config_dir": str(config_dir.resolve()),  # 实际使用的配置目录。
-        "profile_name": profile_name,  # 用户选择的模型配置名称。
+        "profile_name": model_name,  # 用户选择的模型配置名称。
         "llm_profile": llm_profile,  # 已读取的公开模型参数，不包含环境密钥。
         "llm_profile_path": str(profile_path.resolve()),  # 模型配置文件的实际位置。
         "llm_profile_sha256": hashlib.sha256(profile_path.read_bytes()).hexdigest(),  # 固定整份模型配置文件内容。
@@ -257,6 +261,13 @@ if __name__ == "__main__":
     parser.add_argument("--split", choices=["dev", "train", "test"], default="dev") # 指定划分方式
     parser.add_argument("--rewrite-results", type=Path, default=None) # 改写结果路径
     parser.add_argument("--run-name") # 指定本次结果名称
+    
+    parser.add_argument("--benchmark", type=Path, default=None) # QA 题库路径，同时决定是否进入 QA 分支
+    parser.add_argument("--model-name", default="deepseek_flash") # 选择已有 LLM 配置
+    parser.add_argument("--task", default=None) # 选择子任务，例如 pubmedqa, 默认读取全部任务
+    parser.add_argument("--limit", type=int, default=None) # 可选题数上限，默认处理全部选中题目
+    parser.add_argument("--mode", choices=["closed_book"], default="closed_book")
+                            
     args = parser.parse_args()
 
     method = args.method
@@ -266,11 +277,40 @@ if __name__ == "__main__":
     data_dir =  args.data_dir
     split = args.split
     rewrite_results_path = args.rewrite_results
-    run_name = args.run_name if args.run_name else f"{data_dir.name}_{method}_{config_embedding_model}_{split}"
+    run_name = args.run_name
+    
+    benchmark = args.benchmark
+    model_name = args.model_name
+    task = args.task
+    limit = args.limit
+    mode = args.mode
+    
 
-    summary = main(method, config_dir, data_dir, split, cache_dir, run_name, config_embedding_model=config_embedding_model, rewrite_path=rewrite_results_path)
+    if benchmark:
+        summary = main_qa(  # 调用已经完成的QA入口。
+                    config_dir,  # 公开配置目录，已经由argparse转换为Path。
+                    benchmark,  # 实际选择的QA题库路径。
+                    model_name=model_name,  # 选择模型配置。
+                    mode=mode,  # 本轮运行无检索基线。
+                    task=task,  # None表示读取题库内全部任务。
+                    limit=limit,  # None表示不限制题数。
+                    run_name=run_name,  # 原样传入，由main_qa处理默认名称。
+                )  # 返回评分、用量、耗时及逐题评分。
+        print(json.dumps({key: summary[key] for key in ("metrics", "generation", "latency")}, ensure_ascii=False, indent=2))  # 显示QA评分、用量和耗时，逐题详情保存在文件中。
+        
+    else:        
+        summary = main(
+            method,
+            config_dir,
+            data_dir,
+            split,
+            cache_dir,
+            run_name,
+            config_embedding_model=config_embedding_model,
+            rewrite_path=rewrite_results_path
+            )
 
-    if rewrite_results_path is None:  # 原模式返回一个摘要。
-        print(summary["metrics"])  # 沿用原来的指标输出。
-    else:  # 改写模式返回两个组的摘要。
-        print(json.dumps({variant: item["metrics"] for variant, item in summary.items()}, ensure_ascii=False, indent=2))  # 分别打印两组指标。
+        if rewrite_results_path is None:  # 原模式返回一个摘要。
+            print(summary["metrics"])  # 沿用原来的指标输出。
+        else:  # 改写模式返回两个组的摘要。
+            print(json.dumps({variant: item["metrics"] for variant, item in summary.items()}, ensure_ascii=False, indent=2))  # 分别打印两组指标。

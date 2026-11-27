@@ -6,9 +6,19 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27最新：用户的QA命令行已通过7组本地联结检查，下一项由用户运行完整500题无检索开发基线。** run_benchmark_eval.py当前SHA=6852a22313263d57fcd865c10f0031767eb29afa46adba67e13fb978717b4b7c。执行真实CLI／读取／单题核心／迭代／评分／保存，仅替换dotenv和客户端边界，临时产物隔离后自动清理；完整500题假响应、已有输出拒绝、显式配置／名称／limit、脱离CLI直接调用main_qa的默认名称、help及未接通rag拒绝、原BEIR默认／显式命名、原BEIR逻辑除默认命名行外AST未变共7组通过。报告results/qa_cli_validation_01.json，不保存假准确率；没有读取密钥、真实API／模型／GPU调用，助手未修改核心。
+
+用户明确偏好QA参数--model-name，后续命令沿用，不改回--profile或增加兼容别名，也不擅改其他入口。其值是llm_profiles.json配置键，例如deepseek_flash，再由model字段确定实际API模型；用户已将main_qa形参及调用关键字统一为model_name，保存字段仍为"profile_name": model_name。默认命名分别由main与main_qa处理，CLI只传args.run_name；不得重复要求在CLI生成。mode当前只开放closed_book，RAG回调接口保留但命令行检索器装配待后续增量接入。
+
+真实运行名pubmedqa_closed_book_dev_500_01：使用公开PubMedQA专家CV池、deepseek_flash、closed_book、task=pubmedqa，不传limit，预期500题；不是MIRAGE最终测试。运行前_results.jsonl／_summary.json／_run.json／_run.log／_resources.txt五件均不存在。results/pubmedqa_closed_book_dev_500_01_preparation.json状态prepared_not_executed，保存完整用户命令、输入／源码／公开profile身份，只对Bash内部脚本及外层粘贴格式做bash -n，助手未执行。命令沿用scripts/project_env.sh、Python -u、GNU time及tee，独立Bash设置set -euo pipefail，并在创建日志前保护五产物；不新增运行脚本。按用户约定先提交同步此检查点，再把命令发在聊天，由用户亲自跑；完成后核对query_count／saved_count=500、ok＋error=500、Accuracy／PubMedQA Macro-F1、已知／未知用量与阶段耗时，再分析全量开发成绩。不能把此前软件遍历当模型实测，也不声称最终7663对标已完成。
+
+用户同时询问无检索是否依赖模型性能：已说明closed_book只给问题／选项及提示词，使用参数知识与推理；不访问主证据库或调用embedding／重排。成绩也受提示词、生成参数和结构化输出协议影响。后续固定同一LLM／问题／评分／共同提示与生成参数，比较检索带来的变化；不得把该阶段成绩说成RAG收益。
+
+以下8组入口函数验收、19＋11组核心及保存验收与CLI待接入描述为先前检查点；当前以上方CLI验收及用户待运行500题为准。
+
 **2026-11-27当前：用户的main_qa已通过8组本地调用链检查，下一项在同一文件接入无检索QA命令行。** run_benchmark_eval.py源码SHA=ff9d253d13b882b4479713a721289973d1cb4d7358a132d46400b652e1fd7777。真实读取器→main_qa→逐题核心／迭代器→流式保存→用户离线评分接线通过；仅将dotenv替换为空操作、客户端替换为假响应，并将临时输出放到results下隔离目录后清理。选取2题、完整500题假响应遍历、默认命名、不指定task、API异常后继续、RAG空结果回调、三产物分别防覆盖、非法limit拒绝共8组通过。500次假响应遍历不是500题模型实测；没有读取.env、网络请求、模型／GPU运行或医学成绩。原BEIR main及模块级CLI的AST与提交版相同，助手未改核心；报告results/qa_entry_validation_01.json仅记录软件检查与实际源码身份，不保存模拟准确率。
 
-下一用户任务仍在run_benchmark_eval.py原__main__增量修改，不新增入口：增加--benchmark（Path，默认None）作为QA题库及分支信号、--profile（默认deepseek_flash）、--task（默认None）、--limit（int，默认None）。parser.parse_args后先判断args.benchmark；提供题库时调用已验收main_qa，mode明确为closed_book，传args.config／benchmark／profile／task／limit／run_name，返回后只打印metrics／generation／latency；未提供时原BEIR变量赋值、默认名称及main调用／输出整块放入else，行为保持。QA的args.run_name直接传入main_qa，不先套BEIR命名公式。--config保持唯一名称，run-name仍可选且无时间戳。当前不暴露尚未装配的RAG命令行；后续在同文件复用既有检索构造并增加模式选择，不复制算法或另建QA运行脚本。用户保存后先进行无真实调用的CLI联结检查，再由用户亲自运行公开500题开发基线；助手不得代跑。
+下一用户任务仍在run_benchmark_eval.py原__main__增量修改，不新增入口：增加--benchmark（Path，默认None）作为QA题库及分支信号、--model-name（默认deepseek_flash，用户明确选择）、--task（默认None）、--limit（int，默认None）。parser.parse_args后先判断args.benchmark；提供题库时调用已验收main_qa，mode明确为closed_book，传args.config／benchmark／model_name／task／limit／run_name，返回后只打印metrics／generation／latency；未提供时原BEIR变量赋值、默认名称及main调用／输出整块放入else，行为保持。QA的args.run_name直接传入main_qa，不先套BEIR命名公式。--config保持唯一名称，run-name仍可选且无时间戳。当前不暴露尚未装配的RAG命令行；后续在同文件复用既有检索构造并增加模式选择，不复制算法或另建QA运行脚本。用户保存后先进行无真实调用的CLI联结检查，再由用户亲自运行公开500题开发基线；助手不得代跑。
 
 以下19＋11项验收和main_qa待实现描述是上一检查点，当前以上方入口验收及CLI任务为准。
 

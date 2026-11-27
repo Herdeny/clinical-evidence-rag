@@ -108,13 +108,15 @@ PubMedQA另报告macro_f1，依据[原作者评分脚本](https://github.com/pub
 
 助手已在原retrieval_results_io.py增量提供save_qa_results(records, *, score_fn, config, run_name, result_dir)，原四个保存辅助AST未改。三份输出沿用_results.jsonl／_summary.json／_run.json，开始消费生成器前防覆盖；每题写入并flush，完整生成后调用用户评分回调，摘要保存metrics／generation／latency／per_query。中断或异常保留已有响应并记录运行状态，原异常不改；全未知用量不填0、未执行检索耗时为None。11项临时IO检查通过，源码SHA=1743d719e46618955958c954fbdcb05986907d2a8cc11c54ea1d34f0325154bf，记录results/qa_stream_io_validation_01.json；没有新项目脚本、API调用或模型成绩。
 
-用户在现有run_benchmark_eval.py新增main_qa(config_dir, benchmark_path, *, profile_name, mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32)。原BEIR main及CLI先保持，新增函数验收后再增量切换CLI。用现有读取器、可选task／limit筛选题目，gold按实际id取子集；保留可用／选中数量和完整题号，run_name显式优先或qa_{task or 'all'}_{mode}_{profile_name}，无时间戳。公开profile来自config_dir，沿现有dotenv和客户端构造，每批一个客户端；检索器及公开配置从参数传入，避免重写三种算法。
+用户在现有run_benchmark_eval.py新增main_qa(config_dir, benchmark_path, *, model_name, mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32)。用现有读取器、可选task／limit筛选题目，gold按实际id取子集；保留可用／选中数量和完整题号，run_name显式优先或qa_{task or 'all'}_{mode}_{model_name}，无时间戳。默认名称在入口函数内处理，CLI原样传run_name。公开profile来自config_dir，沿现有dotenv和客户端构造，每批一个客户端；检索器及公开配置从参数传入，避免重写三种算法。
 
 records直接保留iter_question_answers返回的生成器；score_fn用partial(evaluate_multiple_choice, questions_df, gold_answers)绑定前两个参数，交给save_qa_results在完整记录后评分。不要提前list(records)，文件保护与逐题保存要先于迭代。config记录输入／源码／公开profile指纹、实际选择及模式／k／检索配置，不保存对象或密钥；三输出先防覆盖，返回完整保存摘要。
 
 2026-11-27用户已实现main_qa并通过8组本地联结检查，入口源码SHA=ff9d253d13b882b4479713a721289973d1cb4d7358a132d46400b652e1fd7777。覆盖有限子集、完整500题假响应遍历、默认名、task=None、API失败保留并继续、RAG空结果注入、三文件防覆盖及非法limit；使用真实核心／读取／评分／保存，dotenv和客户端边界被替换，未读取密钥或调用真实API。原BEIR main及CLI未变，助手未改核心；报告results/qa_entry_validation_01.json没有模拟医学成绩，真实500题仍未运行。
 
-当前由用户在原CLI增加--benchmark（Path，默认None）、--profile（默认deepseek_flash）、--task（默认None）、--limit（int，默认None）。提供benchmark时调用main_qa，mode=closed_book，直接传args.run_name，让QA函数决定其默认名；只打印metrics、generation、latency。未提供benchmark时，原BEIR调用与默认命名放到else保留。--config沿用且不加别名，不新增脚本；正式RAG命令行及检索器装配下一步在同文件复用现有实现。保存后只做假客户端检查，真实批量由用户运行。
+当前CLI已增加--benchmark（Path，默认None）、--model-name（默认deepseek_flash）、--task（默认None）、--limit（int，默认None）。--model-name为用户明确选择的QA参数名，其值对应公开配置键，Python形参同为model_name，保存字段为"profile_name": model_name；不增加--profile别名，也不擅改其他入口。提供benchmark时调用main_qa，直接传args.run_name，由QA函数决定其默认名，只打印metrics、generation、latency。未提供benchmark时进入原BEIR调用，默认名称也由main内部处理。--config沿用且不加别名，不新增脚本；--mode当前只开放closed_book，正式RAG命令行及检索器装配下一步在同文件复用现有实现。
+
+2026-11-27完整CLI通过7组本地联结检查，源码SHA=6852a22313263d57fcd865c10f0031767eb29afa46adba67e13fb978717b4b7c。包括完整500题假响应、产物防覆盖、指定配置／名称／limit、直接函数复用默认名、参数解析、BEIR命名保护及旧检索逻辑范围核对；未读密钥、未调用真实模型或API，报告results/qa_cli_validation_01.json。当前用户任务是亲自运行pubmedqa_closed_book_dev_500_01：公开开发池全部500题、deepseek_flash、不传limit。准备记录及完整命令在results/pubmedqa_closed_book_dev_500_01_preparation.json，状态prepared_not_executed，五份真实产物均未生成；按约定先同步GitHub再由用户执行。完成后报告Accuracy、PubMedQA Macro-F1、失败题／用量／阶段耗时，不能把本地软件检查称为模型效果。
 
 ## 2026-11-24 当前实测进度
 

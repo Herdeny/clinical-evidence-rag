@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-**当前用户任务：在既有run_benchmark_eval.py增量接入无检索QA命令行。** 用户已完成main_qa：读取／子集选择、共享客户端、生成器、离线评分及流式保存通过8组本地调用链检查，原BEIR main及CLI未改。包括完整500题假响应遍历，但没有真实批量调用或模型成绩。下一项增加--benchmark／--profile／--task／--limit，以题库路径是否提供区分QA与原BEIR入口；QA先明确为closed_book，不另建运行脚本。详细参数、命名与后续RAG装配边界见[QA入口](benchmark_scope.md#当前用户任务增量接入qa入口)。真实500开发及7663最终对标待完成。
+**当前用户任务：亲自运行完整500题无检索QA开发基线。** 用户已在既有run_benchmark_eval.py完成main_qa及CLI，以--benchmark是否提供区分QA与原BEIR入口，配置参数采用用户选择的--model-name。完整命令行通过7组本地联结检查，含500题假响应遍历；没有真实批量模型成绩。默认命名分别在main和main_qa内，CLI原样传名称；--mode当前只开放closed_book，后续RAG装配在原文件增量完成，不另建入口。真实运行名pubmedqa_closed_book_dev_500_01，使用独立PubMedQA公开开发池且不传limit；准备命令已检查语法，由用户执行。详细参数、命名与后续RAG边界见[QA入口](benchmark_scope.md#当前用户任务增量接入qa入口)。真实500开发及7663最终对标待完成。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 
