@@ -12,13 +12,29 @@
 
 | 作者发布语料 | 发布页规模 | 核查与决定 |
 | --- | --- | --- |
-| [MedRAG/PubMed](https://huggingface.co/datasets/MedRAG/pubmed) | 23898701个标题／摘要片段；仓库约70GB | 优先候选；含PMID便于溯源，待固定revision、文件清单和容量方案。HF预览只限前5GB，预览221万行不能当完整规模 |
+| [MedRAG/PubMed](https://huggingface.co/datasets/MedRAG/pubmed) | 23898701个标题／摘要片段；仓库约70GB | 已锁定作者提交及1166分片清单，正文尚未下载；含PMID便于溯源。HF预览只限前5GB，预览221万行不能当完整规模 |
 | [MedRAG/Textbooks](https://huggingface.co/datasets/MedRAG/textbooks) | 18部教材、125847段、约212MB | 已有作者切块；卡片未声明明确数据许可，暂不默认采用。原MedQA仓库MIT不能独自证明第三方教材全部权利 |
 | [MedRAG/StatPearls](https://huggingface.co/datasets/MedRAG/statpearls) | 作者描述301202段 | 页面明确不分发正文，HF无正文数据，不能当成可直接下载的现成301k语料 |
 
-尚未下载或冻结上述快照，也不声明无条件商业／再分发许可。[NCBI政策](https://www.ncbi.nlm.nih.gov/home/about/policies/)指出PubMed摘要可能受出版社或作者版权保护；[官方数据下载页](https://pubmed.ncbi.nlm.nih.gov/download/)给出使用条件与下载入口。公开可访问不等于所有内容属于公有领域，不将第三方语料包直接提交GitHub。
+正文尚未下载，PubMed数据身份已固定如下；其他两候选未采用，也不声明无条件商业／再分发许可。[NCBI政策](https://www.ncbi.nlm.nih.gov/home/about/policies/)指出PubMed摘要可能受出版社或作者版权保护；[官方数据下载页](https://pubmed.ncbi.nlm.nih.gov/download/)给出使用条件与下载入口。公开可访问不等于所有内容属于公有领域，不将第三方语料包直接提交GitHub。
 
-下一项先做PubMed固定版本／文件清单／容量预算，再进入数据准备与真实联调。当前pandas整表和内存rank_bm25不能不经规划直接扩到约2390万段。适配只映射既有id、contents、PMID等字段，保留原文、原始ID与快照身份，不生成医学内容或根据gold筛语料；实际接入后独立复核数量与指纹。
+当前进入固定分片下载与磁盘索引验证。适配只映射既有id、contents、PMID等字段，保留原文、原始ID与快照身份，不生成医学内容或根据gold筛语料；实际接入后独立复核数量与指纹。
+
+### PubMed固定快照、容量与当前下载任务
+
+作者提交固定为[33da3593d5756bc04c8909f170003c0b14197957](https://huggingface.co/datasets/MedRAG/pubmed/commit/33da3593d5756bc04c8909f170003c0b14197957)，提交于2024-02-27，文件名为PubMed23系列；不称其为当前最新PubMed资料。公开API按该提交核实全部1166个分片，总70007692549字节。完整文件配置在[corpus_profiles.json](../configs/corpus_profiles.json)，清单SHA-256=1a13edbc7993987a5610040ebba0747d6ad15558591c88ffe338362d6031b419；每文件记录原路径、字节数、内容SHA-256与Git blob SHA-1。空文件chunk/pubmed23n0654.jsonl是普通Git对象，按空内容校验，不虚报失败或删除版本事实。数据卡记录数仍是发布方声明，全文实收数量未验证。
+
+| 容量项目 | 当前已核实或计算的量 | 范围 |
+| --- | ---: | --- |
+| 原始JSONL分片合计 | 65.199744GiB | 作者固定文件元数据，尚未下载 |
+| Qwen 4096维FP32向量 | 364.665237GiB | 按发布方23898701条计算的向量本体，不含索引／payload |
+| Qwen 4096维FP16向量 | 182.332619GiB | 同上，仅容量估算，精度对结果的影响未实测 |
+| 本机可用磁盘 | 约469.56GiB | 本轮观察，会随使用变化 |
+| 本机内存 | 总125GiB、可用约107GiB | 本轮观察，不是索引内存实测 |
+
+按[MedRAG作者实现](https://github.com/gzxiong/MedRAG/blob/main/src/utils.py)的BM25路线采用Pyserini／Lucene磁盘索引；原分片已有id／contents，可直接交给[JsonCollection](https://github.com/castorini/pyserini/blob/master/docs/usage-index.md)，storeRaw保存原记录用于回查PMID及证据。不再复制生成另一套70GB全文JSONL，查询时才映射程序所需证据字段。当前Python3.12及Java21与[Pyserini要求](https://github.com/castorini/pyserini#installation)吻合，但Pyserini和Qdrant均未安装；索引、依赖兼容、空间及吞吐仍需首分片实测。新Lucene后端须明确记录库版本、分词及BM25参数，不能把其分数和旧rank_bm25混为同一实现的收益。
+
+下一项由用户下载原始首分片chunk/pubmed23n0001.jsonl，34168949字节，SHA256=6bd70117f34f7293a7e6e017b2abd3bd2fd0a508abfed4d9613d7616d599afca；保存到项目data/external/medrag_pubmed/raw/chunk/。只验证下载／字段及索引资源，不计算局部医学效果；正式数据覆盖仍为完整作者清单。准备记录results/medrag_pubmed_first_shard_01_preparation.json保留完整命令、配置身份和prepared_not_executed状态，已检查当前hf CLI帮助及Bash语法，助手没有代下载。收到用户输出后再核对实际文件与行结构，再做索引试建及适配，当前不能将原分片直接交给仍要求text/source_id/locator的内存RAG入口。
 
 ## 2026-11-26：仅使用可核查的公开benchmark
 
@@ -165,7 +181,7 @@ records直接保留iter_question_answers返回的生成器；score_fn用partial(
 
 ### 下一用户任务：复用检索器构造
 
-同一500题接入RAG前，在现有run_benchmark_eval.py添加build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, config_embedding_model="bge_small")，返回retrieve_fn和方法配置字典。corpus_df为已规范的语料表，evidence_path为其实际语料文件，用于已有缓存身份；它不是问题题库路径。函数只构建现有Dense／BM25／RRF及相应元数据，不接收gold、运行QA、读取问题／qrels或保存评测。
+同一500题接入RAG前，在现有run_benchmark_eval.py添加build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, embedding_model="bge_small")，返回retrieve_fn和方法配置字典。corpus_df为已规范的语料表，evidence_path为其实际语料文件，用于已有缓存身份；它不是问题题库路径。函数只构建现有Dense／BM25／RRF及相应元数据，不接收gold、运行QA、读取问题／qrels或保存评测。当前参数名称按用户后续统一的embedding_model记录。
 
 将当前main第54—142行构造段移入该函数，局部config={"retrieval_method": method}，保留现有模型配置、缓存调用及三种方法参数，最后return retrieve_fn, config。原第57行evidence_path=data_dir/'corpus.jsonl'改由调用者传入，通用函数不依赖BEIR的data_dir。原main保留BEIR读取、公共config及评测保存，用一次build_retriever调用取得两项，再config.update(retrieval_config)。先由用户完成此抽取，再以本地替身核对；随后在同文件接QA语料加载与RAG分支，不复制三套构造或新增入口脚本。模型选择继续由已有config_embedding_model参数控制，真实新运行仍由用户执行。
 

@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-**当前任务：核查并接入原作者公开发布的检索语料。** 用户已删除v3并明确检索语料也只用可考据的公开数据集，不恢复旧库。QA RAG入口已通过10组本地检查，三方法、闭卷、引用映射、错误处理、配置保存及原BEIR路径均通过，无真实新模型／API／GPU调用。CLI沿用--model-name／--config，Embedding参数统一为--embedding-model。下一项见[公开配套语料核查](benchmark_scope.md#2026-11-27检索语料也只采用公开发布的数据集)：PubMed优先候选但尚未下载或冻结版本，先核查容量；不再给v3运行命令。用户已完成500题闭卷实测61.0%／Macro-F1 0.470773，最终MIRAGE及真实RAG未运行。
+**当前用户任务：下载并校验MedRAG/PubMed首个作者原始分片。** 已在configs/corpus_profiles.json固定作者提交33da359及全部1166文件的大小／内容指纹，总70,007,692,549字节；正文仍未下载。首分片约34.2MB，由用户执行带进度、日志和SHA校验的命令，之后再做Lucene索引验证；完整数据目标不按首分片缩减。[固定快照与容量](benchmark_scope.md#pubmed固定快照容量与当前下载任务)记录来源、合法空分片及向量容量边界。QA RAG软件入口通过10组本地检查，公开500题闭卷61.0%／Macro-F1 0.470773，真实RAG及MIRAGE最终对标未运行；不恢复v3或自建题。CLI保持--model-name／--config／--embedding-model。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 

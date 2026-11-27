@@ -219,6 +219,12 @@ Qwen3 8B 重排相对原 Dense 的 nDCG@10 提升 **6.22%（相对值）**；4B 
 
 证据以 `id / text / source_id / locator` 为共同接口；来源记录进一步保存论文 PMCID／PMID／DOI、说明书 setID／版本，以及章节、页码、XPath 或字符范围。位置存在说明材料可回查，仍需检查是否支持具体结论。
 
+### 公开检索语料：MedRAG/PubMed
+
+资料来源为美国国家医学图书馆（NLM）的PubMed，经MedRAG作者整理为固定PubMed23系列快照，不表示NLM对本项目背书。已固定[作者提交33da359](https://huggingface.co/datasets/MedRAG/pubmed/commit/33da3593d5756bc04c8909f170003c0b14197957)及全部1166分片清单，原文件合计70,007,692,549字节；记录数23,898,701仍为发布方声明，正文尚未下载。[数据配置](configs/corpus_profiles.json)保存每个原文件的大小与内容校验值，不包含正文。
+
+大库BM25将采用Pyserini／Lucene磁盘索引，原始id／contents直接入库，检索时映射统一证据字段；依赖、首分片索引及全量性能待实测。[容量及接入记录](docs/benchmark_scope.md#pubmed固定快照容量与当前下载任务)区分已核实文件元数据、理论向量占用和未完成的实测。
+
 ### 公开评测基准
 
 | 材料 | 规模 | 用途与状态 |
@@ -227,7 +233,7 @@ Qwen3 8B 重排相对原 Dense 的 nDCG@10 提升 **6.22%（相对值）**；4B 
 | MIRAGE | 7,663 道公开医学问答题 | 快照、五上游公开声明及全量／单任务读取已核验；完整问答链路和全量模型对标待完成 |
 | PubMedQA 官方专家 CV 池 | 500 道题；yes／no／maybe | 已核对与 MIRAGE 的 ID／规范化题干及记录中参考 PMID 不重叠；无检索开发基线已实测，Accuracy 61.0% |
 
-NFCorpus 使用其配套文档和 qrels；医学主语料用于项目业务验证；MIRAGE 保持独立，不把标准答案或给定支持上下文塞入检索。数据来源、许可筛选和处理边界见[语料调研](docs/medical_corpus_v3_research.md)、[采集处理](docs/data_acquisition_and_processing.md)与[对标要求](docs/benchmark_scope.md)。
+NFCorpus 使用其配套文档和 qrels；MedRAG/PubMed按固定作者快照准备检索语料，旧v3只保留历史；MIRAGE 保持独立，不把标准答案或给定支持上下文塞入检索。当前来源、使用条件和接入状态见[对标要求](docs/benchmark_scope.md)，旧流程见[历史采集处理](docs/data_acquisition_and_processing.md)。
 
 评测只采用可公开核查的benchmark，并按其标注与协议报告对应能力。原180道CT合成题（120开发／60留出）仅保留历史记录，不属于当前评测集。报告澄清、引用支持、用药与多模态专项需另选匹配的公开benchmark，不能由上述两项成绩代替。
 

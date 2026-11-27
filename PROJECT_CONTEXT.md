@@ -6,6 +6,14 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27当前：MedRAG/PubMed的完整作者文件清单已锁定，下一项由用户下载首个原始分片并校验。** 原作者HF提交33da3593d5756bc04c8909f170003c0b14197957（提交页为2024-02-27），对应PubMed23系列快照；configs/corpus_profiles.json的medrag_pubmed保存全部1166分片的路径／字节数／真实内容SHA-256／Git blob SHA-1。元数据API核实总70007692549字节（65.199744GiB），一个合法空文件chunk/pubmed23n0654.jsonl采用普通Git空blob，内容SHA按空字节确定，不把Git SHA-1当LFS内容SHA-256。数据卡23898701是发布方声明，实际正文行数仍未复验，当前正文下载0分片。源API原件／README和本地manifest在data/external/medrag_pubmed/metadata；结果results/medrag_pubmed_catalog_01.json。终端访问NCBI条款时TLS失败，已用web读取官方条款，不伪称保存了条款原件。助手未下载任何正文、模型或安装库。
+
+本机只读观察：RAM125GiB、可用约107GiB，磁盘可用约469.56GiB；Python3.12及Java21已在，pyserini／qdrant_client未安装。按发布方数量，4096维FP32向量本体364.665237GiB、FP16本体182.332619GiB，均未含HNSW、payload、BM25、缓存等，也不是实测索引大小。先采用与MedRAG官方BM25相同的Pyserini／Lucene磁盘索引路线，直接索引原分片已有id／contents，storeRaw用于回查PMID等原字段，不再生成第二套全文JSONL；检索返回时映射现有id/text/source_id/locator即可。现有retrieve_fn(query,k)与问答核心保留；Lucene安装／试建／适配器及全量索引尚未完成，不能直接用main_qa当前pandas内存分支读取70GB。Dense仍保留Qwen8B候选，存储精度／维度及质量须单独实测，本轮不改Embedding配置。
+
+用户待运行名medrag_pubmed_first_shard_01，下载固定提交的chunk/pubmed23n0001.jsonl到data/external/medrag_pubmed/raw/chunk/pubmed23n0001.jsonl，期望34168949字节、SHA256=6bd70117f34f7293a7e6e017b2abd3bd2fd0a508abfed4d9613d7616d599afca。现有hf download --help已核对，命令使用scripts/project_env.sh维持项目内缓存、不静默关闭单文件进度，GNU time／tee保存日志及资源，sha256sum -c校验后wc -lc显示行数与字节数。准备记录results/medrag_pubmed_first_shard_01_preparation.json状态prepared_not_executed，只bash -n内部与外层脚本；助手没执行下载。先同步本检查点再给用户命令，收到结果再读真实原件、逐行确认文档数及字段，然后安排Lucene依赖／首分片索引验证；正式评测数据仍计划完整1166分片，首分片只验证流程与资源，不得发布局部RAG分数或按gold PMID选库。
+
+以下“未固定revision”和v3待运行描述为此前检查点；当前以上方固定元数据及用户待下载首分片为准。
+
 **2026-11-27最新：用户已删除v3语料，明确检索语料也只用原作者公开发布、可考据的数据集。不要恢复v3或继续让用户查找它。** 撤回拟议的pubmedqa_bm25_rag_dev_smoke_3_01全库运行；准备程序在打开缺失语料时停止，没有创建preparation记录，也没有执行模型／API。旧v3构建及CT实验仅保留历史，不能继续当当前数据规模；此前“只停用自建题、业务语料仍用v3”的解释已被本轮要求取代。公开PubMedQA开发池及500题闭卷成绩保留，MIRAGE7663仍为最终评测。
 
 **QA RAG入口已通过10组本地联结验收。** run_benchmark_eval.py SHA=968bd4b0fd00c72360bb1edab3aaece0a80abe077144d9174d5998ded5f58ff3。真实CLI三种方法完成检索→证据投影→假生成→实际评分／保存，引用ID及来源定位、缓存及文件身份正确；闭卷跳过索引、现成回调只收问题且不重建、API异常保留错题与未知成本、坏参数／语料及已有产物提前拒绝，原BEIR单组／改写两组各三种方法均可用。结果results/qa_rag_entry_validation_01.json，无真实模型／API／GPU或真实缓存写入，助手未改核心，格式样本及假结果已清理。首次替身误返回ndarray，核对已安装LangChain的embed_query／_embed返回list[float]后只修替身，未为误报改用户算法或保存层。
