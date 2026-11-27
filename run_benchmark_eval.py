@@ -20,41 +20,13 @@ from retrieve_core import retrieve
 from retrieve_rrf import retrieve_rrf
 from qa_core import iter_question_answers  # 逐题产生回答记录。
 
-def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_embedding_model="bge_small", rewrite_path=None):
-    if not method in ("bm25", "dense", "rrf"): raise ValueError("Unknown method: " + method)
+def build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, config_embedding_model="bge_small"):  # 根据已读取的语料构造检索器，并返回方法配置。
+    if method not in ("bm25", "dense", "rrf"):  # 共享函数只支持已经实现的三种方法。
+        raise ValueError(f"Unknown method: {method}")  # 对不支持的方法给出明确错误。
+    config = {"retrieval_method": method}
     
-    run_name = run_name if run_name else f"{data_dir.name}_{method}_{config_embedding_model}_{split}"
-
-    result_dir = Path(__file__).resolve().parent / "results"  # 沿用项目原来的输出目录。
-    prefixes = (run_name,) if rewrite_path is None else (f"{run_name}_original", f"{run_name}_rewritten")  # 根据模式确定一个或两个输出前缀。
-    for prefix in prefixes:  # 检查本轮每一组输出。
-        for suffix in ("results.jsonl", "run.json", "summary.json"):  # 每组都有这三份文件。
-            output_path = result_dir / f"{prefix}_{suffix}"  # 拼出实际保存路径。
-            if output_path.exists():  # 任意一份已存在，就在模型或索引构造前停止。
-                raise FileExistsError(output_path)  # 明确指出发生冲突的文件。
-        
-    corpus_df, queries_df, qrels = load_beir_dataset(data_dir, split=split)
-    
-    if rewrite_path is not None:  # 只有提供了改写文件，才读取保存记录。
-        rewrite_bytes = rewrite_path.read_bytes()  # 读取文件字节，后续计算SHA也使用这份内容。
-        rewrite_records = [json.loads(line) for line in rewrite_bytes.decode("utf-8").splitlines() if line.strip()]  # 将JSONL解析为记录字典列表。
-        
-
-    config = {
-            "cache_path": str(cache_dir.resolve()),
-            "corpus_text": "title + space + body; strip",
-            "dataset_name": data_dir.name,
-            "data_dir": str(data_dir.resolve()),
-            "ks": [10, 100],
-            "query_template": "{query}",
-            "split": split,
-            "retrieval_method": method
-        }
-
     if method in ("dense", "rrf"):
         config_path = config_dir / "embedding_profiles.json"
-        
-        evidence_path = data_dir / "corpus.jsonl"
         
         profiles = json.loads(config_path.read_text(encoding="utf-8"))
     
@@ -140,6 +112,47 @@ def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_emb
             "candidate_k": 100,
             "rrf_constant": 60
         }
+    return retrieve_fn, config
+
+def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_embedding_model="bge_small", rewrite_path=None):
+    if not method in ("bm25", "dense", "rrf"): raise ValueError("Unknown method: " + method)
+    
+    run_name = run_name if run_name else f"{data_dir.name}_{method}_{config_embedding_model}_{split}"
+
+    result_dir = Path(__file__).resolve().parent / "results"  # 沿用项目原来的输出目录。
+    prefixes = (run_name,) if rewrite_path is None else (f"{run_name}_original", f"{run_name}_rewritten")  # 根据模式确定一个或两个输出前缀。
+    for prefix in prefixes:  # 检查本轮每一组输出。
+        for suffix in ("results.jsonl", "run.json", "summary.json"):  # 每组都有这三份文件。
+            output_path = result_dir / f"{prefix}_{suffix}"  # 拼出实际保存路径。
+            if output_path.exists():  # 任意一份已存在，就在模型或索引构造前停止。
+                raise FileExistsError(output_path)  # 明确指出发生冲突的文件。
+        
+    corpus_df, queries_df, qrels = load_beir_dataset(data_dir, split=split)
+    
+    if rewrite_path is not None:  # 只有提供了改写文件，才读取保存记录。
+        rewrite_bytes = rewrite_path.read_bytes()  # 读取文件字节，后续计算SHA也使用这份内容。
+        rewrite_records = [json.loads(line) for line in rewrite_bytes.decode("utf-8").splitlines() if line.strip()]  # 将JSONL解析为记录字典列表。
+        
+
+    config = {
+            "cache_path": str(cache_dir.resolve()),
+            "corpus_text": "title + space + body; strip",
+            "dataset_name": data_dir.name,
+            "data_dir": str(data_dir.resolve()),
+            "ks": [10, 100],
+            "query_template": "{query}",
+            "split": split,
+            "retrieval_method": method
+        }
+
+    retrieve_fn, retrieval_config = build_retriever(  # 共用检索器构造逻辑。
+            method, corpus_df,  # 传入所选方法和已经读取的语料表。
+            config_dir=config_dir,  # 沿用模型配置目录。
+            cache_dir=cache_dir,  # 沿用向量缓存目录。
+            evidence_path=data_dir / "corpus.jsonl",  # BEIR调用者明确提供实际语料文件。
+            config_embedding_model=config_embedding_model,  # 传递已有模型配置选择。
+        )  # 得到检索回调和方法配置。
+    config.update(retrieval_config)  # 将方法配置合并进原有运行配置。
     
     if rewrite_path is None:
         eval_df, run = evaluate_beir_retrieval(queries_df, qrels, retrieve_fn, ks=(10,100))

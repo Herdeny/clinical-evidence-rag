@@ -153,6 +153,16 @@ records直接保留iter_question_answers返回的生成器；score_fn用partial(
 
 将当前main第54—142行构造段移入该函数，局部config={"retrieval_method": method}，保留现有模型配置、缓存调用及三种方法参数，最后return retrieve_fn, config。原第57行evidence_path=data_dir/'corpus.jsonl'改由调用者传入，通用函数不依赖BEIR的data_dir。原main保留BEIR读取、公共config及评测保存，用一次build_retriever调用取得两项，再config.update(retrieval_config)。先由用户完成此抽取，再以本地替身核对；随后在同文件接QA语料加载与RAG分支，不复制三套构造或新增入口脚本。模型选择继续由已有config_embedding_model参数控制，真实新运行仍由用户执行。
 
+2026-11-27该抽取已由用户实现并通过8组本地检查，当前源码SHA=20c7eae58cb25c1cf4f2a2a6c74fccf38c7ddb78b108dbea50e04a491a2cb3bd。三种真实检索核心配假Embedding与小型格式文本可调用，来源字段及方法配置保留；真实单组／改写两组读取、评测、保存各三种方法通过，缓存参数／配置选择／归一化记录正确；错误选择和已有产物提前拒绝。QA及CLI的AST未变，助手未修改核心或运行真实模型／API／GPU；临时文件已清理，记录results/shared_retriever_validation_01.json，不是医学效果或全库性能验证。
+
+### 下一用户任务：接入QA的RAG分支
+
+继续在原run_benchmark_eval.py增量实现，不新增入口或复制检索算法。main_qa追加method="bm25"、evidence_path=None、cache_dir=None、config_embedding_model="bge_small"四个仅关键字参数；保留原retrieve_fn／retrieval_config供已经准备好索引的调用者使用。共享构造在main_qa的输出保护与题目筛选之后、LLM配置与客户端创建之前执行，避免先建大索引再发现本轮输出冲突。
+
+mode=rag时先检查k为正整数。retrieve_fn为None时，要求evidence_path，使用pandas.read_json(path, lines=True, dtype=False)读取规范证据表，检查非空、四个共同字段id／text／source_id／locator、ID唯一；cache_dir未给时取root/cache/embeddings。调用build_retriever取得回调与方法配置，补充evidence_path绝对路径字符串、evidence_sha256、evidence_count、cache_path、corpus_text="text"；大语料SHA用已有hashlib分块读取，每块1MiB，不能read_bytes一次额外分配约1.2GB。传入了现成回调时检查可调用及非空配置字典，不重复读取文件或建库。闭卷跳过该段，原输出中的检索配置和k继续为None。
+
+CLI增加--evidences（Path、默认None）和--k（int、默认32），--mode开放closed_book及rag，在QA调用中传上述四个参数及k。--model-name、--config和可选run_name继续沿用。用户保存后先用无模型替身验收，再由用户运行真实RAG长度／输入及API联调；此接线尚未完成，不据已通过的共享构造声明RAG成绩。
+
 ## 2026-11-24 当前实测进度
 
 NFCorpus BM25、Dense与RRF dev已运行并独立核验：3633文档／324查询，BM25的nDCG@10／Recall@100为0.265738／0.205678、平均查询2.839ms；Dense为0.327186／0.315082、23.262ms；RRF为0.312468／0.300335、35.872ms。文档缓存完整并由RRF复用，324题融合顺序和分数独立核对一致。见[开发集对照](nfcorpus_retrieval_baselines.md)。当前Dense四指标均值最高，下一步固定其Top100候选测试重排；尚无重排成绩。官方test未运行，MIRAGE全量7663问答对标仍是最终验收要求。以下11月21日及更早的“尚无成绩／待下载”状态按历史日期理解。

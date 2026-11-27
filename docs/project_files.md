@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-**当前用户任务：在既有run_benchmark_eval.py抽取共享检索器构造。** 用户已亲自完成公开PubMedQA开发池500题无检索基线：305题正确，Accuracy=61.0%、Macro-F1=0.470773，500次结构化结果成功、无失败；原件身份／离线评分／日志／用量均核对一致。详见[真实开发结果](benchmark_scope.md#pubmedqa-closed-book-dev)。下一项把原main内现有Dense／BM25／RRF构造段移入同文件的build_retriever，返回检索回调和方法配置，供BEIR与后续QA共用；[具体任务](benchmark_scope.md#下一用户任务复用检索器构造)说明参数及迁移范围。QA参数继续--model-name，默认命名在函数内；当前CLI仍只开放closed_book，RAG装配随后增量完成。MIRAGE最终7663及RAG对照尚未运行。
+**当前用户任务：在既有run_benchmark_eval.py接入QA的RAG分支。** 用户共享build_retriever与原单组／改写入口已通过8组本地检查，三种方法、缓存参数和配置合并正确；没有新模型／API／GPU调用。[下一步](benchmark_scope.md#下一用户任务接入qa的rag分支)在main_qa输出保护及题目筛选后读取规范证据、构造共享检索器，并在原CLI增加--evidences／--k及rag模式，不另建入口。QA参数继续--model-name，默认命名在函数内。用户已亲自完成500题闭卷基线：Accuracy=61.0%、Macro-F1=0.470773，详见[真实结果](benchmark_scope.md#pubmedqa-closed-book-dev)。MIRAGE最终7663及RAG对照尚未运行。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 

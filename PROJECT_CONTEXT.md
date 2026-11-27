@@ -6,6 +6,12 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27当前：用户的共享build_retriever及原main接线通过8组本地检查，下一项在同文件接入QA的RAG分支。** run_benchmark_eval.py源码SHA=20c7eae58cb25c1cf4f2a2a6c74fccf38c7ddb78b108dbea50e04a491a2cb3bd。真实Dense／BM25／RRF核心配小型无医学含义文本与假Embedding向量，三种回调保留id／text／source_id／locator和有限分数；BM25不读Embedding配置，Dense只建向量，RRF两路都建，BGE／Qwen配置及归一化元数据正确传递，缓存接口实际收到调用者路径／维度／chunk_size=512。原单组及改写两组入口各三种方法均跑真实读取／评测／保存，公共及方法元数据均保留；未知方法／profile与已有产物提前拒绝。构造主体与搬动前AST一致，QA及CLI未改。报告results/shared_retriever_validation_01.json，临时格式输入及结果已清理，不是新增医学评测集；助手未改核心、未读密钥、未运行真实模型／API／GPU或写入真实向量缓存。
+
+下一用户任务仍在run_benchmark_eval.py：给main_qa增加method="bm25"、evidence_path=None、cache_dir=None、config_embedding_model="bge_small"四个仅关键字参数，保留既有ready retrieve_fn／retrieval_config回调接口；引入pandas。输出保护和题目／limit／gold子集处理后、LLM配置及客户端构造前加入RAG装配。mode=rag时先校验k为正整数；retrieve_fn为None才要求evidence_path并读JSONL（lines=True、dtype=False），检查非空、id／text／source_id／locator列和唯一id，cache_dir未给则用root/cache/embeddings，再调用共享build_retriever并保存实际文件路径、分块SHA-256、证据数、cache路径和corpus_text="text"到retrieval_config。不能read_bytes整读1.2GB语料来算SHA；聊天提供现有hashlib的1MiB分块用法，不新增工具模块。已有回调则沿用，不重复读取语料／建库，并检查callable和非空配置字典；闭卷跳过整个分支，原k／retrieval_config仍记None。不要在CLI先建索引，否则输出冲突和题目错误只能在昂贵构造后发现。
+
+CLI增量增加--evidences（Path，默认None）及--k（int，默认32），--mode开放closed_book／rag；QA调用传method、evidence_path=args.evidences、cache_dir、config_embedding_model和k=args.k，--model-name／--config／run_name约定保持，不新增入口。本轮只教完整接线，用户保存后用本地替身验证三种方法、闭卷跳过、错误输入与输出保护；真实语料／RAG输入长度及API联调仍待后续由用户亲自运行，不能直接代跑500。基线prompt／评分保持，真实500闭卷61.0%结果继续作为对照，最终MIRAGE仍未运行。
+
 **2026-11-27最新实测：用户已完成PubMedQA独立公开开发池500题无检索基线，下一项在原入口抽取共享检索器构造。** pubmedqa_closed_book_dev_500_01五份原始运行文件与准备记录已只读核查；run.status=completed、saved_count=500，逐题ID／顺序／题干／选项、题库及公开profile／源码身份、产物SHA和日志汇总均一致。复用用户评分并独立按混淆矩阵复算：305／500答对，Accuracy=0.61、PubMedQA Macro-F1=0.4707726704966231，500条结构化结果ok、error=0。只含一个子任务，macro_accuracy=0.61不等于三类召回的平均。原件未改，results/pubmedqa_closed_book_dev_500_01_validation.json保存核验／混淆矩阵／分类统计；助手没有新增真实API或模型调用。
 
 三类：yes真实276、预测339、答对217，Recall=0.7862318841、F1=0.7056910569；no真实169、预测137、答对81，Recall=0.4792899408、F1=0.5294117647；maybe真实55、预测24、答对7，Recall=0.1272727273、F1=0.1772151899。真实maybe中38误选yes、10误选no；maybe是标准类别，不是系统拒答。始终选yes基线55.2%，本轮高5.8个百分点；不能据此说RAG有效或断定全部错题原因。
