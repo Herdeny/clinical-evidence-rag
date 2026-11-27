@@ -17,7 +17,7 @@
 
 后续每个指标都应对应基准原有标注和官方评分协议。NFCorpus的qrels不是证据充分性标签；MIRAGE选择题准确率不能代替追问正确性、引用支持率、报告解析或临床有效性。这些专项能力应先寻找匹配的公开benchmark，核实原始标签、划分、版本与使用条件，覆盖不足就明确列为待评测；不再临时合成题目填补效果证明。无需将评测要求扩展为“检索库只能包含benchmark材料”：业务语料与评测题各自保留来源和许可，但检索基准必须使用配套corpus及ID。
 
-当前已完成下段所列的五上游公开发布声明、MIRAGE角色核查、用户离线读取验收及独立PubMedQA开发池准备；下一项由用户编写选择题生成核心。不重跑已完成的324 dev，也不对MIRAGE正式测试题反复调参。下面较早保留自建题作产品回归的安排已由本次用户要求取代，原实验历史不改写。
+当前已完成下段所列的五上游公开发布声明、MIRAGE角色核查、用户离线读取验收及独立PubMedQA开发池500题无检索实测；下一项复用既有检索构造接入同题RAG对照。不重跑已完成的324 dev，也不对MIRAGE正式测试题反复调参。下面较早保留自建题作产品回归的安排已由本次用户要求取代，原实验历史不改写。
 
 ### MIRAGE五个上游的发布条件与划分
 
@@ -116,7 +116,42 @@ records直接保留iter_question_answers返回的生成器；score_fn用partial(
 
 当前CLI已增加--benchmark（Path，默认None）、--model-name（默认deepseek_flash）、--task（默认None）、--limit（int，默认None）。--model-name为用户明确选择的QA参数名，其值对应公开配置键，Python形参同为model_name，保存字段为"profile_name": model_name；不增加--profile别名，也不擅改其他入口。提供benchmark时调用main_qa，直接传args.run_name，由QA函数决定其默认名，只打印metrics、generation、latency。未提供benchmark时进入原BEIR调用，默认名称也由main内部处理。--config沿用且不加别名，不新增脚本；--mode当前只开放closed_book，正式RAG命令行及检索器装配下一步在同文件复用现有实现。
 
-2026-11-27完整CLI通过7组本地联结检查，源码SHA=6852a22313263d57fcd865c10f0031767eb29afa46adba67e13fb978717b4b7c。包括完整500题假响应、产物防覆盖、指定配置／名称／limit、直接函数复用默认名、参数解析、BEIR命名保护及旧检索逻辑范围核对；未读密钥、未调用真实模型或API，报告results/qa_cli_validation_01.json。当前用户任务是亲自运行pubmedqa_closed_book_dev_500_01：公开开发池全部500题、deepseek_flash、不传limit。准备记录及完整命令在results/pubmedqa_closed_book_dev_500_01_preparation.json，状态prepared_not_executed，五份真实产物均未生成；按约定先同步GitHub再由用户执行。完成后报告Accuracy、PubMedQA Macro-F1、失败题／用量／阶段耗时，不能把本地软件检查称为模型效果。
+2026-11-27完整CLI通过7组本地联结检查，源码SHA=6852a22313263d57fcd865c10f0031767eb29afa46adba67e13fb978717b4b7c。包括完整500题假响应、产物防覆盖、指定配置／名称／limit、直接函数复用默认名、参数解析、BEIR命名保护及旧检索逻辑范围核对；未读密钥、未调用真实模型或API，报告results/qa_cli_validation_01.json。随后准备pubmedqa_closed_book_dev_500_01：公开开发池全部500题、deepseek_flash、不传limit，先同步GitHub再由用户执行。准备记录及完整命令在results/pubmedqa_closed_book_dev_500_01_preparation.json，保留准备时的prepared_not_executed历史状态；用户现已完成真实运行，成绩与核验见下节，不把此前软件检查当作模型效果。
+
+<a id="pubmedqa-closed-book-dev"></a>
+
+### PubMedQA 500题无检索开发基线：已实测
+
+2026-11-27用户亲自运行pubmedqa_closed_book_dev_500_01，使用已固定的公开专家CV池全部500题，deepseek_flash配置、temperature=0、max_tokens=2048、max_retries=0、thinking禁用；模型只接收问题、选项及共用／无检索提示，不提供原作者context或gold。实际响应模型标识均为deepseek-flash，500次结束原因为tool_calls，与结构化输出一致。题库SHA、公开profile及五个源码SHA与准备记录一致，运行入口SHA=6852a22313263d57fcd865c10f0031767eb29afa46adba67e13fb978717b4b7c。
+
+| 指标 | 真实结果 |
+| --- | ---: |
+| 题数／答对／答错 | 500／305／195 |
+| Accuracy | 0.610000 |
+| PubMedQA Macro-F1 | 0.4707726705 |
+| 接口及结构化结果成功／失败 | 500／0 |
+| 输入／输出／总tokens | 238083／58430／296513 |
+| QA调用均值／中位数 | 944.837307ms／915.937935ms |
+| 整进程墙钟时间 | 7:53.74 |
+| 最大常驻内存 | 254624KiB，约248.66MiB |
+
+用量500条完整已知、未知0；cache_read=128000已包含在输入token内，不重复相加，也不据token总量臆测费用。检索未执行，retrieve_latency_ms统计count=0、mean／median=None。运行状态completed、保存500条、进程退出0；日志与摘要一致。仅一个子任务时macro_accuracy=accuracy，不是三类召回平均。
+
+| 类别 | 真实数量 | 预测数量 | 答对数量 | 该类Recall | 该类F1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| yes | 276 | 339 | 217 | 0.786232 | 0.705691 |
+| no | 169 | 137 | 81 | 0.479290 | 0.529412 |
+| maybe | 55 | 24 | 7 | 0.127273 | 0.177215 |
+
+模型选择yes共339次，超过真实yes的276题；maybe中38题被选为yes、10题选为no。该类最弱，Macro-F1对三类等权，因此低于整体准确率。maybe是公开任务的合法标准类别，不是系统拒答。始终选yes的同池统计基线为55.2%，本轮高5.8个百分点；不能据此证明RAG收益、临床有效性或全部错题的成因。本轮不是MIRAGE最终测试，也不宣称原论文十折实验复现。
+
+助手只读核对五份原始运行文件与准备记录，并复用用户评分／独立混淆矩阵公式复算全部题目、用量与计时，未重新调用模型或评判全部reason医学内容。results/pubmedqa_closed_book_dev_500_01_validation.json保存原件指纹、完整混淆矩阵和独立统计，原件及prepared历史状态未改。
+
+### 下一用户任务：复用检索器构造
+
+同一500题接入RAG前，在现有run_benchmark_eval.py添加build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, config_embedding_model="bge_small")，返回retrieve_fn和方法配置字典。corpus_df为已规范的语料表，evidence_path为其实际语料文件，用于已有缓存身份；它不是问题题库路径。函数只构建现有Dense／BM25／RRF及相应元数据，不接收gold、运行QA、读取问题／qrels或保存评测。
+
+将当前main第54—142行构造段移入该函数，局部config={"retrieval_method": method}，保留现有模型配置、缓存调用及三种方法参数，最后return retrieve_fn, config。原第57行evidence_path=data_dir/'corpus.jsonl'改由调用者传入，通用函数不依赖BEIR的data_dir。原main保留BEIR读取、公共config及评测保存，用一次build_retriever调用取得两项，再config.update(retrieval_config)。先由用户完成此抽取，再以本地替身核对；随后在同文件接QA语料加载与RAG分支，不复制三套构造或新增入口脚本。模型选择继续由已有config_embedding_model参数控制，真实新运行仍由用户执行。
 
 ## 2026-11-24 当前实测进度
 

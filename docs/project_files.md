@@ -1,12 +1,12 @@
 # 现在应该看哪些文件
 
-**当前用户任务：亲自运行完整500题无检索QA开发基线。** 用户已在既有run_benchmark_eval.py完成main_qa及CLI，以--benchmark是否提供区分QA与原BEIR入口，配置参数采用用户选择的--model-name。完整命令行通过7组本地联结检查，含500题假响应遍历；没有真实批量模型成绩。默认命名分别在main和main_qa内，CLI原样传名称；--mode当前只开放closed_book，后续RAG装配在原文件增量完成，不另建入口。真实运行名pubmedqa_closed_book_dev_500_01，使用独立PubMedQA公开开发池且不传limit；准备命令已检查语法，由用户执行。详细参数、命名与后续RAG边界见[QA入口](benchmark_scope.md#当前用户任务增量接入qa入口)。真实500开发及7663最终对标待完成。
+**当前用户任务：在既有run_benchmark_eval.py抽取共享检索器构造。** 用户已亲自完成公开PubMedQA开发池500题无检索基线：305题正确，Accuracy=61.0%、Macro-F1=0.470773，500次结构化结果成功、无失败；原件身份／离线评分／日志／用量均核对一致。详见[真实开发结果](benchmark_scope.md#pubmedqa-closed-book-dev)。下一项把原main内现有Dense／BM25／RRF构造段移入同文件的build_retriever，返回检索回调和方法配置，供BEIR与后续QA共用；[具体任务](benchmark_scope.md#下一用户任务复用检索器构造)说明参数及迁移范围。QA参数继续--model-name，默认命名在函数内；当前CLI仍只开放closed_book，RAG装配随后增量完成。MIRAGE最终7663及RAG对照尚未运行。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 
 **最新验收：load_mirage_dataset已通过离线读取验证。** 全量(7663,4)与7663项答案字典、五任务数量／顺序、原文／选项／答案保真、唯一ID和独立gold均通过；空与未知任务名正确拒绝，三份原件及旧函数AST未变。既有BEIR的9项测试通过；没有模型／API调用。验证保存在本地results/mirage_loader_validation_01.json，先前review_01／02保留。按用户仅本次要求通过codex/mirage-dataset-loader分支创建PR后直接合并；后续恢复原提交同步方式。
 
-**已实现：benchmark_data.py中的load_mirage_dataset(benchmark_path, *, task=None)。** MIRAGE五上游公开声明与任务角色已核查；五部分都作最终评测，上游dev不等于本项目调参集。函数返回四列questions_df（id／task／query／options）和单独gold_answers；不传answer／参考PMID给检索或生成。按官方sorted字符串题号，保留前导零和原文本，None读取全量7663，单任务可选。完整约定与验收见[读取适配记录](benchmark_scope.md#mirage读取函数已验收)。独立官方开发池及QA单题已完成，批量生成和正式QA评分待完成。
+**已实现：benchmark_data.py中的load_mirage_dataset(benchmark_path, *, task=None)。** MIRAGE五上游公开声明与任务角色已核查；五部分都作最终评测，上游dev不等于本项目调参集。函数返回四列questions_df（id／task／query／options）和单独gold_answers；不传answer／参考PMID给检索或生成。按官方sorted字符串题号，保留前导零和原文本，None读取全量7663，单任务可选。完整约定与验收见[读取适配记录](benchmark_scope.md#mirage读取函数已验收)。独立官方开发池500题无检索生成及评分已完成，最终MIRAGE与RAG对照待完成。
 
 **2026-11-26最新要求：评测只用可核查的公开benchmark。** 324题来自NFCorpus官方dev，120题来自助手自建CT初稿，二者不能混称。刚提出的120题运行计划已撤回，未执行；自建题及成绩仅保留历史，不继续扩题、调参或作效果依据。当前公开主线为已完成dev对照的NFCorpus及待QA适配的MIRAGE7663；下一项先核查MIRAGE上游条件与开发／测试协议，再复用既有模块增量接入。专项追问／引用／多模态需另选覆盖相应标注的公开benchmark。详见[当前评测范围](benchmark_scope.md#2026-11-26仅使用可核查的公开benchmark)，以下CT待运行安排按历史理解。
 
@@ -41,7 +41,7 @@ PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | 原CT／BEIR保存保留；save_qa_results流式保存、调用用户评分并保留中断记录，11项本地检查通过，未知用量不补0 | 助手辅助，逐行中文注释，旧四函数AST未改 |
 | benchmark_data.py | BEIR读取与apply_query_rewrites已完成；MIRAGE全量／五单任务读取、四列问题表与独立gold字典已验收，旧函数不变 | 用户；助手未改核心 |
-| benchmark_eval.py | 原检索评测保留；evaluate_multiple_choice逐题评分与汇总通过16项本地检查，支持任务宏平均及PubMedQA F1，无批量QA模型成绩 | 用户；助手未改核心 |
+| benchmark_eval.py | 原检索评测保留；evaluate_multiple_choice支持任务宏平均及PubMedQA F1，已用于500题真实无检索开发基线 | 用户；助手未改核心 |
 | run_benchmark_eval.py | 三方法可选改写及防覆盖已验收；用户324题三方法02已实测核验，无需重写；改写收益与退化均归档 | 用户；助手未改核心 |
 | run_reranking_eval.py | 固定候选重排入口；四套重排dev已核对，旧历史资源异常继续披露；CLI统一--config且原业务函数不变 | 用户；助手只纠正CLI参数 |
 

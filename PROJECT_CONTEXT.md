@@ -6,6 +6,16 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27最新实测：用户已完成PubMedQA独立公开开发池500题无检索基线，下一项在原入口抽取共享检索器构造。** pubmedqa_closed_book_dev_500_01五份原始运行文件与准备记录已只读核查；run.status=completed、saved_count=500，逐题ID／顺序／题干／选项、题库及公开profile／源码身份、产物SHA和日志汇总均一致。复用用户评分并独立按混淆矩阵复算：305／500答对，Accuracy=0.61、PubMedQA Macro-F1=0.4707726704966231，500条结构化结果ok、error=0。只含一个子任务，macro_accuracy=0.61不等于三类召回的平均。原件未改，results/pubmedqa_closed_book_dev_500_01_validation.json保存核验／混淆矩阵／分类统计；助手没有新增真实API或模型调用。
+
+三类：yes真实276、预测339、答对217，Recall=0.7862318841、F1=0.7056910569；no真实169、预测137、答对81，Recall=0.4792899408、F1=0.5294117647；maybe真实55、预测24、答对7，Recall=0.1272727273、F1=0.1772151899。真实maybe中38误选yes、10误选no；maybe是标准类别，不是系统拒答。始终选yes基线55.2%，本轮高5.8个百分点；不能据此说RAG有效或断定全部错题原因。
+
+真实响应模型均deepseek-flash、finish_reason均tool_calls；238083输入＋58430输出=296513 tokens，用量500已知／0未知，cache_read=128000已经含在输入中。无检索计时count=0且均值／中位数None；QA均值944.837307ms、中位数915.937935ms。整进程7:53.74、最大RSS254624KiB（248.65625MiB）、退出0。模型／提示词与基线记录保持，用于随后同题RAG对照；不评价reason中全部医学断言，不宣称原论文十折或MIRAGE最终7663成绩。原preparation.json保留prepared_not_executed的历史状态，不覆写成完成。
+
+下一用户任务在既有run_benchmark_eval.py中加入build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, config_embedding_model="bge_small")，供原BEIR与后续QA共用，不新建脚本。将当前main内第54—142行的Dense／BM25／RRF构造、方法选择及方法元数据移入函数，局部config先为{"retrieval_method": method}，最后返回retrieve_fn, config；方法合法性校验按实际入口需要保留。第57行evidence_path=data_dir/'corpus.jsonl'不能搬进通用函数，应删去该内部赋值，使用传入的真实语料路径。main原公共config和BEIR读取／评分／保存保留，用build_retriever(..., evidence_path=data_dir/'corpus.jsonl', ...)替换构造段，再config.update(retrieval_config)。QA语料加载与mode=rag的CLI装配在该共享函数验收后增量接入；当前不提前开放rag、不代跑新模型或改提示词。详细逻辑与参数必须在聊天给用户，不只藏文档；用户写核心，助手只用本地替身核对接线与缓存参数。
+
+以下CLI验收及500题待用户运行记录为此前准备检查点，当前以上方真实500题结果及共享构造任务为准。
+
 **2026-11-27最新：用户的QA命令行已通过7组本地联结检查，下一项由用户运行完整500题无检索开发基线。** run_benchmark_eval.py当前SHA=6852a22313263d57fcd865c10f0031767eb29afa46adba67e13fb978717b4b7c。执行真实CLI／读取／单题核心／迭代／评分／保存，仅替换dotenv和客户端边界，临时产物隔离后自动清理；完整500题假响应、已有输出拒绝、显式配置／名称／limit、脱离CLI直接调用main_qa的默认名称、help及未接通rag拒绝、原BEIR默认／显式命名、原BEIR逻辑除默认命名行外AST未变共7组通过。报告results/qa_cli_validation_01.json，不保存假准确率；没有读取密钥、真实API／模型／GPU调用，助手未修改核心。
 
 用户明确偏好QA参数--model-name，后续命令沿用，不改回--profile或增加兼容别名，也不擅改其他入口。其值是llm_profiles.json配置键，例如deepseek_flash，再由model字段确定实际API模型；用户已将main_qa形参及调用关键字统一为model_name，保存字段仍为"profile_name": model_name。默认命名分别由main与main_qa处理，CLI只传args.run_name；不得重复要求在CLI生成。mode当前只开放closed_book，RAG回调接口保留但命令行检索器装配待后续增量接入。
