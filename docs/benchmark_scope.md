@@ -4,6 +4,22 @@
 
 **用户随后明确确认：最终项目必须完成对标。MIRAGE 全量外部评测是正式验收项；只有 CT 小库或少量抽样结果不能标记项目完成。**
 
+## 2026-11-27：检索语料也只采用公开发布的数据集
+
+用户已删除项目自行采集解析的v3语料，后续不恢复；检索语料同样采用原作者公开发布、来源与版本可核查的数据集。原783847片段及采集流程只保留历史，不属于当前已接入语料。撤回基于data/v3/evidence.jsonl的3题真实联调计划，没有执行或创建完整准备记录。独立PubMedQA官方开发池及500题闭卷成绩保留，MIRAGE7663继续为最终评测。
+
+核查[MedRAG作者仓库](https://github.com/gzxiong/MedRAG)及作者HF发布页后，候选如下；这些是发布方统计，不是本项目已下载数量：
+
+| 作者发布语料 | 发布页规模 | 核查与决定 |
+| --- | --- | --- |
+| [MedRAG/PubMed](https://huggingface.co/datasets/MedRAG/pubmed) | 23898701个标题／摘要片段；仓库约70GB | 优先候选；含PMID便于溯源，待固定revision、文件清单和容量方案。HF预览只限前5GB，预览221万行不能当完整规模 |
+| [MedRAG/Textbooks](https://huggingface.co/datasets/MedRAG/textbooks) | 18部教材、125847段、约212MB | 已有作者切块；卡片未声明明确数据许可，暂不默认采用。原MedQA仓库MIT不能独自证明第三方教材全部权利 |
+| [MedRAG/StatPearls](https://huggingface.co/datasets/MedRAG/statpearls) | 作者描述301202段 | 页面明确不分发正文，HF无正文数据，不能当成可直接下载的现成301k语料 |
+
+尚未下载或冻结上述快照，也不声明无条件商业／再分发许可。[NCBI政策](https://www.ncbi.nlm.nih.gov/home/about/policies/)指出PubMed摘要可能受出版社或作者版权保护；[官方数据下载页](https://pubmed.ncbi.nlm.nih.gov/download/)给出使用条件与下载入口。公开可访问不等于所有内容属于公有领域，不将第三方语料包直接提交GitHub。
+
+下一项先做PubMed固定版本／文件清单／容量预算，再进入数据准备与真实联调。当前pandas整表和内存rank_bm25不能不经规划直接扩到约2390万段。适配只映射既有id、contents、PMID等字段，保留原文、原始ID与快照身份，不生成医学内容或根据gold筛语料；实际接入后独立复核数量与指纹。
+
 ## 2026-11-26：仅使用可核查的公开benchmark
 
 用户明确要求评测只采用有公开依据、有说服力和可信度的公开benchmark。撤回刚提出的120道自建CT题运行计划；180道自建题及已完成的单例／检索记录仅留作历史，停止据其调参或证明效果。其来源是助手依据固定公开资料编写的病例／问题／行为初标，并非公开benchmark；复核表120行均pending、具名复核者0，来源真实不等于标注独立。未执行的120题准备记录保留其历史状态，不能再当成当前运行指令。
@@ -157,11 +173,11 @@ records直接保留iter_question_answers返回的生成器；score_fn用partial(
 
 ### 下一用户任务：接入QA的RAG分支
 
-继续在原run_benchmark_eval.py增量实现，不新增入口或复制检索算法。main_qa追加method="bm25"、evidence_path=None、cache_dir=None、config_embedding_model="bge_small"四个仅关键字参数；保留原retrieve_fn／retrieval_config供已经准备好索引的调用者使用。共享构造在main_qa的输出保护与题目筛选之后、LLM配置与客户端创建之前执行，避免先建大索引再发现本轮输出冲突。
+该接入已在原run_benchmark_eval.py实现，不新增入口或复制检索算法。main_qa追加method="bm25"、evidence_path=None、cache_dir=None、embedding_model="bge_small"四个仅关键字参数；保留原retrieve_fn／retrieval_config供已经准备好索引的调用者使用。共享构造在main_qa的输出保护与题目筛选之后、LLM配置与客户端创建之前执行，避免先建大索引再发现本轮输出冲突。Embedding参数按用户当前选择统一为embedding_model，历史config_embedding_model记录不覆写。
 
 mode=rag时先检查k为正整数。retrieve_fn为None时，要求evidence_path，使用pandas.read_json(path, lines=True, dtype=False)读取规范证据表，检查非空、四个共同字段id／text／source_id／locator、ID唯一；cache_dir未给时取root/cache/embeddings。调用build_retriever取得回调与方法配置，补充evidence_path绝对路径字符串、evidence_sha256、evidence_count、cache_path、corpus_text="text"；大语料SHA用已有hashlib分块读取，每块1MiB，不能read_bytes一次额外分配约1.2GB。传入了现成回调时检查可调用及非空配置字典，不重复读取文件或建库。闭卷跳过该段，原输出中的检索配置和k继续为None。
 
-CLI增加--evidences（Path、默认None）和--k（int、默认32），--mode开放closed_book及rag，在QA调用中传上述四个参数及k。--model-name、--config和可选run_name继续沿用。用户保存后先用无模型替身验收，再由用户运行真实RAG长度／输入及API联调；此接线尚未完成，不据已通过的共享构造声明RAG成绩。
+CLI已增加--evidences（Path、默认None）和--k（int、默认32），--mode开放closed_book及rag，Embedding选择统一为--embedding-model；--model-name、--config和可选run_name保持。2026-11-27通过10组本地联结检查，源码SHA=968bd4b0fd00c72360bb1edab3aaece0a80abe077144d9174d5998ded5f58ff3：三方法从真实CLI走完假生成／实际评分／保存，引用与来源字段、缓存和文件身份正确，闭卷、外部回调、错误输入／API异常、输出保护及原BEIR路径均通过。报告results/qa_rag_entry_validation_01.json，无真实模型／API／GPU调用或医学效果成绩，助手未改核心，临时文件已清理。首次替身错误返回ndarray，核对真实LangChain返回list[float]后仅修替身，未为检查工具修改用户算法或保存层。真实运行等待本页开头的公开语料接入，v3联调计划已撤回。
 
 ## 2026-11-24 当前实测进度
 

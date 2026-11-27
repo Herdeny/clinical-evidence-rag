@@ -6,6 +6,7 @@ from urllib import parse
 
 from dotenv import load_dotenv  # 沿用项目环境加载方式。
 from pathlib import Path
+import pandas as pd
 from functools import partial
 from langchain_deepseek import ChatDeepSeek  # 创建整批共用的客户端。
 
@@ -20,7 +21,7 @@ from retrieve_core import retrieve
 from retrieve_rrf import retrieve_rrf
 from qa_core import iter_question_answers  # 逐题产生回答记录。
 
-def build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, config_embedding_model="bge_small"):  # 根据已读取的语料构造检索器，并返回方法配置。
+def build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, embedding_model="bge_small"):  # 根据已读取的语料构造检索器，并返回方法配置。
     if method not in ("bm25", "dense", "rrf"):  # 共享函数只支持已经实现的三种方法。
         raise ValueError(f"Unknown method: {method}")  # 对不支持的方法给出明确错误。
     config = {"retrieval_method": method}
@@ -30,24 +31,24 @@ def build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, 
         
         profiles = json.loads(config_path.read_text(encoding="utf-8"))
     
-        if not config_embedding_model in profiles: raise ValueError("Unknown embedding model profile: " + config_embedding_model)
+        if not embedding_model in profiles: raise ValueError("Unknown embedding model profile: " + embedding_model)
     
-        embedding_profile = profiles[config_embedding_model]
+        embedding_model_profile = profiles[embedding_model]
                 
         embedding_model = build_embedding_model(
-            profile=embedding_profile
+            profile=embedding_model_profile
         )
 
         # 核对模型的真实维度、长度与配置一致
         if not (
-            embedding_model._client.get_embedding_dimension() == embedding_profile['dimension']
+            embedding_model._client.get_embedding_dimension() == embedding_model_profile['dimension']
             and
-            embedding_model._client.max_seq_length == embedding_profile['max_seq_length']
+            embedding_model._client.max_seq_length == embedding_model_profile['max_seq_length']
             ):
-            raise ValueError("embedding_profile is not consistent with the real model")
+            raise ValueError("embedding_model_profile is not consistent with the real model")
 
         embeddings, cache_info = prepare_document_embeddings(
-            corpus_df, embedding_model, evidence_path=evidence_path, cache_dir=cache_dir, chunk_size=512, dimension=embedding_profile['dimension']
+            corpus_df, embedding_model, evidence_path=evidence_path, cache_dir=cache_dir, chunk_size=512, dimension=embedding_model_profile['dimension']
             )
 
         dense_retrieve_fn = partial(
@@ -60,12 +61,12 @@ def build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, 
         
         config["dense"] = {
             "device": embedding_model.model_kwargs["device"],
-            "embedding_dimension": embedding_profile['dimension'],
-            "embedding_profile": config_embedding_model,
+            "embedding_dimension": embedding_model_profile['dimension'],
+            "embedding_model_profile": embedding_model_profile,
             "embeddings_cache": cache_info,
             "embeddings_shape": embeddings.shape,
             "encode_kwargs": embedding_model.encode_kwargs,
-            "max_seq_length": embedding_profile['max_seq_length'],
+            "max_seq_length": embedding_model_profile['max_seq_length'],
             "model_kwargs": embedding_model.model_kwargs,
             "model_name": embedding_model.model_name,
             "query_encode_kwargs": embedding_model.query_encode_kwargs,
@@ -114,10 +115,10 @@ def build_retriever(method, corpus_df, *, config_dir, cache_dir, evidence_path, 
         }
     return retrieve_fn, config
 
-def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_embedding_model="bge_small", rewrite_path=None):
+def main(method, config_dir, data_dir, split, cache_dir, run_name, *, embedding_model="bge_small", rewrite_path=None):
     if not method in ("bm25", "dense", "rrf"): raise ValueError("Unknown method: " + method)
     
-    run_name = run_name if run_name else f"{data_dir.name}_{method}_{config_embedding_model}_{split}"
+    run_name = run_name if run_name else f"{data_dir.name}_{method}_{embedding_model}_{split}"
 
     result_dir = Path(__file__).resolve().parent / "results"  # 沿用项目原来的输出目录。
     prefixes = (run_name,) if rewrite_path is None else (f"{run_name}_original", f"{run_name}_rewritten")  # 根据模式确定一个或两个输出前缀。
@@ -150,7 +151,7 @@ def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_emb
             config_dir=config_dir,  # 沿用模型配置目录。
             cache_dir=cache_dir,  # 沿用向量缓存目录。
             evidence_path=data_dir / "corpus.jsonl",  # BEIR调用者明确提供实际语料文件。
-            config_embedding_model=config_embedding_model,  # 传递已有模型配置选择。
+            embedding_model=embedding_model,  # 传递已有模型配置选择。
         )  # 得到检索回调和方法配置。
     config.update(retrieval_config)  # 将方法配置合并进原有运行配置。
     
@@ -189,7 +190,8 @@ def main(method, config_dir, data_dir, split, cache_dir, run_name, *, config_emb
 def main_qa(config_dir, benchmark_path,
             *, 
             model_name, 
-            mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32):
+            mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32,
+            method="bm25", evidence_path=None, cache_dir=None, embedding_model="bge_small"):
     
     root = Path(__file__).resolve().parent
     run_name = run_name if run_name else f"qa_{task or 'all'}_{mode}_{model_name}"
@@ -204,6 +206,46 @@ def main_qa(config_dir, benchmark_path,
         if limit <= 0: raise ValueError("limit must be positive")  # 整数类型正确后再检查范围。
         questions_df = questions_df.iloc[:limit].copy()  # 必须赋回变量，后面的生成才会使用截取后的表。
     gold_answers = {query_id: gold_answers[query_id] for query_id in questions_df["id"]}  # 与实际选中的题目同步。
+        
+    if mode == "rag":
+        if type(k) != int: raise TypeError("k must be an integer")  # 检索条数必须是整数。
+        if k <= 0: raise ValueError("k must be positive")  # 类型正确后，再检查取值范围。
+        
+        
+        if retrieve_fn is None:
+            if evidence_path is None:  # 没有现成检索器时，必须提供语料文件。
+                raise ValueError("evidence_path is required in rag mode")  # 在创建LLM客户端前停止。
+            corpus_df = pd.read_json(evidence_path, lines=True, dtype=False)  # 路径已提供，再读取语料。
+            if corpus_df.empty: raise ValueError("Corpus_df is blank")
+            if any(key not in corpus_df.columns for key in ("id", "text", "source_id", "locator")): raise ValueError("Lack essential keys")
+            if corpus_df["id"].duplicated().any(): raise ValueError("Duplicated ID")
+            if cache_dir is None:
+                cache_dir = root / "cache" / "embeddings"
+            retrieve_fn, retrieval_config = build_retriever(  # 复用已经验收的三种检索构造。
+                method, corpus_df,  # 传入所选方法和实际证据表。
+                config_dir=config_dir,  # 使用已有模型配置目录。
+                cache_dir=cache_dir,  # 使用本次缓存目录。
+                evidence_path=evidence_path,  # 使用实际语料文件固定缓存身份。
+                embedding_model=embedding_model,  # 沿用Embedding配置选择。
+            )  # 返回的回调会交给现有批量问答函数。
+            evidence_digest = hashlib.sha256()  # 创建文件摘要计算器。
+            with evidence_path.open("rb") as stream:  # 以二进制方式读取实际语料。
+                for block in iter(lambda: stream.read(1024 * 1024), b""):  # 每次读取1MiB，读到空字节停止。
+                    evidence_digest.update(block)  # 将每块内容加入同一个摘要。
+            retrieval_config.update({
+                "evidence_path": str(evidence_path.resolve()),
+                "evidence_sha256": evidence_digest.hexdigest(),
+                "evidence_count": len(corpus_df),
+                "cache_path": str(cache_dir.resolve()),
+                "corpus_text": "text",
+            })
+        
+        if not callable(retrieve_fn):  # 无论回调来自文件构造还是外部传入，都必须可调用。
+            raise TypeError("retrieve_fn must be callable")  # 类型不符合调用要求。
+        if not isinstance(retrieval_config, dict):  # 运行配置必须能够按字典保存。
+            raise TypeError("retrieval_config must be a dictionary")  # 拒绝错误类型。
+        if not retrieval_config:  # 字典类型正确后，再检查是否为空。
+            raise ValueError("retrieval_config must not be empty")  # 避免缺少检索配置记录。
             
     llm_profile = json.loads((config_dir / "llm_profiles.json").read_text(encoding="utf-8"))[model_name]
     
@@ -254,13 +296,6 @@ def main_qa(config_dir, benchmark_path,
 )  # 返回包含metrics、generation、latency和per_query的摘要。
     
     return summary
-    
-    
-    
-    
-    
-    
-    
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent
@@ -270,7 +305,7 @@ if __name__ == "__main__":
     parser.add_argument("--cache", type=Path, default=root / "cache" / "embeddings") # 指定缓存文件路径
     parser.add_argument("--config", type=Path, default=root / "configs") # 指定配置文件路径
     parser.add_argument("--data-dir", type=Path, default=root / "data" / "external" / "nfcorpus" / "prepared" / "nfcorpus" ) # 指定数据文件路径
-    parser.add_argument("--config-embedding-model", choices=["bge_small", "qwen3_8b"], default="bge_small")
+    parser.add_argument("--embedding-model", choices=["bge_small", "qwen3_8b"], default="bge_small")
     parser.add_argument("--split", choices=["dev", "train", "test"], default="dev") # 指定划分方式
     parser.add_argument("--rewrite-results", type=Path, default=None) # 改写结果路径
     parser.add_argument("--run-name") # 指定本次结果名称
@@ -279,14 +314,17 @@ if __name__ == "__main__":
     parser.add_argument("--model-name", default="deepseek_flash") # 选择已有 LLM 配置
     parser.add_argument("--task", default=None) # 选择子任务，例如 pubmedqa, 默认读取全部任务
     parser.add_argument("--limit", type=int, default=None) # 可选题数上限，默认处理全部选中题目
-    parser.add_argument("--mode", choices=["closed_book"], default="closed_book")
+    parser.add_argument("--mode", choices=["closed_book", "rag"], default="closed_book")
+    
+    parser.add_argument("--evidences", type=Path, default=None)  # 指定RAG实际检索的证据文件。
+    parser.add_argument("--k", type=int, default=32)  # 指定每题送入生成阶段的检索条数。
                             
     args = parser.parse_args()
 
     method = args.method
     cache_dir = args.cache
     config_dir = args.config
-    config_embedding_model = args.config_embedding_model
+    embedding_model = args.embedding_model
     data_dir =  args.data_dir
     split = args.split
     rewrite_results_path = args.rewrite_results
@@ -308,6 +346,11 @@ if __name__ == "__main__":
                     task=task,  # None表示读取题库内全部任务。
                     limit=limit,  # None表示不限制题数。
                     run_name=run_name,  # 原样传入，由main_qa处理默认名称。
+                    method=method,
+                    evidence_path=args.evidences,
+                    cache_dir=cache_dir,
+                    embedding_model=embedding_model,
+                    k=args.k
                 )  # 返回评分、用量、耗时及逐题评分。
         print(json.dumps({key: summary[key] for key in ("metrics", "generation", "latency")}, ensure_ascii=False, indent=2))  # 显示QA评分、用量和耗时，逐题详情保存在文件中。
         
@@ -319,7 +362,7 @@ if __name__ == "__main__":
             split,
             cache_dir,
             run_name,
-            config_embedding_model=config_embedding_model,
+            embedding_model=embedding_model,
             rewrite_path=rewrite_results_path
             )
 

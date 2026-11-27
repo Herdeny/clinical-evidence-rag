@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-**当前用户任务：在既有run_benchmark_eval.py接入QA的RAG分支。** 用户共享build_retriever与原单组／改写入口已通过8组本地检查，三种方法、缓存参数和配置合并正确；没有新模型／API／GPU调用。[下一步](benchmark_scope.md#下一用户任务接入qa的rag分支)在main_qa输出保护及题目筛选后读取规范证据、构造共享检索器，并在原CLI增加--evidences／--k及rag模式，不另建入口。QA参数继续--model-name，默认命名在函数内。用户已亲自完成500题闭卷基线：Accuracy=61.0%、Macro-F1=0.470773，详见[真实结果](benchmark_scope.md#pubmedqa-closed-book-dev)。MIRAGE最终7663及RAG对照尚未运行。
+**当前任务：核查并接入原作者公开发布的检索语料。** 用户已删除v3并明确检索语料也只用可考据的公开数据集，不恢复旧库。QA RAG入口已通过10组本地检查，三方法、闭卷、引用映射、错误处理、配置保存及原BEIR路径均通过，无真实新模型／API／GPU调用。CLI沿用--model-name／--config，Embedding参数统一为--embedding-model。下一项见[公开配套语料核查](benchmark_scope.md#2026-11-27检索语料也只采用公开发布的数据集)：PubMed优先候选但尚未下载或冻结版本，先核查容量；不再给v3运行命令。用户已完成500题闭卷实测61.0%／Macro-F1 0.470773，最终MIRAGE及真实RAG未运行。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 

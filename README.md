@@ -131,8 +131,8 @@ Dense 与 RRF 需要先准备配置中固定版本的模型快照。当前 Qwen3
 
 | 目的 | 在 BM25 命令基础上调整 |
 |:---|:---|
-| Qwen3-Embedding-8B Dense | `--method dense --config-embedding-model qwen3_8b`，并更换 `--run-name` |
-| BM25＋Qwen3 Dense RRF | `--method rrf --config-embedding-model qwen3_8b`，并更换 `--run-name` |
+| Qwen3-Embedding-8B Dense | `--method dense --embedding-model qwen3_8b`，并更换 `--run-name` |
+| BM25＋Qwen3 Dense RRF | `--method rrf --embedding-model qwen3_8b`，并更换 `--run-name` |
 | 比较原问题和保存的改写 | 追加 `--rewrite-results <已保存的改写JSONL路径>`；同一入口输出两组结果 |
 
 改写对照复用保存记录，不会在检索过程中重新请求 API。生成改写记录的入口是 [run_query_rewrite_batch.py](run_query_rewrite_batch.py)，需要可用的 DeepSeek 配置与凭证。固定候选重排使用 [run_reranking_eval.py](run_reranking_eval.py)，完整准备与运行步骤见[重排说明](docs/reranking_runtime_task.md)。
@@ -204,7 +204,9 @@ Qwen3 8B 重排相对原 Dense 的 nDCG@10 提升 **6.22%（相对值）**；4B 
 
 ## 🗂️ 数据与证据溯源
 
-### 医学主语料 v3
+### 医学主语料 v3（历史记录，已停用）
+
+用户已删除该项目自行采集解析的语料，后续检索语料也只采用来源及版本可核查的公开发布数据集。下表仅为此前构建快照的历史统计，不是当前运行输入，不恢复v3。公开配套语料的候选、使用条件及状态见[数据范围](docs/benchmark_scope.md#2026-11-27检索语料也只采用公开发布的数据集)。
 
 | 来源 | 来源数 | 检索片段数 |
 |:---|---:|---:|
@@ -229,7 +231,7 @@ NFCorpus 使用其配套文档和 qrels；医学主语料用于项目业务验�
 
 评测只采用可公开核查的benchmark，并按其标注与协议报告对应能力。原180道CT合成题（120开发／60留出）仅保留历史记录，不属于当前评测集。报告澄清、引用支持、用药与多模态专项需另选匹配的公开benchmark，不能由上述两项成绩代替。
 
-医学QA开发池500题标签分布为yes 276、no 169、maybe 55，无检索基线已完成全部生成及评分。该池用于项目开发，不宣称原论文十折实验或语义主题完全隔离。共享检索构造已通过本地接线检查，当前在原入口接入QA的RAG分支，见[当前任务](docs/benchmark_scope.md#下一用户任务接入qa的rag分支)。
+医学QA开发池500题标签分布为yes 276、no 169、maybe 55，无检索基线已完成全部生成及评分。该池用于项目开发，不宣称原论文十折实验或语义主题完全隔离。RAG统一入口已通过本地联结验收，真实RAG对照等待公开配套语料接入，见[当前数据范围](docs/benchmark_scope.md#2026-11-27检索语料也只采用公开发布的数据集)。
 
 <a id="docs"></a>
 

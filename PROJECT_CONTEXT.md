@@ -6,6 +6,20 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27最新：用户已删除v3语料，明确检索语料也只用原作者公开发布、可考据的数据集。不要恢复v3或继续让用户查找它。** 撤回拟议的pubmedqa_bm25_rag_dev_smoke_3_01全库运行；准备程序在打开缺失语料时停止，没有创建preparation记录，也没有执行模型／API。旧v3构建及CT实验仅保留历史，不能继续当当前数据规模；此前“只停用自建题、业务语料仍用v3”的解释已被本轮要求取代。公开PubMedQA开发池及500题闭卷成绩保留，MIRAGE7663仍为最终评测。
+
+**QA RAG入口已通过10组本地联结验收。** run_benchmark_eval.py SHA=968bd4b0fd00c72360bb1edab3aaece0a80abe077144d9174d5998ded5f58ff3。真实CLI三种方法完成检索→证据投影→假生成→实际评分／保存，引用ID及来源定位、缓存及文件身份正确；闭卷跳过索引、现成回调只收问题且不重建、API异常保留错题与未知成本、坏参数／语料及已有产物提前拒绝，原BEIR单组／改写两组各三种方法均可用。结果results/qa_rag_entry_validation_01.json，无真实模型／API／GPU或真实缓存写入，助手未改核心，格式样本及假结果已清理。首次替身误返回ndarray，核对已安装LangChain的embed_query／_embed返回list[float]后只修替身，未为误报改用户算法或保存层。
+
+当前沿用用户已统一的--embedding-model／Python embedding_model，不添加旧参数别名；--model-name／--config／可选run_name保持。dense.embedding_model_profile按用户布局保存完整公开配置字典。qa_core.py／benchmark_eval.py／benchmark_data.py／retrieval_results_io.py未改；真实500闭卷61.0%／Macro-F1 0.470773，最终MIRAGE及真实RAG未运行。
+
+下一项先核验原作者检索语料的固定快照、使用条件、文件清单与容量，再让用户下载。已浏览MedRAG官方仓库及HF数据卡：PubMed优先候选，卡片23898701摘要片段、约70GB、含id／title／content／contents／PMID；预览只限前5GB，显示221万行不是完整规模，未下载或固定revision。Textbooks卡片18教材／125847段／212MB，但未声明明确数据许可，不能把原MedQA仓库MIT当全部教材授权；StatPearls卡片301202段，但明确不分发正文，HF无正文文件。NCBI政策提示摘要可能有出版社／作者版权，不能说成无条件公有领域。详见docs/benchmark_scope.md新增公开检索语料段；不能直接将2390万段载入当前pandas／内存BM25而不做容量与索引规划。保留原文／原ID，仅作字段适配，不用gold PMID选段或生成医学内容，不把候选规模说成本地已实现。
+
+以下待修订及v3待运行描述均为历史检查点，当前以上方用户最新数据要求与10组软件验收为准。
+
+**2026-11-27当前待修订：RAG主要接线已通过本地观察，仅剩Dense／RRF配置中的模型实例不能序列化。** 用户已统一当前文件三处入口形参／调用及CLI为embedding_model／--embedding-model，接受该命名，不要求改回旧名或添加兼容别名；历史命令不覆写。用户将原embedding_profile配置字典变量及元数据键改为embedding_model_profile，可以保留此布局。当前第36行embedding_model_profile=profiles[embedding_model]是JSON配置字典，第38行后embedding_model是模型实例，但第65行"embedding_model_profile": embedding_model仍记录实例。直接改该值为现成配置字典embedding_model_profile即可，记录完整配置是合理的，不必为旧辅助检查恢复字符串字段或新增变量；不要用default=str掩盖实例问题。
+
+本轮实际执行闭卷2题、RAG真实CPU BM25接线2题、外部现成回调1题，均使用假LLM；闭卷不读语料，BM25语料读取一次、正确保存文件SHA／证据数与方法配置，现成回调不重新读文件或建库。错误k／缺路径／不可调用回调／配置类型错误及空配置均在客户端与dotenv之前拒绝。反向语料检查、重复读取、evidence_sha256拼写和共同校验均已修正。另以假Embedding直接执行Dense构造，json.dumps实际配置仍报TypeError，字段值类型是SimpleNamespace替身实例，确认剩余问题；尚未完成三方法整体RAG验收，不发真实运行命令或提交本修订。助手未改核心、读取密钥或调用真实模型／API／GPU，临时输入与结果已清理，不是新增医学benchmark。
+
 **2026-11-27当前：用户的共享build_retriever及原main接线通过8组本地检查，下一项在同文件接入QA的RAG分支。** run_benchmark_eval.py源码SHA=20c7eae58cb25c1cf4f2a2a6c74fccf38c7ddb78b108dbea50e04a491a2cb3bd。真实Dense／BM25／RRF核心配小型无医学含义文本与假Embedding向量，三种回调保留id／text／source_id／locator和有限分数；BM25不读Embedding配置，Dense只建向量，RRF两路都建，BGE／Qwen配置及归一化元数据正确传递，缓存接口实际收到调用者路径／维度／chunk_size=512。原单组及改写两组入口各三种方法均跑真实读取／评测／保存，公共及方法元数据均保留；未知方法／profile与已有产物提前拒绝。构造主体与搬动前AST一致，QA及CLI未改。报告results/shared_retriever_validation_01.json，临时格式输入及结果已清理，不是新增医学评测集；助手未改核心、未读密钥、未运行真实模型／API／GPU或写入真实向量缓存。
 
 下一用户任务仍在run_benchmark_eval.py：给main_qa增加method="bm25"、evidence_path=None、cache_dir=None、config_embedding_model="bge_small"四个仅关键字参数，保留既有ready retrieve_fn／retrieval_config回调接口；引入pandas。输出保护和题目／limit／gold子集处理后、LLM配置及客户端构造前加入RAG装配。mode=rag时先校验k为正整数；retrieve_fn为None才要求evidence_path并读JSONL（lines=True、dtype=False），检查非空、id／text／source_id／locator列和唯一id，cache_dir未给则用root/cache/embeddings，再调用共享build_retriever并保存实际文件路径、分块SHA-256、证据数、cache路径和corpus_text="text"到retrieval_config。不能read_bytes整读1.2GB语料来算SHA；聊天提供现有hashlib的1MiB分块用法，不新增工具模块。已有回调则沿用，不重复读取语料／建库，并检查callable和非空配置字典；闭卷跳过整个分支，原k／retrieval_config仍记None。不要在CLI先建索引，否则输出冲突和题目错误只能在昂贵构造后发现。
