@@ -84,7 +84,7 @@ prepared/benchmark.json的SHA-256为2afd9c360b5b59dd07059743630358f1f480be46650e
 
 保存后的离线验收：同一函数能接收A／B二选项和A／B／C三选项；两模式消息与四字段上下文正确，输入对象未改；仅一次调用；解析失败／越界答案／未知引用／空白理由保持error、answer=None且保留已知用量；closed_book的引用／上下文规则成立；有效结果不含gold。空RAG命中仍为rag，既不强制maybe也不伪造引用。只用内存假客户端检查软件协议，不新增合成benchmark题或证明医学准确率，不运行真实模型。通过后再接实际PubMedQA开发池的用户单题／批量运行；全500是开发比较，全7663仍是最终目标。
 
-### 当前用户任务：离线QA评分
+### 离线QA评分：已验收
 
 在已有benchmark_eval.py增量添加evaluate_multiple_choice(questions_df, gold_answers, answer_records)，不新增脚本、不改变原BEIR评分。只读取调用者传入的内存对象，不检索或调用模型。questions_df四列id／task／query／options；gold_answers为id到标准答案键；answer_records直接采用本次保存结构，外层query_id、内层result.status与result.answer.answer_choice。返回逐题eval_df和summary，后续无检索／BM25／Dense／RRF共用。
 
@@ -94,7 +94,15 @@ summary为query_count、ok_count、error_count、accuracy、per_task、macro_acc
 
 PubMedQA另报告macro_f1，依据[原作者评分脚本](https://github.com/pubmedqa/pubmedqa/blob/master/evaluation.py)；MIRAGE任务间准确率等权平均依据[作者评测代码](https://github.com/gzxiong/MIRAGE/blob/main/src/evaluate.py)，本轮于2026-11-27重核。使用已安装scikit-learn 1.9.1的f1_score，按该任务options键并集排序生成label_to_index；gold用映射转整数、失败预测用-1，labels显式只列合法非负编号，average="macro"、zero_division=0。失败仍记入相应真实类漏判，不把错误符号当第四类。此失败政策与结构化解析差异须说明，不能称原脚本原样复现。数学验收例真值0／1／2、预测0／0／-1：Accuracy=1/3、Macro-F1=2/9，仅软件算术例而非新增医学benchmark。
 
-当前函数尚未实现，核心仍由用户写；聊天具体说明record_map构造、逐题字段／失败分支、groupby与F1参数。保存后先离线检查，再接用户批量生成，不提前运行500次API。
+2026-11-27用户已实现并通过16项本地软件检查，源码SHA=8be77919b64aa3ea0e1ea2998ddfb7fa033b2d0ac1e0f957b334d99166b380f8。失败分母、状态计数、题号乱序对齐、任务等权平均、全对／全错、动态键、无PubMedQA分组及各种ID／状态／文本错配均符合约定；摘要可JSON序列化、输入未改，原三个函数AST相同。结果在results/qa_scoring_validation_01.json，不是医学模型成绩；没有API调用或新建测试脚本，助手未修改核心。500开发和7663最终生成／评分尚未运行。
+
+### 当前用户任务：批量问答编排
+
+在原qa_core.py添加iter_question_answers(questions_df, *, llm, mode="rag", retrieve_fn=None, k=32)，不新建批量脚本。复用answer_multiple_choice和统一retrieve_fn(query, k)接口；具体方法与客户端／索引由调用者准备。函数逐题yield记录，供入口收到一题即保存一行JSONL；不接收gold、不写文件或重做评分。k=32参考[MedRAG官方用法](https://github.com/gzxiong/MedRAG#usage)示例，仅参考设置，适用性及输入token预算待实际RAG开发核查。
+
+先检查题目表非空、ID唯一、mode有效；rag要求可调用retrieve_fn和正整数k，closed_book不调用检索。循环用tqdm／iterrows；每题无检索给hits=[]及retrieve_latency_ms=None，RAG仅用query检索一次并计时，空命中仍为RAG。之后调用单题核心一次，共享外部llm；只捕获生成调用的openai.APIError并保留错误题，未知用量和响应元数据设None，不填0；核心已经返回的结构化错误保留其已知用量。编程／检索异常不吞掉，qa_latency_ms对成功或API异常均计时。
+
+外层逐题record七字段query_id／task／options／hits／retrieve_latency_ms／qa_latency_ms／result；result是原单题七字段返回，已验收评分函数可直接读取。每轮for末尾yield record，让外层保存后再继续，不在内部返回全量列表。只新增perf_counter／tqdm／APIError导入；聊天须具体解释yield的暂停／继续、各变量和try位置。该函数尚未实现，真实批量仍由用户操作，下一验收只用本地替身，不代跑模型。
 
 ## 2026-11-24 当前实测进度
 

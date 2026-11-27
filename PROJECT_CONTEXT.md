@@ -6,6 +6,20 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27当前：用户evaluate_multiple_choice已通过16项本地软件验收，下一项在已有qa_core.py增量实现批量问答迭代器。** benchmark_eval.py源码SHA=8be77919b64aa3ea0e1ea2998ddfb7fa033b2d0ac1e0f957b334d99166b380f8；PubMedQA F1已存per_task，非PubMedQA单任务正常，失败分母／成功失败计数／题号重排对齐／任务等权平均／全失败／全正确／动态选项键均通过，空表及重复／缺失／多余题号、问题错配、未知状态和越界答案被拒绝。输入未改、摘要可JSON序列化，原有三个函数AST相同。记录results/qa_scoring_validation_01.json仅软件检查，助手未改核心、未新增测试脚本或医学评测题、无API调用，没有500题或MIRAGE成绩。下面两版待修订记录已是历史，普通代码问题已解决。
+
+下一用户任务：在原qa_core.py新增iter_question_answers(questions_df, *, llm, mode="rag", retrieve_fn=None, k=32)。逐题yield外层record，不在核心写文件；入口下一步即可每收到一题就保存一行，500开发和7663最终复用同一接口。mode沿单题默认rag，closed_book明确传入且不调用检索；rag要求retrieve_fn可调用及k为正整数。k=32参考本轮重新核查MedRAG官方README示例，不称实测最优，正式RAG运行仍需检查上下文长度。问题表非空、ID唯一，其他题干／选项检查复用单题核心，不接收gold，不读配置／密钥、不构建客户端／索引、不选具体BM25／Dense／RRF分支。
+
+循环使用tqdm(questions_df.iterrows(), total=len(questions_df), desc="批量问答")。closed_book的hits=[]、retrieve_latency_ms=None；rag只调用retrieve_fn(question["query"], k)，不传选项，单独计时，空命中仍传mode=rag。每题调用一次answer_multiple_choice(query, options, hits, llm=llm, mode=mode)，使用同一个外部客户端。只在单题生成调用周围捕获openai.APIError，生成含original_query／mode／status="error"／answer=None／usage_metadata=None／response_metadata=None／error类型与消息的七字段结果；结构化失败直接保留单题核心已返回的已知用量。检索和编程异常自然传播。qa_start在try前取得，try/except后计qa_latency_ms，失败调用也保留耗时。
+
+yield的外层record固定七项：query_id／task／options／hits／retrieve_latency_ms／qa_latency_ms／result；result保持单题七字段，兼容已验收评分函数的query_id＋result读取。原题号、任务和标准答案不进入模型消息。yield在for循环内，每题交回外层后才继续下一题；不写return records或在内部积累全量结果。新增只需perf_counter／tqdm／APIError导入，模式／检索回调／k和迭代器的类型与插入位置须在聊天具体说明。用户写核心，保存后本地假客户端／检索器核查；不提前运行真实批量/API。真实执行仍由用户完成。
+
+**2026-11-27当前待修订更新：QA离线评分第二版已修正上一轮入口／字段／题号／分组／计数问题，只剩Macro-F1归属和作用域需要修正。** 当前benchmark_eval.py的SHA=3e4c3aaa08cb81581436f594a58ca7b308d6bfce8bde442c124f72484021ed74。实际本地格式样例通过：逐题ID顺序与correct=1／0／0，3题中ok=2、error=1，失败保留在分母，Accuracy=1/3；混合任务例总Accuracy=0.5、任务等权平均=2/3，输入未改。F1算出2/9但放在顶层拼为macro_fi的键中，per_task没有macro_f1；仅非PubMedQA任务时实际抛UnboundLocalError，因为循环从未给macro_f1赋值。修订只需在if task=="pubmedqa"内计算后写per_task[task]["macro_f1"]=macro_f1，并删除summary顶层"macro_fi":macro_f1，不加全局默认值、不改其他统计。助手未修改核心／调用API／新增测试脚本或评测题文件；仍属改错阶段，不提交或推进批量调用。以下8af版本的多处问题为上一版检查记录，当前不重复要求修改。
+
+**2026-11-27当前待修订：用户已在benchmark_eval.py写出离线QA评分草稿，尚未通过，不进入批量/API阶段。** 本次源码SHA=8af6acd74218e373a499a1b46059176ec6db7c9a837e74e04551d5be8d8a5fdc，函数当前拼为evaluat_multiple_choice。使用已保存单题及对应题目／gold子集只读调用，实际首先在if not questions_df报DataFrame真值不明确；未产生评分成绩，无API调用。原有三个函数AST与HEAD相同，助手未改核心或新建测试脚本，改错阶段不提交。
+
+集中修订点：入口用questions_df.empty及id.duplicated().any()，公开函数名补evaluate；当前record已经是result，应从record["answer"]["answer_choice"]取答案；第二个循环当前题号是question_id，输出query_id及错误信息不能沿用建立record_map时遗留的query_id；逐题输出列拼为predicted_answer以对应后面读取；groupby每项是(task字符串, group DataFrame)，应解包并删除task=group["task"]；不要用f1_score同名变量遮蔽导入函数，计算结果另存并写入per_task[task]["macro_f1"]；ok／error按status列计数而非总行数差；summary补per_task，最终返回eval_df, summary。已有全量ID集合检查、失败行correct=0、合法类别编码、全局平均和任务宏平均意图保留；不强改内部变量或异常名称以迁就检查工具。以上属普通代码修正，不登记为工程常见问题。下一步聊天逐处解释并由用户保存，再检查真实未改写的函数。
+
 **2026-11-27当前：用户公开PubMedQA单题真实联调已通过只读核查，下一项在已有benchmark_eval.py增量实现离线QA评分。** pubmedqa_closed_book_smoke_1_01保存1条有效结构化响应，模型标识deepseek-flash，closed_book且引用为空；481输入＋125输出＝606 tokens、cache_read=0，核心调用947.077ms，整进程1.71s、RSS179624KiB、退出0。日志JSON与逐题文件一致，开发材料／公开配置／读取器SHA均相符。当前核心SHA=a4aa6725fd2311d8d5c7abab21fb59048925e0675a8f99bc8a51b7d75ad1718d；相对14项验收版本只删除两条无用导入，全部类／函数AST相同，无须重跑模型或原14项。助手仅核对本地原件并新建results/pubmedqa_closed_book_smoke_1_01_validation.json，三份原件及原未执行准备记录未改，没有新的API调用。这里只确认真实接口和记账，不验证reason中的医学断言、不计算单题准确率或评价模型效果；完整500开发及7663最终对标未运行。
 
 下一用户任务：在原benchmark_eval.py添加evaluate_multiple_choice(questions_df, gold_answers, answer_records)，不新增脚本或改原BEIR函数。纯离线、只接收已保存回答，不检索／加载模型／读取.env。questions_df仍四列id／task／query／options，gold为全局id到答案键；answer_records复用实际JSONL外层query_id及result，其中result为核心七字段返回。建立record_map时拒绝重复，参评题号／gold／记录题号集合要求完全一致，题目表非空且ID唯一；不将未完成文件当完整成绩。按题目表顺序处理，核对result.original_query匹配，状态只能ok／error；ok取answer_choice且要求属于本题选项，error保留predicted_answer=None、correct=0，不丢失败题。逐题表六列query_id／task／gold_answer／predicted_answer／status／correct；返回eval_df及summary。

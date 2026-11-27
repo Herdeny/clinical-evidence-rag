@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-**当前用户任务：在已有benchmark_eval.py增量实现离线QA评分。** 用户已完成真实PubMedQA单题联调：deepseek-flash、closed_book、有效结构化回答及空引用，481＋125＝606 tokens、调用947.077ms。原三文件、输入／代码身份和元数据只读核对通过；核心仅删除两条无用导入，函数／类结构未改，不重复运行模型。下一项添加evaluate_multiple_choice(questions_df, gold_answers, answer_records)，返回六列逐题表与完整分母下的准确率／子任务宏平均及PubMedQA macro-F1，不新增脚本；详细任务在[离线评分](benchmark_scope.md#当前用户任务离线qa评分)。函数尚未实现，没有批量QA成绩，助手未代跑API。
+**当前用户任务：在已有qa_core.py增量实现批量问答迭代器。** 用户evaluate_multiple_choice已通过16项本地检查，失败分母／任务等权平均／PubMedQA F1、记录对齐与异常输入拒绝符合约定，原有三个函数未改。下一项iter_question_answers逐题复用单题核心与统一检索回调，yield固定记录供入口及时保存，无检索和RAG共用；详细任务在[批量问答](benchmark_scope.md#当前用户任务批量问答编排)。该迭代器尚未实现，不新建批量脚本或代跑API，完整500开发与7663最终对标仍待完成。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 
@@ -41,7 +41,7 @@ PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
 | retrieval_results_io.py | CT分阶段计时、评估状态及完整已知用量汇总，保留失败原始记录并保护同名输出；CT 8项通过。BEIR协议不变，6项通过 | 助手辅助，逐行中文注释 |
 | benchmark_data.py | BEIR读取与apply_query_rewrites已完成；MIRAGE全量／五单任务读取、四列问题表与独立gold字典已验收，旧函数不变 | 用户；助手未改核心 |
-| benchmark_eval.py | 公共评分、冻结重排及evaluate_query_rewrite_retrieval已实现；同题两组共享标签／检索器，CPU假检索核对通过，非真实改写收益 | 用户；助手未改核心 |
+| benchmark_eval.py | 原检索评测保留；evaluate_multiple_choice逐题评分与汇总通过16项本地检查，支持任务宏平均及PubMedQA F1，无批量QA模型成绩 | 用户；助手未改核心 |
 | run_benchmark_eval.py | 三方法可选改写及防覆盖已验收；用户324题三方法02已实测核验，无需重写；改写收益与退化均归档 | 用户；助手未改核心 |
 | run_reranking_eval.py | 固定候选重排入口；四套重排dev已核对，旧历史资源异常继续披露；CLI统一--config且原业务函数不变 | 用户；助手只纠正CLI参数 |
 
