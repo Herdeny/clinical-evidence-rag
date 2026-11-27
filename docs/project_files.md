@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-**当前用户任务：在已有qa_core.py增量实现批量问答迭代器。** 用户evaluate_multiple_choice已通过16项本地检查，失败分母／任务等权平均／PubMedQA F1、记录对齐与异常输入拒绝符合约定，原有三个函数未改。下一项iter_question_answers逐题复用单题核心与统一检索回调，yield固定记录供入口及时保存，无检索和RAG共用；详细任务在[批量问答](benchmark_scope.md#当前用户任务批量问答编排)。该迭代器尚未实现，不新建批量脚本或代跑API，完整500开发与7663最终对标仍待完成。
+**当前用户任务：在既有run_benchmark_eval.py增量加入main_qa。** 用户批量迭代器通过19项本地检查，单题核心未改；助手在原retrieval_results_io.py提供流式save_qa_results，11项本地IO检查通过，旧保存函数未改。下一项把读取／子集选择、公开配置与共享客户端、生成器、用户评分回调和保存串起来，原BEIR main及CLI先保持；详细步骤在[QA入口](benchmark_scope.md#当前用户任务增量接入qa入口)。main_qa尚未实现，没有新增项目入口文件或真实批量调用，500开发及7663最终对标待完成。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 
@@ -27,7 +27,7 @@ PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者
 | retrieve_rrf.py | 多路排名融合与统一查询编排，12项合成检查通过；CLI已接入 | 用户 |
 | rerank_core.py | 纯函数12项无权重验收通过，保留原生转换异常；Qwen4B／8B及BGE真实完整运行已共用 | 用户；助手仅整理异常提示及无用导入／空白 |
 | query_rewrite.py | 单题真实CT通过；批量rewrite_queries已通过4题混合假响应及编程异常传播检查，失败记录／用量保留；无批量API或改写检索收益 | 用户；助手未修改核心 |
-| qa_core.py | 14项软件检查及用户公开开发池真实单题联调通过；用量／模型标识可回查，无批量准确率成绩 | 用户；助手只读检查，未修改核心 |
+| qa_core.py | 单题真实联调通过；iter_question_answers通过19项本地检查，支持惰性逐题产出、统一检索与API失败继续，无真实批量成绩 | 用户；助手只读检查，未修改核心 |
 | evidence_review.py | 五字段与单轮评估通过18项假响应检查；用户完成提示词增量及Flash／V4 Pro三题对照，仍有任务边界与报告事实混淆，待正式开发验证 | 用户；助手只读审查，未改核心 |
 | run_query_rewrite.py | 独立读取LLM配置、加载项目环境并单次调用核心；用户真实CT单题通过，422／96／518 tokens，CLI已统一--config | 用户；助手只纠正CLI参数，业务函数未改 |
 | run_query_rewrite_batch.py | 指定划分／limit、共享客户端、保存结果；用户真实8题已核验，1变化有语义观察，尚无检索收益 | 用户；助手未修改实现 |
@@ -39,7 +39,7 @@ PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者
 | embedding_adapter.py | 共享模型构造与显式FP32输出归一化；6项无权重验证通过，预检和正式入口已共用，真实GPU预检03通过 | 助手辅助，逐行中文注释 |
 | reranker_adapter.py | build_reranker加载固定CrossEncoder；describe_reranker记录实际设备／精度／长度／指令等；Qwen4B／8B及BGE真实完整运行均已核对 | 助手辅助，逐行中文注释 |
 | embedding_cache_io.py | 向量缓存文件、身份、断点、发布与校验；实际输出策略进入身份，BGE旧指纹保留 | 助手辅助，逐行中文注释 |
-| retrieval_results_io.py | CT分阶段计时、评估状态及完整已知用量汇总，保留失败原始记录并保护同名输出；CT 8项通过。BEIR协议不变，6项通过 | 助手辅助，逐行中文注释 |
+| retrieval_results_io.py | 原CT／BEIR保存保留；save_qa_results流式保存、调用用户评分并保留中断记录，11项本地检查通过，未知用量不补0 | 助手辅助，逐行中文注释，旧四函数AST未改 |
 | benchmark_data.py | BEIR读取与apply_query_rewrites已完成；MIRAGE全量／五单任务读取、四列问题表与独立gold字典已验收，旧函数不变 | 用户；助手未改核心 |
 | benchmark_eval.py | 原检索评测保留；evaluate_multiple_choice逐题评分与汇总通过16项本地检查，支持任务宏平均及PubMedQA F1，无批量QA模型成绩 | 用户；助手未改核心 |
 | run_benchmark_eval.py | 三方法可选改写及防覆盖已验收；用户324题三方法02已实测核验，无需重写；改写收益与退化均归档 | 用户；助手未改核心 |

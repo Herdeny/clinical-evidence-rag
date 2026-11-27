@@ -6,6 +6,18 @@
 
 ## 1. 当前应从哪里继续
 
+**2026-11-27当前：用户批量迭代器通过19项本地检查，流式保存辅助通过11项检查；下一项在既有run_benchmark_eval.py增量添加main_qa入口函数。** qa_core.py源码SHA=5d023db042f06898d3f56ec6b141494a13e8fddb07d331c2739fe3e435ff1870；惰性执行／每次next一题、共享客户端、question-only检索、空命中RAG、结构化失败保留用量、API异常记录后继续、检索和编程异常原样传播、参数拒绝、评分联结与输入不变均通过。单题输出类及answer_multiple_choice的AST未改；结果results/qa_batch_validation_01.json，不是模型成绩，无API调用。
+
+助手在已有retrieval_results_io.py增量提供save_qa_results(records, *, score_fn, config, run_name, result_dir)，源码SHA=1743d719e46618955958c954fbdcb05986907d2a8cc11c54ea1d34f0325154bf。先保护三份输出／独占创建_run.json，再for消费用户迭代器，每题原样写_results.jsonl并flush。生成结束才score_fn(saved)，复用用户evaluate_multiple_choice，不自写评分规则；完整_summary.json包含metrics／generation／latency／per_query。已知用量含结构化失败、未知或全未知不补0，未执行检索耗时保留None；只有完整生成评分后_run.status=completed。生成／评分失败或KeyboardInterrupt保留已写JSONL，不产生虚假完整成绩，状态记录后原异常继续上抛；状态文件用项目结果目录临时文件原子更新。11项临时软件IO检查通过，旧四个辅助函数AST未改，记录results/qa_stream_io_validation_01.json，未新增项目入口或测试脚本、未调用API。注意保存函数消费生成器会触发其业务执行，不能说传入真实生成器后仍只是无调用的文件操作。
+
+下一用户任务仅在run_benchmark_eval.py加入main_qa(config_dir, benchmark_path, *, profile_name, mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32)，原main及__main__先保持。不新增运行脚本；CLI切换在该函数本地验收后增量接入。limit=None保留所选集合全部，正整数时iloc[:limit].copy；随后gold按实际id过滤，记录available_count／selected_count／query_subset_ids，不能把开发子集冒称全量。run_name显式值优先，否则qa_{task or 'all'}_{mode}_{profile_name}，不加时间戳、不改为CLI必填。结果仍root/results，三输出先防覆盖；从config_dir/llm_profiles.json取公开profile，沿原入口load_dotenv(root/'.env', override=False)、单个ChatDeepSeek客户端。main_qa传入准备好的retrieve_fn及retrieval_config，closed_book无索引；不用在该函数重写三种检索算法或复制BEIR数据读取。当前主线先接closed_book，正式RAG装配仍待后续复用既有索引／方法配置，callback接口不变。
+
+构造records=iter_question_answers(..., llm=llm, mode=mode, retrieve_fn=retrieve_fn, k=k)时不要list消费；score_fn=partial(evaluate_multiple_choice, questions_df, gold_answers)，由保存函数在记录完整后调用第三个参数。公开config需包含benchmark_path及SHA、config_dir、profile_name／llm_profile、mode／task／limit／k（无检索可None）、available_count／selected_count／query_subset_ids、retrieval_config及读取器／QA核心／评分／入口／公开profile文件指纹，不能包含llm对象、检索器对象或密钥；指纹在迭代前取。返回save_qa_results(..., score_fn=..., config=..., run_name=..., result_dir=root/'results')的完整摘要，后面CLI只打印metrics及generation，避免数千行per_query终端输出。聊天需具体讲路径、筛选、partial绑定、生成器何时执行及调用参数。用户写核心；本轮不代跑500题或任何真实API，保存后用假客户端／无操作dotenv核查，不读取.env。
+
+以下迭代器草稿待修订与新增任务尚未实现状态按历史理解，当前以上方19＋11项验收及main_qa任务为准。
+
+**2026-11-27当前待修订：用户已写iter_question_answers草稿，尚未通过批量迭代验收。** qa_core.py源码SHA=80d9bb46c31a2815de436291cc01ff59763459d06130c0666df9273976178de8；输出类和单题函数AST与HEAD相同。实际对一行无医学含义的格式输入next生成器，首先因question["opentions"]报KeyError，需改为question["options"]；没有调用API。RAG参数校验目前将不可调用检索器、k类型和非正数合并成空文字ValueError，实际错误文字为空；聊天建议在mode=rag内分别用TypeError提示不可调用／非整数，用ValueError提示k<=0，以实际异常语义和可诊断性为由，不因检查工具强改核心。yield位置与APIError捕获范围从代码看正确，qa_latency_ms在try成功分支和except分支各赋值一次可成立，不要求仅为排版统一而移动。助手未改核心／新增测试脚本，改错阶段不提交，不进入真实批量。保存后再用本地替身检查逐题产出、检索参数、API失败继续及已知用量保留。
+
 **2026-11-27当前：用户evaluate_multiple_choice已通过16项本地软件验收，下一项在已有qa_core.py增量实现批量问答迭代器。** benchmark_eval.py源码SHA=8be77919b64aa3ea0e1ea2998ddfb7fa033b2d0ac1e0f957b334d99166b380f8；PubMedQA F1已存per_task，非PubMedQA单任务正常，失败分母／成功失败计数／题号重排对齐／任务等权平均／全失败／全正确／动态选项键均通过，空表及重复／缺失／多余题号、问题错配、未知状态和越界答案被拒绝。输入未改、摘要可JSON序列化，原有三个函数AST相同。记录results/qa_scoring_validation_01.json仅软件检查，助手未改核心、未新增测试脚本或医学评测题、无API调用，没有500题或MIRAGE成绩。下面两版待修订记录已是历史，普通代码问题已解决。
 
 下一用户任务：在原qa_core.py新增iter_question_answers(questions_df, *, llm, mode="rag", retrieve_fn=None, k=32)。逐题yield外层record，不在核心写文件；入口下一步即可每收到一题就保存一行，500开发和7663最终复用同一接口。mode沿单题默认rag，closed_book明确传入且不调用检索；rag要求retrieve_fn可调用及k为正整数。k=32参考本轮重新核查MedRAG官方README示例，不称实测最优，正式RAG运行仍需检查上下文长度。问题表非空、ID唯一，其他题干／选项检查复用单题核心，不接收gold，不读配置／密钥、不构建客户端／索引、不选具体BM25／Dense／RRF分支。

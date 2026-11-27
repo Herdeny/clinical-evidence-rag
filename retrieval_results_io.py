@@ -1,5 +1,5 @@
 # 下面的文档字符串说明本模块、类或函数的用途和适用边界。
-"""Save learner-computed retrieval results; never encodes, retrieves or scores."""
+"""Save learner outputs; generation, retrieval and scoring logic remain caller-owned."""
 
 # 导入内容指纹工具。
 import hashlib
@@ -24,6 +24,84 @@ def _sha256_file(path):
             digest.update(block)
     # 返回取出已经计算好的十六进制内容指纹，结束本次函数调用。
     return digest.hexdigest()
+
+
+def save_qa_results(records, *, score_fn, config, run_name, result_dir):  # 边迭代边保存QA记录，再调用用户提供的离线评分函数。
+    import os  # 原子替换本轮自己创建的运行状态文件。
+    import tempfile  # 临时状态文件仍放在本轮结果目录。
+    from statistics import mean, median  # 汇总实际记录的阶段耗时。
+    if not isinstance(run_name, str):  # 区分前缀的类型错误。
+        raise TypeError("run_name must be a string")  # 不强行转换用户输入。
+    if not run_name.strip() or Path(run_name).name != run_name or run_name in (".", ".."):  # 前缀应是单个非空文件名。
+        raise ValueError("run_name must be a nonempty filename prefix")  # 不让文件写到结果目录以外。
+    if not callable(score_fn):  # 评分由调用者传入，而不是在保存层另写规则。
+        raise TypeError("score_fn must be callable")  # 在消费生成器之前拒绝错误配置。
+    if not isinstance(config, dict):  # 运行配置应是公开参数字典。
+        raise TypeError("config must be a dictionary")  # 不读取环境变量或密钥。
+    config_copy = json.loads(json.dumps(config, ensure_ascii=False, allow_nan=False))  # 先确认配置可保存，同时避免改动原配置。
+    result_dir = Path(result_dir)  # 沿用现有保存函数的目录参数。
+    paths = {kind: result_dir / f"{run_name}_{suffix}" for kind, suffix in (("results", "results.jsonl"), ("summary", "summary.json"), ("run", "run.json"))}  # 仍使用三份标准输出。
+    for path in paths.values():  # 在开始迭代或请求模型之前检查全部文件。
+        if path.exists():  # 任何已有输出都阻止本轮覆盖。
+            raise FileExistsError(path)  # 让调用者手动更换运行编号。
+    result_dir.mkdir(parents=True, exist_ok=True)  # 只创建调用方指定的结果目录。
+    run = {"run_name": run_name, "config": config_copy, "status": "running", "saved_count": None}  # 运行中不伪造已完成计数。
+    with paths["run"].open("x", encoding="utf-8") as stream:  # 独占创建运行记录，防止同名任务并发覆盖。
+        json.dump(run, stream, ensure_ascii=False, indent=2, allow_nan=False)  # 在拉取第一条模型结果前写下配置。
+        stream.write("\n")  # 保持可读文本格式。
+    def update_run():  # 只更新本轮刚独占创建的运行文件。
+        temporary_path = None  # 仅跟踪本次更新自己创建的临时文件。
+        try:  # 更新状态时不留下半份JSON。
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=result_dir, prefix=f".{run_name}.", suffix=".tmp", delete=False) as stream:  # 临时文件与目标位于同一目录。
+                temporary_path = Path(stream.name)  # 保存本次临时文件路径。
+                json.dump(run, stream, ensure_ascii=False, indent=2, allow_nan=False)  # 先写完整运行状态。
+                stream.write("\n")  # 保持末尾换行。
+            os.replace(temporary_path, paths["run"])  # 原子替换本轮已有状态，不触碰其他运行。
+        finally:  # 成功或失败都只清理自己的临时文件。
+            if temporary_path is not None:  # 尚未创建时不做删除操作。
+                temporary_path.unlink(missing_ok=True)  # 替换成功后原临时路径已经不存在。
+    saved = []  # 保留已经写入的记录，交给现有离线评分函数。
+    try:  # 失败时保留已生成的结果，并继续向外抛出原异常。
+        with paths["results"].open("x", encoding="utf-8") as stream:  # 原始逐题输出独占创建，不截断旧文件。
+            for record in records:  # 每次取值会拉动调用者的生成器，模型仍由其核心执行。
+                line = json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n"  # 原样序列化全部字段，不重新解释回答。
+                stream.write(line)  # 每次只追加当前一题。
+                stream.flush()  # 收到一题就交给文件系统，不等全部问题结束。
+                saved.append(record)  # 只有写入完成的记录才计入已保存数量。
+        eval_df, metrics = score_fn(saved)  # 生成结束后复用用户评分，不在保存层计算另一套正确性。
+        token_fields = ("input_tokens", "output_tokens", "total_tokens")  # 沿用原有用量汇总口径。
+        known_usage = []  # 完整已知用量才参与总数求和。
+        for record in saved:  # 成功与失败记录都检查，不删除失败题的已知用量。
+            usage = record["result"].get("usage_metadata")  # 原始SDK元数据保留在逐题文件中。
+            if isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0 for key in token_fields):  # 排除未知或不完整用量。
+                known_usage.append(usage)  # 解析失败但用量完整的记录也计入。
+        generation = {  # 统计生成状态和实际可见成本。
+            "query_count": len(saved),  # 已保存的完整题数。
+            "ok_count": sum(record["result"]["status"] == "ok" for record in saved),  # 格式通过数，不等于答对数。
+            "error_count": sum(record["result"]["status"] == "error" for record in saved),  # 失败题仍计入总数。
+            "usage_known_count": len(known_usage),  # 完整已知用量的记录数。
+            "usage_unknown_count": len(saved) - len(known_usage),  # 未知用量不解释为零成本。
+            "known_token_totals": {key: sum(usage[key] for usage in known_usage) if known_usage else None for key in token_fields},  # 全未知时保留None。
+            "usage_scope": "Complete usage records only; includes errors with known usage; excludes unknown or partial usage.",  # 与已有改写及证据评估口径一致。
+        }  # 不估算价格或服务器侧未返回的用量。
+        latency = {}  # 两个阶段分别汇总，不能互相替换。
+        for field in ("retrieve_latency_ms", "qa_latency_ms"):  # 对应用户迭代器的原字段名。
+            values = [float(record[field]) for record in saved if record.get(field) is not None]  # 跳过未执行的检索阶段。
+            latency[field] = {"count": len(values), "mean": mean(values) if values else None, "median": median(values) if values else None}  # 全未执行时不伪造零耗时。
+        summary = {"metrics": metrics, "generation": generation, "latency": latency, "per_query": eval_df.to_dict(orient="records")}  # 评分表保存在摘要中，不覆盖原始输出。
+        payload = json.dumps(summary, ensure_ascii=False, indent=2, allow_nan=False) + "\n"  # 完成全部序列化后才创建完成摘要。
+        with paths["summary"].open("x", encoding="utf-8") as stream:  # 未完成的运行不会提前生成完整成绩文件。
+            stream.write(payload)  # 保存指标、用量和逐题评分。
+        run.update(status="completed", saved_count=len(saved), output_sha256={kind: _sha256_file(paths[kind]) for kind in ("results", "summary")})  # 只在生成与评分都完成后标记完成。
+        update_run()  # 写下完成状态和产物指纹。
+        return summary  # 返回与摘要文件完全一致的对象。
+    except BaseException as exc:  # 此处只记录运行状态，不把核心异常改成成功或其他异常。
+        run.update(status="interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed", saved_count=len(saved), error={"type": type(exc).__name__, "message": str(exc)})  # 明确区分中断与失败。
+        try:  # 尽力记录状态，但不能遮蔽最初的异常。
+            update_run()  # 已写入的JSONL始终保留。
+        except Exception:  # 磁盘等故障可能同时阻止状态更新。
+            pass  # 保留最初异常；旧的running状态和原始结果仍可回查。
+        raise  # 向调用者原样抛出异常，不删除已付费得到的响应。
 
 
 # 按实际检索方法验证运行元数据，同时兼容旧的顶层配置。

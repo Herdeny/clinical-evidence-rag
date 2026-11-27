@@ -1,4 +1,7 @@
 import json
+from time import perf_counter
+from tqdm import tqdm
+from openai import APIError
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -119,4 +122,49 @@ def answer_multiple_choice(query, options, hits, *, llm, mode="rag"):
     results["answer"] = schema_response.model_dump()
     return results
     
+def iter_question_answers(questions_df, *, llm, mode="rag", retrieve_fn=None, k=32):
+    if questions_df.empty: raise ValueError("Questions_df is blank")
+    if questions_df['id'].duplicated().any(): raise ValueError("ID is duplicated in Question_df")
+    if mode not in ("closed_book", "rag"): raise ValueError(f"Unpredicted mode: {mode}")
+    if mode == "rag":  # 这些参数要求只用于RAG模式。
+        if not callable(retrieve_fn): raise TypeError("retrieve_fn must be callable")  # 检索器必须能被调用。
+        if type(k) != int: raise TypeError("k must be an integer")  # 检索条数必须是整数。
+        if k <= 0: raise ValueError("k must be positive")  # 类型正确后，再检查取值范围。
     
+    for _, question in tqdm(questions_df.iterrows(), total=len(questions_df), desc="批量问答"):  # 每轮取得一道题的Series。
+        hits = []
+        retrieve_latency_ms = None
+        
+        if mode == "rag":
+            retrieve_start = perf_counter()
+            hits = retrieve_fn(question["query"], k)
+            retrieve_end = perf_counter()
+            retrieve_latency_ms = (retrieve_end - retrieve_start) * 1000
+
+        qa_start = perf_counter()
+        try:
+            result = answer_multiple_choice(
+                question["query"], question["options"], hits, llm=llm, mode=mode
+            )
+            qa_latency_ms = (perf_counter() - qa_start) * 1000
+        except APIError as exc:
+            result = {
+                "original_query": question["query"],
+                "mode": mode,
+                "status": "error",
+                "answer": None,
+                "usage_metadata": None,
+                "response_metadata": None,
+                "error": f"{type(exc).__name__}: {exc}"
+            }
+            qa_latency_ms = (perf_counter() - qa_start) * 1000
+        record = {
+            "query_id": question["id"],
+            "task": question["task"],
+            "options": question["options"],
+            "hits": hits,
+            "retrieve_latency_ms": retrieve_latency_ms if mode == "rag" else None,
+            "qa_latency_ms": qa_latency_ms,
+            "result": result
+        }
+        yield record

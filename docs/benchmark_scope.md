@@ -96,13 +96,21 @@ PubMedQA另报告macro_f1，依据[原作者评分脚本](https://github.com/pub
 
 2026-11-27用户已实现并通过16项本地软件检查，源码SHA=8be77919b64aa3ea0e1ea2998ddfb7fa033b2d0ac1e0f957b334d99166b380f8。失败分母、状态计数、题号乱序对齐、任务等权平均、全对／全错、动态键、无PubMedQA分组及各种ID／状态／文本错配均符合约定；摘要可JSON序列化、输入未改，原三个函数AST相同。结果在results/qa_scoring_validation_01.json，不是医学模型成绩；没有API调用或新建测试脚本，助手未修改核心。500开发和7663最终生成／评分尚未运行。
 
-### 当前用户任务：批量问答编排
+### 批量问答编排：已验收
 
 在原qa_core.py添加iter_question_answers(questions_df, *, llm, mode="rag", retrieve_fn=None, k=32)，不新建批量脚本。复用answer_multiple_choice和统一retrieve_fn(query, k)接口；具体方法与客户端／索引由调用者准备。函数逐题yield记录，供入口收到一题即保存一行JSONL；不接收gold、不写文件或重做评分。k=32参考[MedRAG官方用法](https://github.com/gzxiong/MedRAG#usage)示例，仅参考设置，适用性及输入token预算待实际RAG开发核查。
 
 先检查题目表非空、ID唯一、mode有效；rag要求可调用retrieve_fn和正整数k，closed_book不调用检索。循环用tqdm／iterrows；每题无检索给hits=[]及retrieve_latency_ms=None，RAG仅用query检索一次并计时，空命中仍为RAG。之后调用单题核心一次，共享外部llm；只捕获生成调用的openai.APIError并保留错误题，未知用量和响应元数据设None，不填0；核心已经返回的结构化错误保留其已知用量。编程／检索异常不吞掉，qa_latency_ms对成功或API异常均计时。
 
-外层逐题record七字段query_id／task／options／hits／retrieve_latency_ms／qa_latency_ms／result；result是原单题七字段返回，已验收评分函数可直接读取。每轮for末尾yield record，让外层保存后再继续，不在内部返回全量列表。只新增perf_counter／tqdm／APIError导入；聊天须具体解释yield的暂停／继续、各变量和try位置。该函数尚未实现，真实批量仍由用户操作，下一验收只用本地替身，不代跑模型。
+外层逐题record七字段query_id／task／options／hits／retrieve_latency_ms／qa_latency_ms／result；result是原单题七字段返回，已验收评分函数可直接读取。每轮for末尾yield record，让外层保存后再继续，不在内部返回全量列表。2026-11-27用户已实现并通过19项本地检查，源码SHA=5d023db042f06898d3f56ec6b141494a13e8fddb07d331c2739fe3e435ff1870；单题AST未改，记录results/qa_batch_validation_01.json。仅本地替身验证，未产生真实批量成绩或API调用。
+
+### 当前用户任务：增量接入QA入口
+
+助手已在原retrieval_results_io.py增量提供save_qa_results(records, *, score_fn, config, run_name, result_dir)，原四个保存辅助AST未改。三份输出沿用_results.jsonl／_summary.json／_run.json，开始消费生成器前防覆盖；每题写入并flush，完整生成后调用用户评分回调，摘要保存metrics／generation／latency／per_query。中断或异常保留已有响应并记录运行状态，原异常不改；全未知用量不填0、未执行检索耗时为None。11项临时IO检查通过，源码SHA=1743d719e46618955958c954fbdcb05986907d2a8cc11c54ea1d34f0325154bf，记录results/qa_stream_io_validation_01.json；没有新项目脚本、API调用或模型成绩。
+
+用户在现有run_benchmark_eval.py新增main_qa(config_dir, benchmark_path, *, profile_name, mode, task=None, limit=None, run_name=None, retrieve_fn=None, retrieval_config=None, k=32)。原BEIR main及CLI先保持，新增函数验收后再增量切换CLI。用现有读取器、可选task／limit筛选题目，gold按实际id取子集；保留可用／选中数量和完整题号，run_name显式优先或qa_{task or 'all'}_{mode}_{profile_name}，无时间戳。公开profile来自config_dir，沿现有dotenv和客户端构造，每批一个客户端；检索器及公开配置从参数传入，避免重写三种算法。
+
+records直接保留iter_question_answers返回的生成器；score_fn用partial(evaluate_multiple_choice, questions_df, gold_answers)绑定前两个参数，交给save_qa_results在完整记录后评分。不要提前list(records)，文件保护与逐题保存要先于迭代。config记录输入／源码／公开profile指纹、实际选择及模式／k／检索配置，不保存对象或密钥；三输出先防覆盖，返回完整保存摘要。当前main_qa尚未实现，后续正式RAG装配与批量CLI仍待接入；用户保存后只用本地替身验证，真实500题仍由用户运行。
 
 ## 2026-11-24 当前实测进度
 
