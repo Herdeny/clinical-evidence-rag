@@ -46,9 +46,13 @@ PubMed数据身份已固定，当前只实收首分片；其他两候选未采�
 
 2026-11-28首分片建库实测通过：indexed15377，unindexable／empty／skipped／errors均0；建库进程1.59s、峰值RSS489696KiB、退出0，包含Python/JVM启动，不含之后回读。索引15文件合计15056284字节，文件分配空间15097856字节；du的15M是舍入展示。全部15377条回读与原记录一致、原件及索引指纹未改，见results/medrag_pubmed_first_shard_index_01_validation.json。没有运行排名查询或医学问答，不用单分片数值线性外推完整库。
 
-用户现已在已有retrieve_bm25.py增量实现两个函数：load_lucene_bm25(index_path, *, k1=0.9, b=0.4)加载现成索引并设置评分参数、返回LuceneSearcher；retrieve_lucene_bm25(query, k, *, searcher)调用search，按命中原序回读stored raw并映射五字段。Pyserini在加载函数内部导入，避免原rank_bm25使用者仅导入模块就启动JVM。查询保持原字符串，让Lucene分析器处理；不重复调用旧tokenize或排序。输出id=原hit.docid，score=普通float，text=contents，source_id=pubmed:{PMID}，locator=MedRAG/pubmed | {原记录id} | contents，定位到公开数据记录和字段，不编造论文页码。语料revision与索引身份随后写入入口运行配置。此轮默认0.9／0.4来自当前Pyserini，保留旧rank_bm25的1.5／0.75及原结果。边界校验按真实语义：类型错TypeError、空问题及非正k为ValueError；不为测试样式改算法或异常。搜索器由调用方加载一次、跨问题复用并最终关闭；两个函数不加载JSONL全库、不重建索引、不接LLM，不绑定首分片路径。源码审查通过后，由用户执行单查询真实联调，后续复用原入口。
+用户现已在已有retrieve_bm25.py增量实现两个函数：load_lucene_bm25(index_path, *, k1=0.9, b=0.4)加载现成索引并设置评分参数、返回LuceneSearcher；retrieve_lucene_bm25(query, k, *, searcher)调用search，按命中原序回读stored raw并映射五字段。Pyserini在加载函数内部导入，避免原rank_bm25使用者仅导入模块就启动JVM。查询保持原字符串，让Lucene分析器处理；不重复调用旧tokenize或排序。输出id=原hit.docid，score=普通float，text=contents，source_id=pubmed:{PMID}，locator=MedRAG/pubmed | {原记录id} | contents，定位到公开数据记录和字段，不编造论文页码。语料revision与索引身份随后写入入口运行配置。此轮默认0.9／0.4来自当前Pyserini，保留旧rank_bm25的1.5／0.75及原结果。边界校验按真实语义：类型错TypeError、空问题及非正k为ValueError；不为测试样式改算法或异常。搜索器由调用方加载一次、跨问题复用并最终关闭；两个函数不加载JSONL全库、不重建索引、不接LLM，不绑定首分片路径。源码审查及用户真实单查询现已通过，先完成完整语料下载与完整索引，再复用原入口进行开发集RAG对照。
 
 用户询问向量数据库后已澄清：Qdrant仍为Dense检索计划，当前未安装；Lucene是公开BM25参照路线。Qdrant官方当前也支持BM25、稀疏及混合查询，不因采用Lucene而将Qdrant排除，也不预设长期双后端必然更好；需用实际效果与维护成本判断。
+
+2026-11-28真实单查询验收通过：用户的medrag_pubmed_lucene_bm25_smoke_1_01按统一retrieve_fn(query,k)在15377条首分片上查询lung cancer screening、k=3，返回3个唯一原ID；完整正文及PMID／定位均与作者原JSONL一致，原索引与源码不变。加载2674.30ms、检索23.89ms，进程3.33s、RSS948900KiB、退出0；这是一次观测，没有相关性标签，不计算Recall或医学支持率。验收results/medrag_pubmed_lucene_bm25_smoke_1_01_validation.json，旧preparation状态保留。
+
+当前先取得完整作者语料，再进行完整索引及500题RAG对照。用户待运行medrag_pubmed_full_download_01：hf download固定作者revision、include=chunk/*.jsonl、local-dir为原raw目录、max-workers=4，已下载首分片按HF本地元数据复用。下载后同一命令以4MiB块逐文件核对大小与内容SHA，每25个文件显示校验进度，合法空分片按原样计入；目标1166文件、70007692549字节。结果保存独立_manifest.json、日志与资源，资源范围包含下载和全文件字节校验，不含后续解析／建库。原始正文不改写，实收清单actual_record_count保持null，23898701仍为发布方声明。准备记录results/medrag_pubmed_full_download_01_preparation.json已核对本机CLI及脚本语法，并在临时目录用真实首分片和作者空文件身份验证校验器正常、空文件及错误SHA路径，未调用下载器。助手未执行全量下载，没有新增源码脚本；现有检索函数通过索引路径复用完整库。
 
 ## 2026-11-26：仅使用可核查的公开benchmark
 
