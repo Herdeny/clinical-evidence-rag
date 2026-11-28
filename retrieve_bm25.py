@@ -1,5 +1,7 @@
 import re
+import json
 import numpy as np
+from pathlib import Path
 from rank_bm25 import BM25Okapi
 
 def tokenize(text):
@@ -38,3 +40,36 @@ def retrieve_bm25(query, k, *, bm25_index, evidences):
         }
         results.append(result)
     return results
+
+def load_lucene_bm25(index_path, *, k1=0.9, b=0.4):
+    index_dir = Path(index_path)
+    if not index_dir.exists(): raise FileNotFoundError("Index-dir not found.")
+    if not index_dir.is_dir(): raise NotADirectoryError("Index-dir is not a directory.")
+    
+    from pyserini.search.lucene import LuceneSearcher
+    searcher = LuceneSearcher(str(index_dir))
+    searcher.set_bm25(k1, b)
+    return searcher
+
+def retrieve_lucene_bm25(query, k, *, searcher):
+    if not type(query) == str: raise TypeError("Query is not str.")
+    if not query.strip(): raise ValueError("Query is empty.")  # 拒绝空字符串以及只有空格、换行的问题。
+    if not type(k) == int: raise TypeError("K is not int.")
+    if k <= 0: raise ValueError(f"Expected k positive int, but got {k}")
+
+    hits = searcher.search(query, k=k)
+    records = list()
+    for hit in hits:
+        document = json.loads(searcher.doc(hit.docid).raw())
+        record = {
+            "id": hit.docid,
+            "score": float(hit.score),
+            "text": document["contents"],
+            "source_id": f"pubmed:{document["PMID"]}",
+            "locator": f"MedRAG/pubmed | {document['id']} | contents"
+        }
+        records.append(record)
+    return records
+        
+    
+    
