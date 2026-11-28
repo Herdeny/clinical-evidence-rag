@@ -1,6 +1,6 @@
 # 现在应该看哪些文件
 
-**当前用户任务：试建MedRAG/PubMed首分片Lucene索引并回读首末记录。** MedRAG/PubMed首分片已实收：34168949字节、15377条唯一ID原记录，SHA与固定作者版本一致；03成功，01／02失败原件保留。wc -l因没有末尾换行少计一条，验收按实际JSON解析数；PMID原为整数。完整1166分片目标保留，当前只有1份已下载。Pyserini1.3.0已由用户安装并导入成功；全部314个原有包版本未变，32个新增依赖的身份保存在安装报告。验收见results/pyserini_bm25_install_01_validation.json。下一项使用已准备命令直接索引原文件到cache/indexes/medrag_pubmed/lucene_first_shard_01；助手未代建库。[固定快照与容量](benchmark_scope.md#pubmed固定快照容量与当前下载任务)记录当前验收及接入顺序。QA RAG软件入口通过10组本地检查，公开500题闭卷61.0%／Macro-F1 0.470773，真实RAG及MIRAGE最终对标未运行；不恢复v3或自建题。CLI保持--model-name／--config／--embedding-model。
+**当前用户任务：在已有retrieve_bm25.py增量编写load_lucene_bm25与retrieve_lucene_bm25。** MedRAG/PubMed首分片已实收：34168949字节、15377条唯一ID原记录，SHA与固定作者版本一致；03成功，01／02失败原件保留。wc -l因没有末尾换行少计一条，验收按实际JSON解析数；PMID原为整数。完整1166分片目标保留，当前只有1份已下载。Pyserini1.3.0已由用户安装并导入成功；全部314个原有包版本未变，32个新增依赖的身份保存在安装报告。验收见results/pyserini_bm25_install_01_validation.json。用户已完成首分片索引，15377条原记录全部回读一致；进程1.59s、RSS489696KiB，索引文件合计15056284字节。验收见results/medrag_pubmed_first_shard_index_01_validation.json；助手只做只读核验，未代建库。两个新函数复用现有证据返回接口，原rank_bm25函数保留。[固定快照与容量](benchmark_scope.md#pubmed固定快照容量与当前下载任务)记录当前验收及接入顺序。QA RAG软件入口通过10组本地检查，公开500题闭卷61.0%／Macro-F1 0.470773，真实RAG及MIRAGE最终对标未运行；不恢复v3或自建题。CLI保持--model-name／--config／--embedding-model。
 
 PubMedQA开发池已由用户亲自准备并通过实际核查：固定原作者提交1cbae8e，1000专家题减官方500测试得到500开发，MIRAGE测试ID／全题库规范化题干／记录中参考PMID交集均0。读取shape=(500,4)，标签yes／no／maybe为276／169／55；已有数据加载器直接复用。真实日志／资源及数据指纹见results/pubmedqa_development_prepare_01_validation.json，没有模型成绩。原准备记录保留历史状态；PR #1已合并，一次性例外结束，本轮恢复main提交推送。
 

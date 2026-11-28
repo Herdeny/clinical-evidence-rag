@@ -296,6 +296,8 @@
 
 **2026-11-27公开大库容量补充。** 旧v3运行已停用并归档；新MedRAG/PubMed元数据总65.20GiB，按作者记录数计算的4096维FP32向量本体约364.67GiB。当前机器可用磁盘约469.56GiB，另有Lucene、payload、HNSW、缓存等空间，不能依据“模型能装进4090”断言全库能落地。方案改为分片直接进入Lucene磁盘索引，原始格式已满足id／contents，无须额外复制一套全文JSONL；Dense存储容量与精度需另验。现阶段只有元数据审计和理论向量字节计算，没有实测全库索引大小、编码时长或吞吐；下一步用一个原始分片试建，仅验证工程成本，不发布局部医学分数。
 
+**2026-11-28首分片实测补充。** 用户已完成Lucene首分片15377条建库，未索引／空／跳过／错误均0，全部stored raw与原记录逐条一致。GNU time进程1.59s、峰值RSS489696KiB，索引文件内容15056284字节；范围含Python/JVM启动和建库，不含其后回读。Java建库日志显示00:00:00是整秒展示，不代表零耗时。threads=1限制的是建库工作线程，JVM还有运行时线程，实际CPU514%不能解释为程序只有一个线程。首分片大小、语言与文档分布未覆盖完整1166分片，当前仅证明工程链路，不能线性外推完整库时间、磁盘或问答效果。详见results/medrag_pubmed_first_shard_index_01_validation.json。
+
 **ENG-020：单个模型加载参数未必约束整个依赖链的网络访问**
 
 **实际现象。** 2026-11-19，使用当前LangChain HuggingFaceEmbeddings／Sentence Transformers加载已缓存的BGE固定revision，model_kwargs包含local_files_only=True。首次真实CUDA小批仍观察到对huggingface.co上main/processor_config.json的HEAD探测和SSL重试；随后八条正文与查询编码成功。只能据实说明观察到了辅助配置探测，不能据此断言权重被更新或来自main。
