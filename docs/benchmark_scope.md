@@ -32,11 +32,17 @@ PubMed数据身份已固定，当前只实收首分片；其他两候选未采�
 | 本机可用磁盘 | 约469.56GiB | 本轮观察，会随使用变化 |
 | 本机内存 | 总125GiB、可用约107GiB | 本轮观察，不是索引内存实测 |
 
-按[MedRAG作者实现](https://github.com/gzxiong/MedRAG/blob/main/src/utils.py)的BM25路线采用Pyserini／Lucene磁盘索引；原分片已有id／contents，可直接交给[JsonCollection](https://github.com/castorini/pyserini/blob/master/docs/usage-index.md)，storeRaw保存原记录用于回查PMID及证据。不再复制生成另一套70GB全文JSONL，查询时才映射程序所需证据字段。当前Python3.12及Java21与[Pyserini要求](https://github.com/castorini/pyserini#installation)吻合，但Pyserini和Qdrant均未安装；索引、依赖兼容、空间及吞吐仍需首分片实测。新Lucene后端须明确记录库版本、分词及BM25参数，不能把其分数和旧rank_bm25混为同一实现的收益。
+按[MedRAG作者实现](https://github.com/gzxiong/MedRAG/blob/main/src/utils.py)的BM25路线采用Pyserini／Lucene磁盘索引；原分片已有id／contents，可直接交给[JsonCollection](https://github.com/castorini/pyserini/blob/master/docs/usage-index.md)，storeRaw保存原记录用于回查PMID及证据。不再复制生成另一套70GB全文JSONL，查询时才映射程序所需证据字段。当前Python3.12及Java21与[Pyserini要求](https://github.com/castorini/pyserini#installation)吻合，Pyserini1.3.0已安装并通过JVM接口导入，Qdrant仍未安装；索引构建、空间及吞吐仍需首分片实测。新Lucene后端须明确记录库版本、分词及BM25参数，不能把其分数和旧rank_bm25混为同一实现的收益。
 
 2026-11-28首分片已由用户下载并验收：chunk/pubmed23n0001.jsonl为34168949字节，SHA256=6bd70117f34f7293a7e6e017b2abd3bd2fd0a508abfed4d9613d7616d599afca；实际15377条、ID全部唯一。id／title／content／contents均为字符串，PMID原为正整数；原文件保持不变。首末ID为pubmed23n0001_0／pubmed23n0001_15376，所有ID后缀与零起始记录序号吻合。文件末尾没有换行，所以wc -l的15376不是JSON记录数。03成功进程7.10s、峰值RSS93224KiB、退出0；01／02失败记录保留。验收results/medrag_pubmed_first_shard_03_validation.json保存三轮原件及内容指纹。历史01准备记录和catalog不改写为事后状态。只验证下载／结构及索引资源，不计算局部医学效果；正式覆盖仍为完整1166分片。当前不能将原分片直接交给仍要求text/source_id/locator的内存RAG入口。
 
-下一项由用户安装固定候选[Pyserini1.3.0](https://pypi.org/project/pyserini/1.3.0/)并检查LuceneSearcher导入。官方发行元数据中1.3.0要求torch>=2.4、transformers>=4.6；[2.4.0元数据](https://pypi.org/pypi/pyserini/2.4.0/json)要求torch>=2.9、transformers>=5，不直接升级本机已实测torch2.6.0+cu126／transformers4.57.6。results/pyserini_release_metadata_01.json记录候选依赖；results/pyserini_bm25_install_01_constraints.txt固定当前已安装发行版，pip必须在这些约束内解析依赖，冲突则停止。该约束只保护当前环境，并非空环境完整锁文件；兼容性仍待安装及JVM导入实测。安装缓存显式指定cache/pip，日志及资源保留，助手不代装。之后试建首分片索引、确认15377条及storeRaw保真，再由用户在现有retrieve_bm25.py增量实现适配器，复用QA／评分。无须新增根目录运行脚本。
+安装前选择固定候选[Pyserini1.3.0](https://pypi.org/project/pyserini/1.3.0/)并检查LuceneSearcher导入。官方发行元数据中1.3.0要求torch>=2.4、transformers>=4.6；[2.4.0元数据](https://pypi.org/pypi/pyserini/2.4.0/json)要求torch>=2.9、transformers>=5，不直接升级本机已实测torch2.6.0+cu126／transformers4.57.6。results/pyserini_release_metadata_01.json记录候选依赖；results/pyserini_bm25_install_01_constraints.txt固定当前已安装发行版，pip必须在这些约束内解析依赖，冲突则停止。该约束只保护当前环境，并非空环境完整锁文件；其后实际安装及JVM导入的验收见下段；索引运行仍待实测。安装缓存显式指定cache/pip，日志及资源保留，助手不代装。之后试建首分片索引、确认15377条及storeRaw保真，再由用户在现有retrieve_bm25.py增量实现适配器，复用QA／评分。无须新增根目录运行脚本。
+
+2026-11-28上述安装已由用户完成，LuceneSearcher实际导入成功。314个原有包版本全部未变，新增32个；pip报告中的Pyserini1.3.0原始发行包SHA与PyPI固定值一致。安装进程1:23.87、RSS561504KiB、退出0，资源只包括pip，不包含其后导入；详见results/pyserini_bm25_install_01_validation.json。未代跑模型或建索引，原preparation仍保留准备时状态。
+
+当前任务为首分片建库：直接读取data/external/medrag_pubmed/raw/chunk/，命令在开始前保护既有索引与输出，确认目录仅有该分片且内容SHA不变。输出cache/indexes/medrag_pubmed/lucene_first_shard_01，采用JsonCollection／DefaultLuceneDocumentGenerator、threads=1、language=en、stemmer=porter，保留默认keepStopwords=false，storeRaw=true；Java初始堆512MiB、最大堆4GiB，这不等于整个进程RSS上限。storeRaw用于回读作者的id／contents／PMID等原记录。BM25的k1／b是后续查询评分参数，不放进建库命令；未来适配器显式记录，与旧rank_bm25基线区分。
+
+本机1.3.0的参数已通过--options核对（--help无效），准备记录results/medrag_pubmed_first_shard_index_01_preparation.json保存完整命令和输入／库指纹，只完成Bash与Python语法检查。由用户执行，终端显示Java建库日志并保存资源；验收为15377文档、首末原ID可回读五字段和正文，并记录索引磁盘大小。首分片仅验证工程链路，尚无局部医学问答成绩；之后优先在原retrieve_bm25.py增量实现磁盘检索，再接原QA入口，完整语料与7663题目标保留。
 
 ## 2026-11-26：仅使用可核查的公开benchmark
 
