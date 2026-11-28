@@ -2,7 +2,9 @@
 
 **2026-11-27状态更新：用户已删除v3，后续检索语料也只采用原作者公开发布、来源及版本可核查的数据集。本页v2／v3采集构建流程仅保留历史，不再作为运行指令或恢复旧库。公开NFCorpus／PubMedQA／MIRAGE材料继续按原来源使用；下一步见[当前数据范围](benchmark_scope.md#2026-11-27检索语料也只采用公开发布的数据集)。**
 
-当前MedRAG/PubMed来源已固定为作者提交33da3593d5756bc04c8909f170003c0b14197957，完整1166分片身份在configs/corpus_profiles.json；本轮只取得API元数据及README，没有下载正文。下一项用户通过项目环境包装器执行hf download，固定repo-type=dataset／revision及首个原文件路径，输出到data/external/medrag_pubmed/raw，随后对照配置的内容SHA校验。完整用户命令保存在results/medrag_pubmed_first_shard_01_preparation.json，状态prepared_not_executed；只检查语法和当前CLI参数。原始分片已有Lucene需要的id／contents，后续直接索引，不再改写或重切正文；正式数据范围仍为完整作者清单，首分片用于下载与资源验证。详见[固定快照及容量](benchmark_scope.md#pubmed固定快照容量与当前下载任务)。
+当前MedRAG/PubMed来源固定为作者提交33da3593d5756bc04c8909f170003c0b14197957，完整1166分片身份在configs/corpus_profiles.json。2026-11-28用户已完成首分片下载，03轮进程7.10s、RSS93224KiB、退出0；前两次退出1记录保留。实际文件data/external/medrag_pubmed/raw/chunk/pubmed23n0001.jsonl为34168949字节，SHA256=6bd70117f34f7293a7e6e017b2abd3bd2fd0a508abfed4d9613d7616d599afca，逐条解析15377记录且ID唯一。原五字段id／title／content／contents为字符串，PMID为正整数，不改写原文件；没有末尾换行导致wc -l为15376，不将其作为记录数。验收保存在results/medrag_pubmed_first_shard_03_validation.json，三轮日志、资源、原件及配置指纹都记录；旧catalog和01准备记录继续保留当时状态。
+
+下一项由用户安装固定兼容候选Pyserini1.3.0，安装缓存放cache/pip；当前发行版版本约束保存在results/pyserini_bm25_install_01_constraints.txt，兼容性待实际导入检查。随后首分片直接进入Lucene，保留原id／contents并通过storeRaw回读原记录，不再改写或重切正文。正式数据范围仍为完整作者清单，首分片仅验证下载与索引资源，不做局部医学效果评测。详见[固定快照及容量](benchmark_scope.md#pubmed固定快照容量与当前下载任务)。
 
 记录日期：2026-11-19；主要原文快照采集于 2026-11-18，CT 快照使用此前已保存版本。本文记录已经做过的流程与本地证据，不表示本轮清理又重新下载了一遍。完整来源、使用条件、指纹与失败记录继续以对应清单为准。
 

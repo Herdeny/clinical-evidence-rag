@@ -221,9 +221,9 @@ Qwen3 8B 重排相对原 Dense 的 nDCG@10 提升 **6.22%（相对值）**；4B 
 
 ### 公开检索语料：MedRAG/PubMed
 
-资料来源为美国国家医学图书馆（NLM）的PubMed，经MedRAG作者整理为固定PubMed23系列快照，不表示NLM对本项目背书。已固定[作者提交33da359](https://huggingface.co/datasets/MedRAG/pubmed/commit/33da3593d5756bc04c8909f170003c0b14197957)及全部1166分片清单，原文件合计70,007,692,549字节；记录数23,898,701仍为发布方声明，正文尚未下载。[数据配置](configs/corpus_profiles.json)保存每个原文件的大小与内容校验值，不包含正文。
+资料来源为美国国家医学图书馆（NLM）的PubMed，经MedRAG作者整理为固定PubMed23系列快照，不表示NLM对本项目背书。已固定[作者提交33da359](https://huggingface.co/datasets/MedRAG/pubmed/commit/33da3593d5756bc04c8909f170003c0b14197957)及全部1166分片清单，原文件合计70,007,692,549字节；完整记录数23,898,701仍为发布方声明。现已实收并核验首分片：34,168,949字节、15,377条原记录，内容指纹与作者版本一致；其余1165分片待下载。[数据配置](configs/corpus_profiles.json)保存每个原文件的大小与内容校验值，不包含正文。
 
-大库BM25将采用Pyserini／Lucene磁盘索引，原始id／contents直接入库，检索时映射统一证据字段；依赖、首分片索引及全量性能待实测。[容量及接入记录](docs/benchmark_scope.md#pubmed固定快照容量与当前下载任务)区分已核实文件元数据、理论向量占用和未完成的实测。
+大库BM25将采用Pyserini／Lucene磁盘索引，原始id／contents直接入库，检索时映射统一证据字段。下一步安装固定兼容候选Pyserini1.3.0并验证首分片索引，保留已实测模型依赖；运行兼容、索引及全量性能待实测。[容量及接入记录](docs/benchmark_scope.md#pubmed固定快照容量与当前下载任务)区分实收数据、理论向量占用和未完成的实测。
 
 ### 公开评测基准
 

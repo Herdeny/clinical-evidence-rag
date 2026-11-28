@@ -1,18 +1,20 @@
 # 项目背景、进度与后续任务交接
 
-最后核对：2026-11-27。本文用于在后续对话、上下文压缩或换助手时恢复项目。内容依据用户的项目要求、当前代码、保存的输出及结果文件整理。该日期是交接更新日，不覆盖来源此前的核验日期。
+最后核对：2026-11-28。本文用于在后续对话、上下文压缩或换助手时恢复项目。内容依据用户的项目要求、当前代码、保存的输出及结果文件整理。该日期是交接更新日，不覆盖来源此前的核验日期。
 
 **接手时先读本文件，再检查当前代码和用户最新提交的输出。不要把规划当成实现，不要从 B0 重新教起。用户后续明确指令优先于本文，代码与输出的变化需要及时更新到本文。**
 
 ## 1. 当前应从哪里继续
 
-**2026-11-27当前：MedRAG/PubMed的完整作者文件清单已锁定，下一项由用户下载首个原始分片并校验。** 原作者HF提交33da3593d5756bc04c8909f170003c0b14197957（提交页为2024-02-27），对应PubMed23系列快照；configs/corpus_profiles.json的medrag_pubmed保存全部1166分片的路径／字节数／真实内容SHA-256／Git blob SHA-1。元数据API核实总70007692549字节（65.199744GiB），一个合法空文件chunk/pubmed23n0654.jsonl采用普通Git空blob，内容SHA按空字节确定，不把Git SHA-1当LFS内容SHA-256。数据卡23898701是发布方声明，实际正文行数仍未复验，当前正文下载0分片。源API原件／README和本地manifest在data/external/medrag_pubmed/metadata；结果results/medrag_pubmed_catalog_01.json。终端访问NCBI条款时TLS失败，已用web读取官方条款，不伪称保存了条款原件。助手未下载任何正文、模型或安装库。
+**2026-11-28当前：用户已下载MedRAG/PubMed首分片，完整性及结构验收通过；下一项由用户安装兼容的Pyserini依赖，然后试建首分片索引。** 实际成功轮次medrag_pubmed_first_shard_03：34168949字节，内容SHA256=6bd70117f34f7293a7e6e017b2abd3bd2fd0a508abfed4d9613d7616d599afca；15377条JSON记录、15377个唯一ID，首末ID为pubmed23n0001_0／pubmed23n0001_15376。五字段id/title/content/contents/PMID完整，前四项为字符串，PMID原为正整数；保留原始类型，只在证据返回层按需要映射。wc -l为15376是因为最后一条没有末尾换行，不能据此丢失最后一条。03进程7.10s、峰值RSS93224KiB、退出0；01／02退出1的原日志及资源保留，不能冒充成功轮成本。验收results/medrag_pubmed_first_shard_03_validation.json包含逐条结构／ID检查及三轮原件指纹，所有原件未改。当前只下载1/1166分片，完整库实际记录数尚未复验，没有运行真实RAG或模型/API。
+
+原作者HF提交33da3593d5756bc04c8909f170003c0b14197957（提交页为2024-02-27），对应PubMed23系列快照；configs/corpus_profiles.json保存全部1166分片的身份，元数据总70007692549字节（65.199744GiB），数据卡23898701仍是发布方声明。合法空分片pubmed23n0654.jsonl保留；源API／README／manifest在data/external/medrag_pubmed/metadata。原catalog_01及first_shard_01_preparation.json继续保留当时元数据审计／未执行状态，不事后改写。NCBI条款经web核对，终端TLS失败，未伪称保存条款原件。助手只做离线验收及公开依赖元数据核查，未代下载正文、模型或安装库。
 
 本机只读观察：RAM125GiB、可用约107GiB，磁盘可用约469.56GiB；Python3.12及Java21已在，pyserini／qdrant_client未安装。按发布方数量，4096维FP32向量本体364.665237GiB、FP16本体182.332619GiB，均未含HNSW、payload、BM25、缓存等，也不是实测索引大小。先采用与MedRAG官方BM25相同的Pyserini／Lucene磁盘索引路线，直接索引原分片已有id／contents，storeRaw用于回查PMID等原字段，不再生成第二套全文JSONL；检索返回时映射现有id/text/source_id/locator即可。现有retrieve_fn(query,k)与问答核心保留；Lucene安装／试建／适配器及全量索引尚未完成，不能直接用main_qa当前pandas内存分支读取70GB。Dense仍保留Qwen8B候选，存储精度／维度及质量须单独实测，本轮不改Embedding配置。
 
-用户待运行名medrag_pubmed_first_shard_01，下载固定提交的chunk/pubmed23n0001.jsonl到data/external/medrag_pubmed/raw/chunk/pubmed23n0001.jsonl，期望34168949字节、SHA256=6bd70117f34f7293a7e6e017b2abd3bd2fd0a508abfed4d9613d7616d599afca。现有hf download --help已核对，命令使用scripts/project_env.sh维持项目内缓存、不静默关闭单文件进度，GNU time／tee保存日志及资源，sha256sum -c校验后wc -lc显示行数与字节数。准备记录results/medrag_pubmed_first_shard_01_preparation.json状态prepared_not_executed，只bash -n内部与外层脚本；助手没执行下载。先同步本检查点再给用户命令，收到结果再读真实原件、逐行确认文档数及字段，然后安排Lucene依赖／首分片索引验证；正式评测数据仍计划完整1166分片，首分片只验证流程与资源，不得发布局部RAG分数或按gold PMID选库。
+依赖选择已核对官方PyPI元数据：Pyserini2.4.0要求torch>=2.9、transformers>=5，与本机已实测torch2.6.0+cu126／transformers4.57.6不兼容。选固定Pyserini1.3.0作为本轮兼容候选，其声明torch>=2.4、transformers>=4.6；这只是依赖声明满足，不等于运行兼容已验证。助手读取公开元数据没有下载发行包。安装使用results/pyserini_bm25_install_01_constraints.txt约束当前所有已安装发行版不被替换；结果不是可用于空环境的完整锁文件。由用户执行pip安装及LuceneSearcher导入检查，保留日志／资源，安装缓存显式放cache/pip；安装失败就按实际冲突处理，不跳过依赖。安装通过后试建首分片索引，确认15377条及storeRaw能回读原文，再在既有retrieve_bm25.py增量添加用户实现的磁盘检索适配器。原retrieve_fn(query,k)、QA生成及评分无需因后端变化重写。正式目标仍为完整作者清单，不能依据首分片发布医学效果或按gold PMID选库。
 
-以下“未固定revision”和v3待运行描述为此前检查点；当前以上方固定元数据及用户待下载首分片为准。
+以下“未固定revision”、首分片待下载和v3待运行描述为此前检查点；当前以上方实收验收及依赖安装任务为准。
 
 **2026-11-27最新：用户已删除v3语料，明确检索语料也只用原作者公开发布、可考据的数据集。不要恢复v3或继续让用户查找它。** 撤回拟议的pubmedqa_bm25_rag_dev_smoke_3_01全库运行；准备程序在打开缺失语料时停止，没有创建preparation记录，也没有执行模型／API。旧v3构建及CT实验仅保留历史，不能继续当当前数据规模；此前“只停用自建题、业务语料仍用v3”的解释已被本轮要求取代。公开PubMedQA开发池及500题闭卷成绩保留，MIRAGE7663仍为最终评测。
 

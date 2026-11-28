@@ -12,11 +12,11 @@
 
 | 作者发布语料 | 发布页规模 | 核查与决定 |
 | --- | --- | --- |
-| [MedRAG/PubMed](https://huggingface.co/datasets/MedRAG/pubmed) | 23898701个标题／摘要片段；仓库约70GB | 已锁定作者提交及1166分片清单，正文尚未下载；含PMID便于溯源。HF预览只限前5GB，预览221万行不能当完整规模 |
+| [MedRAG/PubMed](https://huggingface.co/datasets/MedRAG/pubmed) | 23898701个标题／摘要片段；仓库约70GB | 已锁定1166分片，实收首分片15377条；完整记录数仍待复验。含PMID；HF约221万行预览不能当完整规模 |
 | [MedRAG/Textbooks](https://huggingface.co/datasets/MedRAG/textbooks) | 18部教材、125847段、约212MB | 已有作者切块；卡片未声明明确数据许可，暂不默认采用。原MedQA仓库MIT不能独自证明第三方教材全部权利 |
 | [MedRAG/StatPearls](https://huggingface.co/datasets/MedRAG/statpearls) | 作者描述301202段 | 页面明确不分发正文，HF无正文数据，不能当成可直接下载的现成301k语料 |
 
-正文尚未下载，PubMed数据身份已固定如下；其他两候选未采用，也不声明无条件商业／再分发许可。[NCBI政策](https://www.ncbi.nlm.nih.gov/home/about/policies/)指出PubMed摘要可能受出版社或作者版权保护；[官方数据下载页](https://pubmed.ncbi.nlm.nih.gov/download/)给出使用条件与下载入口。公开可访问不等于所有内容属于公有领域，不将第三方语料包直接提交GitHub。
+PubMed数据身份已固定，当前只实收首分片；其他两候选未采用，也不声明无条件商业／再分发许可。[NCBI政策](https://www.ncbi.nlm.nih.gov/home/about/policies/)指出PubMed摘要可能受出版社或作者版权保护；[官方数据下载页](https://pubmed.ncbi.nlm.nih.gov/download/)给出使用条件与下载入口。公开可访问不等于所有内容属于公有领域，不将第三方语料包直接提交GitHub。
 
 当前进入固定分片下载与磁盘索引验证。适配只映射既有id、contents、PMID等字段，保留原文、原始ID与快照身份，不生成医学内容或根据gold筛语料；实际接入后独立复核数量与指纹。
 
@@ -26,7 +26,7 @@
 
 | 容量项目 | 当前已核实或计算的量 | 范围 |
 | --- | ---: | --- |
-| 原始JSONL分片合计 | 65.199744GiB | 作者固定文件元数据，尚未下载 |
+| 原始JSONL分片合计 | 65.199744GiB | 作者固定文件元数据；当前仅实收首分片34168949字节 |
 | Qwen 4096维FP32向量 | 364.665237GiB | 按发布方23898701条计算的向量本体，不含索引／payload |
 | Qwen 4096维FP16向量 | 182.332619GiB | 同上，仅容量估算，精度对结果的影响未实测 |
 | 本机可用磁盘 | 约469.56GiB | 本轮观察，会随使用变化 |
@@ -34,7 +34,9 @@
 
 按[MedRAG作者实现](https://github.com/gzxiong/MedRAG/blob/main/src/utils.py)的BM25路线采用Pyserini／Lucene磁盘索引；原分片已有id／contents，可直接交给[JsonCollection](https://github.com/castorini/pyserini/blob/master/docs/usage-index.md)，storeRaw保存原记录用于回查PMID及证据。不再复制生成另一套70GB全文JSONL，查询时才映射程序所需证据字段。当前Python3.12及Java21与[Pyserini要求](https://github.com/castorini/pyserini#installation)吻合，但Pyserini和Qdrant均未安装；索引、依赖兼容、空间及吞吐仍需首分片实测。新Lucene后端须明确记录库版本、分词及BM25参数，不能把其分数和旧rank_bm25混为同一实现的收益。
 
-下一项由用户下载原始首分片chunk/pubmed23n0001.jsonl，34168949字节，SHA256=6bd70117f34f7293a7e6e017b2abd3bd2fd0a508abfed4d9613d7616d599afca；保存到项目data/external/medrag_pubmed/raw/chunk/。只验证下载／字段及索引资源，不计算局部医学效果；正式数据覆盖仍为完整作者清单。准备记录results/medrag_pubmed_first_shard_01_preparation.json保留完整命令、配置身份和prepared_not_executed状态，已检查当前hf CLI帮助及Bash语法，助手没有代下载。收到用户输出后再核对实际文件与行结构，再做索引试建及适配，当前不能将原分片直接交给仍要求text/source_id/locator的内存RAG入口。
+2026-11-28首分片已由用户下载并验收：chunk/pubmed23n0001.jsonl为34168949字节，SHA256=6bd70117f34f7293a7e6e017b2abd3bd2fd0a508abfed4d9613d7616d599afca；实际15377条、ID全部唯一。id／title／content／contents均为字符串，PMID原为正整数；原文件保持不变。首末ID为pubmed23n0001_0／pubmed23n0001_15376，所有ID后缀与零起始记录序号吻合。文件末尾没有换行，所以wc -l的15376不是JSON记录数。03成功进程7.10s、峰值RSS93224KiB、退出0；01／02失败记录保留。验收results/medrag_pubmed_first_shard_03_validation.json保存三轮原件及内容指纹。历史01准备记录和catalog不改写为事后状态。只验证下载／结构及索引资源，不计算局部医学效果；正式覆盖仍为完整1166分片。当前不能将原分片直接交给仍要求text/source_id/locator的内存RAG入口。
+
+下一项由用户安装固定候选[Pyserini1.3.0](https://pypi.org/project/pyserini/1.3.0/)并检查LuceneSearcher导入。官方发行元数据中1.3.0要求torch>=2.4、transformers>=4.6；[2.4.0元数据](https://pypi.org/pypi/pyserini/2.4.0/json)要求torch>=2.9、transformers>=5，不直接升级本机已实测torch2.6.0+cu126／transformers4.57.6。results/pyserini_release_metadata_01.json记录候选依赖；results/pyserini_bm25_install_01_constraints.txt固定当前已安装发行版，pip必须在这些约束内解析依赖，冲突则停止。该约束只保护当前环境，并非空环境完整锁文件；兼容性仍待安装及JVM导入实测。安装缓存显式指定cache/pip，日志及资源保留，助手不代装。之后试建首分片索引、确认15377条及storeRaw保真，再由用户在现有retrieve_bm25.py增量实现适配器，复用QA／评分。无须新增根目录运行脚本。
 
 ## 2026-11-26：仅使用可核查的公开benchmark
 
